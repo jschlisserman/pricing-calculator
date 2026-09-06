@@ -366,7 +366,7 @@ export default function App() {
               <p className="footnote">
                 Support is billed on 3-month engagements only and is never
                 annualized. When support is sold with other purchases, volume
-                discount is waived: 20% credit with 1 purchase, 25% with 2+.
+                discount is waived: 15% credit with 1 purchase, 20% with 2+.
               </p>
 
               <button
@@ -384,19 +384,19 @@ export default function App() {
       <section className="rules">
         <div className="rule">
           <h4>2 purchases</h4>
-          <p>20% off product total</p>
+          <p>15% off product total</p>
         </div>
         <div className="rule">
           <h4>3 purchases</h4>
-          <p>25% off product total</p>
+          <p>20% off product total</p>
         </div>
         <div className="rule">
           <h4>4+ purchases</h4>
-          <p>30% off product total</p>
+          <p>25% off product total</p>
         </div>
         <div className="rule">
           <h4>Support + products</h4>
-          <p>No volume discount. 20% with 1 purchase, 25% with 2+.</p>
+          <p>No volume discount. 15% with 1 purchase, 20% with 2+.</p>
         </div>
       </section>
     </div>

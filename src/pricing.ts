@@ -135,9 +135,9 @@ export const CATEGORY_ORDER = [
 ] as const
 
 /** Credit on support when sold with exactly one other purchase. */
-export const SUPPORT_BUNDLE_CREDIT_ONE = 0.2
+export const SUPPORT_BUNDLE_CREDIT_ONE = 0.15
 /** Discount on support when sold with 2+ other purchases. */
-export const SUPPORT_BUNDLE_CREDIT_MULTI = 0.25
+export const SUPPORT_BUNDLE_CREDIT_MULTI = 0.2
 
 export function getCompanySizeMultiplier(employees: number): number {
   if (employees > 500) return 2
@@ -153,15 +153,15 @@ export function getCompanySizeLabel(employees: number): string {
 
 /** Multi-purchase discount from count of distinct non-support purchases. */
 export function getVolumeDiscount(purchaseCount: number): number {
-  if (purchaseCount >= 4) return 0.3
-  if (purchaseCount === 3) return 0.25
-  if (purchaseCount === 2) return 0.2
+  if (purchaseCount >= 4) return 0.25
+  if (purchaseCount === 3) return 0.2
+  if (purchaseCount === 2) return 0.15
   return 0
 }
 
 /**
  * Support credit/discount when bundled with other purchases.
- * 1 other purchase → 20%; 2+ → 25%; otherwise 0.
+ * 1 other purchase → 15%; 2+ → 20%; otherwise 0.
  */
 export function getSupportCreditRate(productPurchaseCount: number): number {
   if (productPurchaseCount >= 2) return SUPPORT_BUNDLE_CREDIT_MULTI
