@@ -395,6 +395,11 @@ button {
   text-align: right;
 }
 
+.item-price-note {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
 .item.selected .item-price {
   color: var(--text);
 }
@@ -574,6 +579,66 @@ button {
   margin: 0;
   font-size: 0.85rem;
   color: var(--text);
+}
+
+.band-table-section {
+  margin-top: 2rem;
+}
+
+.band-table-intro {
+  margin: 0 0 0.9rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  max-width: 42rem;
+}
+
+.band-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--surface-1);
+}
+
+.band-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+  font-size: 0.875rem;
+}
+
+.band-table th,
+.band-table td {
+  padding: 0.75rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.band-table th {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.band-table td:nth-child(n + 3) {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.band-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.band-table tbody tr.active-band {
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+}
+
+.band-table tbody tr.active-band td:first-child {
+  color: var(--green);
+  font-weight: 600;
 }
 
 @keyframes fade-up {

@@ -2,9 +2,14 @@ import { useMemo, useState } from 'react'
 import {
   CATALOG,
   CATEGORY_ORDER,
+  DESIGN_PARTNER_ID,
+  DPP_HEADCOUNT_BANDS,
+  HEADCOUNT_BANDS,
   buildQuote,
+  formatMultiplier,
   formatPercent,
   formatUsd,
+  getCatalogListAmount,
   type CatalogItem,
 } from './pricing'
 
@@ -124,9 +129,9 @@ export default function App() {
       <section className="hero animate-in delay-1">
         <h1>Build an order. Adjust as you go.</h1>
         <p>
-          Select products for an SMB baseline, then scale by company size. Volume
-          discounts apply across product purchases; support is a separate
-          quarterly engagement.
+          Select products against Growth-band list pricing, then scale by
+          headcount band. Volume discounts apply across product purchases;
+          support is a separate quarterly engagement.
         </p>
       </section>
 
@@ -153,13 +158,17 @@ export default function App() {
               </div>
               <div className="size-badge" aria-live="polite">
                 {quote.companySizeLabel}
-                {quote.companyMultiplier > 1 && (
-                  <strong>×{quote.companyMultiplier}</strong>
-                )}
+                <strong>
+                  {formatMultiplier(
+                    quote.companyMultiplier,
+                    quote.companyCustom,
+                  )}
+                </strong>
               </div>
             </div>
             <p className="size-hint">
-              SMB list pricing. +50% at 100+ employees. +100% above 500.
+              Growth (25–99) is 1.0x list. Startup is 0.5x; larger bands scale up
+              to a 5.0x floor for Global+.
             </p>
           </div>
 
@@ -221,9 +230,17 @@ export default function App() {
                           )}
                         </span>
                         <span className="item-price">
-                          {formatUsd(item.basePrice)}
+                          {formatUsd(getCatalogListAmount(item, employees))}
                           <br />
                           {periodLabel(item)}
+                          {item.id === DESIGN_PARTNER_ID && (
+                            <>
+                              <br />
+                              <span className="item-price-note">
+                                DPP {formatMultiplier(quote.dppMultiplier)}
+                              </span>
+                            </>
+                          )}
                         </span>
                       </button>
                     )
@@ -259,7 +276,11 @@ export default function App() {
                         <span className="order-line-name">{item.name}</span>
                         <span className="order-line-meta">
                           {item.category}
-                          {isSupport ? ' · 3-month term' : ''}
+                          {isSupport
+                            ? ' · 3-month term'
+                            : item.id === DESIGN_PARTNER_ID
+                              ? ` · DPP ${formatMultiplier(quote.dppMultiplier)}`
+                              : ''}
                         </span>
                       </div>
                       <span className="order-line-price">
@@ -294,7 +315,7 @@ export default function App() {
                     <div className="total-row muted">
                       <span>
                         Products subtotal
-                        {quote.companyMultiplier > 1
+                        {quote.companyMultiplier !== 1
                           ? ` (${quote.companySizeLabel})`
                           : ''}
                       </span>
@@ -397,6 +418,88 @@ export default function App() {
         <div className="rule">
           <h4>Support + products</h4>
           <p>No volume discount. 15% with 1 purchase, 20% with 2+.</p>
+        </div>
+      </section>
+
+      <section className="band-table-section">
+        <div className="panel-head">
+          <h2>Headcount pricing bands</h2>
+        </div>
+        <p className="band-table-intro">
+          Annual list prices for one purchase in each product category. Growth is
+          the baseline; other bands apply the multiplier to that list.
+        </p>
+        <div className="band-table-wrap">
+          <table className="band-table">
+            <thead>
+              <tr>
+                <th>Band</th>
+                <th>Headcount</th>
+                <th>Multiplier</th>
+                <th>Deployment</th>
+                <th>Security</th>
+                <th>Agent Learning</th>
+                <th>Collaboration</th>
+                <th>All four (list)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {HEADCOUNT_BANDS.map((band) => (
+                <tr
+                  key={band.id}
+                  className={
+                    band.id === quote.companyBandId ? 'active-band' : undefined
+                  }
+                >
+                  <td>{band.name}</td>
+                  <td>{band.headcount}</td>
+                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
+                  <td>{band.deployment}</td>
+                  <td>{band.security}</td>
+                  <td>{band.agentLearning}</td>
+                  <td>{band.collaboration}</td>
+                  <td>{band.allFour}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="band-table-section">
+        <div className="panel-head">
+          <h2>DPP headcount bands</h2>
+        </div>
+        <p className="band-table-intro">
+          Design Partner Program annual fees. Startup ($8,000) is the 1.0x
+          baseline; these multipliers are separate from product packaging bands.
+        </p>
+        <div className="band-table-wrap">
+          <table className="band-table">
+            <thead>
+              <tr>
+                <th>Band</th>
+                <th>Headcount</th>
+                <th>Multiplier</th>
+                <th>DPP annual fee</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DPP_HEADCOUNT_BANDS.map((band) => (
+                <tr
+                  key={band.id}
+                  className={
+                    band.id === quote.dppBandId ? 'active-band' : undefined
+                  }
+                >
+                  <td>{band.name}</td>
+                  <td>{band.headcount}</td>
+                  <td>{formatMultiplier(band.multiplier)}</td>
+                  <td>{formatUsd(band.annualFee)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
