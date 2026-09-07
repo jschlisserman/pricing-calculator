@@ -392,6 +392,80 @@ export function formatMultiplier(multiplier: number, custom = false): string {
   return custom ? `Custom, ${value}x floor` : `${value}x`
 }
 
+/** Growth-band category list prices used to derive band tables. */
+export const PRODUCT_CATEGORY_BASES = {
+  deployment: 8_000,
+  security: 6_000,
+  agentLearning: 8_000,
+  collaboration: 8_000,
+} as const
+
+/** Agency client pass-through: 50% off product bands; $7.5k minimum on total. */
+export const AGENCY_PASS_THROUGH_RATE = 0.5
+export const AGENCY_PASS_THROUGH_MINIMUM = 7_500
+
+export function agencyPassThroughFee(
+  growthBase: number,
+  multiplier: number,
+): number {
+  return growthBase * multiplier * AGENCY_PASS_THROUGH_RATE
+}
+
+export interface AgencyPassThroughBand {
+  id: string
+  name: string
+  headcount: string
+  multiplier: number
+  custom?: boolean
+  deployment: string
+  security: string
+  agentLearning: string
+  collaboration: string
+  allFour: string
+}
+
+function formatBandUsd(amount: number, custom = false): string {
+  return `${formatUsd(amount)}${custom ? '+' : ''}`
+}
+
+export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
+  HEADCOUNT_BANDS.map((band) => {
+    const deployment = agencyPassThroughFee(
+      PRODUCT_CATEGORY_BASES.deployment,
+      band.multiplier,
+    )
+    const security = agencyPassThroughFee(
+      PRODUCT_CATEGORY_BASES.security,
+      band.multiplier,
+    )
+    const agentLearning = agencyPassThroughFee(
+      PRODUCT_CATEGORY_BASES.agentLearning,
+      band.multiplier,
+    )
+    const collaboration = agencyPassThroughFee(
+      PRODUCT_CATEGORY_BASES.collaboration,
+      band.multiplier,
+    )
+    const allFour = Math.max(
+      deployment + security + agentLearning + collaboration,
+      AGENCY_PASS_THROUGH_MINIMUM,
+    )
+    const custom = Boolean(band.custom)
+
+    return {
+      id: band.id,
+      name: band.name,
+      headcount: band.headcount,
+      multiplier: band.multiplier,
+      custom: band.custom,
+      deployment: formatBandUsd(deployment, custom),
+      security: formatBandUsd(security, custom),
+      agentLearning: formatBandUsd(agentLearning, custom),
+      collaboration: formatBandUsd(collaboration, custom),
+      allFour: formatBandUsd(allFour, custom),
+    }
+  })
+
 /** Multi-purchase discount from count of distinct non-support purchases. */
 export function getVolumeDiscount(purchaseCount: number): number {
   if (purchaseCount >= 4) return 0.25

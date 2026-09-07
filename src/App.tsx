@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
+  AGENCY_PASS_THROUGH_BANDS,
   CATALOG,
   CATEGORY_ORDER,
   DESIGN_PARTNER_ID,
@@ -496,6 +497,51 @@ export default function App() {
                   <td>{band.headcount}</td>
                   <td>{formatMultiplier(band.multiplier)}</td>
                   <td>{formatUsd(band.annualFee)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="band-table-section">
+        <div className="panel-head">
+          <h2>Agency pass-through fees</h2>
+        </div>
+        <p className="band-table-intro">
+          Client pass-through pricing for agencies: 50% off product headcount
+          bands.
+        </p>
+        <div className="band-table-wrap">
+          <table className="band-table">
+            <thead>
+              <tr>
+                <th>Band</th>
+                <th>Headcount</th>
+                <th>Multiplier</th>
+                <th>Deployment</th>
+                <th>Security</th>
+                <th>Agent Learning</th>
+                <th>Collaboration</th>
+                <th>All four (list)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {AGENCY_PASS_THROUGH_BANDS.map((band) => (
+                <tr
+                  key={band.id}
+                  className={
+                    band.id === quote.companyBandId ? 'active-band' : undefined
+                  }
+                >
+                  <td>{band.name}</td>
+                  <td>{band.headcount}</td>
+                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
+                  <td>{band.deployment}</td>
+                  <td>{band.security}</td>
+                  <td>{band.agentLearning}</td>
+                  <td>{band.collaboration}</td>
+                  <td>{band.allFour}</td>
                 </tr>
               ))}
             </tbody>
