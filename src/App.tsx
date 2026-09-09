@@ -6,13 +6,18 @@ import {
   DESIGN_PARTNER_ID,
   DPP_HEADCOUNT_BANDS,
   HEADCOUNT_BANDS,
+  PLATFORM_ID,
+  PLATFORM_USAGE_METRICS,
   buildQuote,
+  emptyPlatformUsage,
   formatMultiplier,
   formatPercent,
+  formatUnitCost,
   formatUsd,
   getCatalogListAmount,
   isDppEligible,
   type CatalogItem,
+  type PlatformUsageAmounts,
 } from './pricing'
 
 const FUTURE_FEATURES: Record<string, string[]> = {
@@ -69,6 +74,8 @@ function categoryMeta(category: string): string {
 export default function App() {
   const [employees, setEmployees] = useState(50)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [platformUsage, setPlatformUsage] =
+    useState<PlatformUsageAmounts>(emptyPlatformUsage)
 
   useEffect(() => {
     if (!isDppEligible(employees)) {
@@ -77,9 +84,16 @@ export default function App() {
   }, [employees])
 
   const quote = useMemo(
-    () => buildQuote(selectedIds, Number.isFinite(employees) ? employees : 0),
-    [selectedIds, employees],
+    () =>
+      buildQuote(
+        selectedIds,
+        Number.isFinite(employees) ? employees : 0,
+        platformUsage,
+      ),
+    [selectedIds, employees, platformUsage],
   )
+
+  const platformSelected = selectedIds.includes(PLATFORM_ID)
 
   const byCategory = useMemo(() => {
     const map = new Map<string, CatalogItem[]>()
@@ -113,8 +127,22 @@ export default function App() {
     setSelectedIds((prev) => prev.filter((x) => x !== id))
   }
 
+  function setUsageAmount(metricId: string, value: string) {
+    const parsed = Number(value.replace(/,/g, ''))
+    setPlatformUsage((prev) => ({
+      ...prev,
+      [metricId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+    }))
+  }
+
+  function clearOrder() {
+    setSelectedIds([])
+    setPlatformUsage(emptyPlatformUsage())
+  }
+
   const hasProducts = quote.productLineItems.length > 0
   const hasSupport = quote.supportLineItem !== null
+  const hasOrder = quote.lineItems.length > 0
 
   return (
     <div className="app">
@@ -197,72 +225,157 @@ export default function App() {
                     const selected = selectedIds.includes(item.id)
                     const isSupport = item.kind === 'support'
                     const isDpp = item.id === DESIGN_PARTNER_ID
+                    const isPlatform = item.id === PLATFORM_ID
                     const dppUnavailable = isDpp && !quote.dppEligible
                     const futureFeatures = FUTURE_FEATURES[item.id] ?? []
 
                     return (
-                      <button
+                      <div
                         key={item.id}
-                        type="button"
-                        className={`item${selected ? ' selected' : ''}${isSupport ? ' radio' : ''}${dppUnavailable ? ' unavailable' : ''}`}
-                        onClick={() => {
-                          if (dppUnavailable) return
-                          toggleItem(item.id)
-                        }}
-                        aria-pressed={selected}
-                        aria-disabled={dppUnavailable}
-                        disabled={dppUnavailable}
+                        className={`item-wrap${isPlatform && selected ? ' open' : ''}`}
                       >
-                        <span className="check" aria-hidden="true">
-                          {selected && !isSupport ? <CheckIcon /> : null}
-                        </span>
-                        <span className="item-body">
-                          <span className="item-name">
-                            {item.name}
-                            {item.future && <span className="pill future">Future</span>}
-                            {item.kind === 'bundle' && (
-                              <span className="pill">Bundle</span>
+                        <button
+                          type="button"
+                          className={`item${selected ? ' selected' : ''}${isSupport ? ' radio' : ''}${dppUnavailable ? ' unavailable' : ''}`}
+                          onClick={() => {
+                            if (dppUnavailable) return
+                            toggleItem(item.id)
+                          }}
+                          aria-pressed={selected}
+                          aria-disabled={dppUnavailable}
+                          disabled={dppUnavailable}
+                        >
+                          <span className="check" aria-hidden="true">
+                            {selected && !isSupport ? <CheckIcon /> : null}
+                          </span>
+                          <span className="item-body">
+                            <span className="item-name">
+                              {item.name}
+                              {item.future && (
+                                <span className="pill future">Future</span>
+                              )}
+                              {item.kind === 'bundle' && (
+                                <span className="pill">Bundle</span>
+                              )}
+                              {isPlatform && (
+                                <span className="pill">Usage</span>
+                              )}
+                              {dppUnavailable && (
+                                <span className="pill">Not offered</span>
+                              )}
+                            </span>
+                            {item.description && (
+                              <p className="item-desc">{item.description}</p>
                             )}
-                            {dppUnavailable && (
-                              <span className="pill">Not offered</span>
+                            {item.features && (
+                              <div className="feature-list">
+                                {item.features.map((feature) => {
+                                  const isFuture =
+                                    futureFeatures.includes(feature)
+                                  return (
+                                    <span
+                                      key={feature}
+                                      className={`feature${isFuture ? ' future' : ''}`}
+                                    >
+                                      {feature}
+                                      {isFuture ? ' · Future' : ''}
+                                    </span>
+                                  )
+                                })}
+                              </div>
                             )}
                           </span>
-                          {item.description && (
-                            <p className="item-desc">{item.description}</p>
-                          )}
-                          {item.features && (
-                            <div className="feature-list">
-                              {item.features.map((feature) => {
-                                const isFuture = futureFeatures.includes(feature)
+                          <span className="item-price">
+                            {dppUnavailable ? (
+                              '—'
+                            ) : isPlatform ? (
+                              <>
+                                Metered
+                                <br />
+                                usage
+                              </>
+                            ) : (
+                              <>
+                                {formatUsd(
+                                  getCatalogListAmount(item, employees),
+                                )}
+                                <br />
+                                {periodLabel(item)}
+                              </>
+                            )}
+                            {dppUnavailable && (
+                              <>
+                                <br />
+                                Enterprise+
+                              </>
+                            )}
+                            {isDpp && quote.dppMultiplier != null && (
+                              <>
+                                <br />
+                                <span className="item-price-note">
+                                  DPP {formatMultiplier(quote.dppMultiplier)}
+                                </span>
+                              </>
+                            )}
+                          </span>
+                        </button>
+
+                        {isPlatform && selected && (
+                          <div className="platform-usage">
+                            <p className="platform-usage-intro">
+                              Enter <strong>additional</strong> volume only.
+                              First 1,000,000 observability events and first 250
+                              CPU hours are included free.
+                            </p>
+                            <div className="platform-usage-table">
+                              <div className="platform-usage-head">
+                                <span>Meter</span>
+                                <span>Additional amount</span>
+                                <span>Unit cost</span>
+                                <span>Line cost</span>
+                              </div>
+                              {PLATFORM_USAGE_METRICS.map((metric) => {
+                                const amount = platformUsage[metric.id] ?? 0
+                                const lineCost = amount * metric.unitCost
                                 return (
-                                  <span
-                                    key={feature}
-                                    className={`feature${isFuture ? ' future' : ''}`}
+                                  <div
+                                    className="platform-usage-row"
+                                    key={metric.id}
                                   >
-                                    {feature}
-                                    {isFuture ? ' · Future' : ''}
-                                  </span>
+                                    <div className="platform-usage-label">
+                                      <span>{metric.name}</span>
+                                      {metric.includedNote && (
+                                        <span className="platform-usage-note">
+                                          {metric.includedNote}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step={1}
+                                      value={amount}
+                                      onChange={(e) =>
+                                        setUsageAmount(metric.id, e.target.value)
+                                      }
+                                      aria-label={`Additional ${metric.name}`}
+                                    />
+                                    <span className="platform-usage-unit">
+                                      {formatUnitCost(metric.unitCost)}
+                                      <span className="platform-usage-note">
+                                        / {metric.unitLabel}
+                                      </span>
+                                    </span>
+                                    <span className="platform-usage-cost">
+                                      {formatUsd(lineCost)}
+                                    </span>
+                                  </div>
                                 )
                               })}
                             </div>
-                          )}
-                        </span>
-                        <span className="item-price">
-                          {dppUnavailable
-                            ? '—'
-                            : formatUsd(getCatalogListAmount(item, employees))}
-                          <br />
-                          {dppUnavailable ? 'Enterprise+' : periodLabel(item)}
-                          {isDpp && quote.dppMultiplier != null && (
-                            <>
-                              <br />
-                              <span className="item-price-note">
-                                DPP {formatMultiplier(quote.dppMultiplier)}
-                              </span>
-                            </>
-                          )}
-                        </span>
-                      </button>
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
@@ -280,16 +393,12 @@ export default function App() {
             </span>
           </div>
 
-          {quote.lineItems.length === 0 ? (
-            <p className="summary-empty">
-              Select products from the catalog. You can add or remove anything
-              after the order is started.
-            </p>
-          ) : (
+          {hasOrder ? (
             <>
               <ul className="order-lines">
                 {quote.lineItems.map(({ item, listAmount, billedAmount }) => {
                   const isSupport = item.kind === 'support'
+                  const isPlatform = item.id === PLATFORM_ID
                   return (
                     <li className="order-line" key={item.id}>
                       <div>
@@ -298,11 +407,31 @@ export default function App() {
                           {item.category}
                           {isSupport
                             ? ' · 3-month term'
-                            : item.id === DESIGN_PARTNER_ID &&
-                                quote.dppMultiplier != null
-                              ? ` · DPP ${formatMultiplier(quote.dppMultiplier)}`
-                              : ''}
+                            : isPlatform
+                              ? ' · usage-based'
+                              : item.id === DESIGN_PARTNER_ID &&
+                                  quote.dppMultiplier != null
+                                ? ` · DPP ${formatMultiplier(quote.dppMultiplier)}`
+                                : ''}
                         </span>
+                        {isPlatform && quote.platformUsageLines.length > 0 && (
+                          <ul className="usage-breakdown">
+                            {quote.platformUsageLines.map((line) => (
+                              <li key={line.metric.id}>
+                                {line.metric.name}:{' '}
+                                {line.additionalAmount.toLocaleString('en-US')} ×{' '}
+                                {formatUnitCost(line.metric.unitCost)} ={' '}
+                                {formatUsd(line.cost)}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {isPlatform &&
+                          quote.platformUsageLines.length === 0 && (
+                            <span className="order-line-meta">
+                              No additional usage entered
+                            </span>
+                          )}
                       </div>
                       <span className="order-line-price">
                         {isSupport && billedAmount !== listAmount ? (
@@ -310,6 +439,8 @@ export default function App() {
                             <span className="strike">{formatUsd(listAmount)}</span>
                             {formatUsd(billedAmount)}
                           </>
+                        ) : isPlatform ? (
+                          formatUsd(quote.platformUsageTotal)
                         ) : (
                           formatUsd(billedAmount)
                         )}
@@ -362,16 +493,32 @@ export default function App() {
                       </div>
                     )}
 
-                    <div className={`total-row${hasSupport ? '' : ' grand'}`}>
-                      <span>Products annual total</span>
+                    <div className="total-row muted">
+                      <span>Products after discount</span>
                       <span>{formatUsd(quote.productTotal)}</span>
                     </div>
                   </>
                 )}
 
+                {platformSelected && (
+                  <div className="total-row muted">
+                    <span>Platform usage</span>
+                    <span>{formatUsd(quote.platformUsageTotal)}</span>
+                  </div>
+                )}
+
+                {(hasProducts || platformSelected) && (
+                  <div className={`total-row${hasSupport ? '' : ' grand'}`}>
+                    <span>Annual total</span>
+                    <span>{formatUsd(quote.annualTotal)}</span>
+                  </div>
+                )}
+
                 {hasSupport && quote.supportLineItem && (
                   <>
-                    {hasProducts && <div className="totals-divider" />}
+                    {(hasProducts || platformSelected) && (
+                      <div className="totals-divider" />
+                    )}
 
                     <div className="total-row muted">
                       <span>Support engagement (list)</span>
@@ -397,10 +544,10 @@ export default function App() {
                   </>
                 )}
 
-                {!hasSupport && hasProducts && (
+                {!hasSupport && (hasProducts || platformSelected) && (
                   <div className="total-row muted">
                     <span>Effective / quarter</span>
-                    <span>{formatUsd(quote.productTotal / 4)}</span>
+                    <span>{formatUsd(quote.annualTotal / 4)}</span>
                   </div>
                 )}
               </div>
@@ -409,16 +556,22 @@ export default function App() {
                 Support is billed on 3-month engagements only and is never
                 annualized. When support is sold with other purchases, volume
                 discount is waived: 15% credit with 1 purchase, 20% with 2+.
+                Platform usage is metered separately and is not volume-discounted.
               </p>
 
               <button
                 type="button"
                 className="clear-btn"
-                onClick={() => setSelectedIds([])}
+                onClick={clearOrder}
               >
                 Clear order
               </button>
             </>
+          ) : (
+            <p className="summary-empty">
+              Select products from the catalog. You can add or remove anything
+              after the order is started.
+            </p>
           )}
         </aside>
       </div>

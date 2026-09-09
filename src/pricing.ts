@@ -34,6 +34,16 @@ export const CATALOG: CatalogItem[] = [
     future: true,
   },
   {
+    id: 'deploy-platform',
+    name: 'Platform',
+    category: 'Deployment',
+    description:
+      'Usage-based. Enter additional volume above included free tiers.',
+    basePrice: 0,
+    billingPeriod: 'year',
+    kind: 'individual',
+  },
+  {
     id: 'security-controls',
     name: 'Security and Controls',
     category: 'Security and Controls',
@@ -330,6 +340,89 @@ export function getDppHeadcountBand(
 }
 
 export const DESIGN_PARTNER_ID = 'program-design-partner'
+export const PLATFORM_ID = 'deploy-platform'
+
+export interface PlatformUsageMetric {
+  id: string
+  name: string
+  unitCost: number
+  /** Shown next to the unit cost, e.g. "event", "GB", "hour". */
+  unitLabel: string
+  /** Included free tier note; input is additional volume only. */
+  includedNote?: string
+}
+
+export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
+  {
+    id: 'observability-events',
+    name: 'Observability Events',
+    unitCost: 0.00008,
+    unitLabel: 'event',
+    includedNote: 'First 1,000,000 events included / free',
+  },
+  {
+    id: 'data-egress',
+    name: 'Data Egress (GB)',
+    unitCost: 0.8,
+    unitLabel: 'GB',
+  },
+  {
+    id: 'cpu-time',
+    name: 'CPU Time (Hour)',
+    unitCost: 0.25,
+    unitLabel: 'hour',
+    includedNote: 'First 250 hours included / free',
+  },
+  {
+    id: 'rows-written',
+    name: 'Rows Written (LibSQL)',
+    unitCost: 0.000002,
+    unitLabel: 'row',
+  },
+  {
+    id: 'compute-hours',
+    name: 'Compute Hours (Postgres)',
+    unitCost: 0.4,
+    unitLabel: 'hour',
+  },
+  {
+    id: 'data-storage',
+    name: 'Data Storage GB',
+    unitCost: 0.75,
+    unitLabel: 'GB',
+  },
+]
+
+export type PlatformUsageAmounts = Record<string, number>
+
+export function emptyPlatformUsage(): PlatformUsageAmounts {
+  return Object.fromEntries(
+    PLATFORM_USAGE_METRICS.map((metric) => [metric.id, 0]),
+  )
+}
+
+export interface PlatformUsageLine {
+  metric: PlatformUsageMetric
+  additionalAmount: number
+  cost: number
+}
+
+export function buildPlatformUsageLines(
+  amounts: PlatformUsageAmounts,
+): PlatformUsageLine[] {
+  return PLATFORM_USAGE_METRICS.map((metric) => {
+    const additionalAmount = Math.max(0, amounts[metric.id] ?? 0)
+    return {
+      metric,
+      additionalAmount,
+      cost: additionalAmount * metric.unitCost,
+    }
+  }).filter((line) => line.additionalAmount > 0)
+}
+
+export function sumPlatformUsage(amounts: PlatformUsageAmounts): number {
+  return buildPlatformUsageLines(amounts).reduce((sum, line) => sum + line.cost, 0)
+}
 
 /** Sized list amount for a catalog item at a given headcount. */
 export function getCatalogListAmount(
@@ -488,6 +581,10 @@ export interface Quote {
   supportCreditAmount: number
   productSubtotal: number
   productTotal: number
+  platformUsageLines: PlatformUsageLine[]
+  platformUsageTotal: number
+  /** Products after discount + platform usage. */
+  annualTotal: number
   supportListQuarterly: number
   supportTotalQuarterly: number
 }
@@ -495,6 +592,7 @@ export interface Quote {
 export function buildQuote(
   selectedIds: string[],
   employees: number,
+  platformUsage: PlatformUsageAmounts = emptyPlatformUsage(),
 ): Quote {
   const dppEligible = isDppEligible(employees)
   const selected = CATALOG.filter((item) => {
@@ -508,6 +606,7 @@ export function buildQuote(
 
   const productItems = selected.filter((item) => item.kind !== 'support')
   const supportItem = selected.find((item) => item.kind === 'support') ?? null
+  const platformSelected = selected.some((item) => item.id === PLATFORM_ID)
 
   const productLineItems: LineItem[] = productItems.map((item) => {
     const listAmount = getCatalogListAmount(item, employees)
@@ -539,6 +638,7 @@ export function buildQuote(
 
   // Volume discount only when support is not on the order.
   // Support never annualizes and never participates in volume %.
+  // Platform usage is metered separately and is not volume-discounted.
   const discountRate = supportItem
     ? 0
     : getVolumeDiscount(productPurchaseCount)
@@ -549,6 +649,15 @@ export function buildQuote(
   )
   const discountAmount = productSubtotal * discountRate
   const productTotal = productSubtotal - discountAmount
+
+  const platformUsageLines = platformSelected
+    ? buildPlatformUsageLines(platformUsage)
+    : []
+  const platformUsageTotal = platformUsageLines.reduce(
+    (sum, line) => sum + line.cost,
+    0,
+  )
+  const annualTotal = productTotal + platformUsageTotal
 
   const supportListQuarterly = supportLineItem?.listAmount ?? 0
   const supportCreditAmount = supportLineItem
@@ -576,16 +685,31 @@ export function buildQuote(
     supportCreditAmount,
     productSubtotal,
     productTotal,
+    platformUsageLines,
+    platformUsageTotal,
+    annualTotal,
     supportListQuarterly,
     supportTotalQuarterly,
   }
 }
 
 export function formatUsd(amount: number): string {
+  const fractionDigits = Number.isInteger(amount) ? 0 : 2
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: 2,
+  }).format(amount)
+}
+
+export function formatUnitCost(amount: number): string {
+  const digits = amount > 0 && amount < 0.01 ? 6 : 2
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   }).format(amount)
 }
 

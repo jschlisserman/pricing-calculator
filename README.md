@@ -19,4 +19,5 @@ npm run dev
 - Security and Agent Learning are bundles (one purchase each)
 - Deployment and Collaboration SKUs are individual purchases
 - Support tiers are mutually exclusive, billed on 3-month (quarterly) terms only — never annualized
+- Platform (Deployment) is usage-based: enter additional volume above included free tiers (1M observability events, 250 CPU hours); unit costs are fixed and not volume-discounted
 - If support is sold with other purchases: volume discount is waived; credit on the quarterly support engagement is 15% with 1 purchase, 20% with 2+
