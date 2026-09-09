@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AGENCY_PASS_THROUGH_BANDS,
   CATALOG,
@@ -11,6 +11,7 @@ import {
   formatPercent,
   formatUsd,
   getCatalogListAmount,
+  isDppEligible,
   type CatalogItem,
 } from './pricing'
 
@@ -68,6 +69,12 @@ function categoryMeta(category: string): string {
 export default function App() {
   const [employees, setEmployees] = useState(50)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!isDppEligible(employees)) {
+      setSelectedIds((prev) => prev.filter((id) => id !== DESIGN_PARTNER_ID))
+    }
+  }, [employees])
 
   const quote = useMemo(
     () => buildQuote(selectedIds, Number.isFinite(employees) ? employees : 0),
@@ -169,7 +176,7 @@ export default function App() {
             </div>
             <p className="size-hint">
               Growth (25–99) is 1.0x list. Startup is 0.5x; larger bands scale up
-              to a 5.0x floor for Global+.
+              to an 8.0x floor for Global+.
             </p>
           </div>
 
@@ -189,15 +196,22 @@ export default function App() {
                   {items.map((item) => {
                     const selected = selectedIds.includes(item.id)
                     const isSupport = item.kind === 'support'
+                    const isDpp = item.id === DESIGN_PARTNER_ID
+                    const dppUnavailable = isDpp && !quote.dppEligible
                     const futureFeatures = FUTURE_FEATURES[item.id] ?? []
 
                     return (
                       <button
                         key={item.id}
                         type="button"
-                        className={`item${selected ? ' selected' : ''}${isSupport ? ' radio' : ''}`}
-                        onClick={() => toggleItem(item.id)}
+                        className={`item${selected ? ' selected' : ''}${isSupport ? ' radio' : ''}${dppUnavailable ? ' unavailable' : ''}`}
+                        onClick={() => {
+                          if (dppUnavailable) return
+                          toggleItem(item.id)
+                        }}
                         aria-pressed={selected}
+                        aria-disabled={dppUnavailable}
+                        disabled={dppUnavailable}
                       >
                         <span className="check" aria-hidden="true">
                           {selected && !isSupport ? <CheckIcon /> : null}
@@ -208,6 +222,9 @@ export default function App() {
                             {item.future && <span className="pill future">Future</span>}
                             {item.kind === 'bundle' && (
                               <span className="pill">Bundle</span>
+                            )}
+                            {dppUnavailable && (
+                              <span className="pill">Not offered</span>
                             )}
                           </span>
                           {item.description && (
@@ -231,10 +248,12 @@ export default function App() {
                           )}
                         </span>
                         <span className="item-price">
-                          {formatUsd(getCatalogListAmount(item, employees))}
+                          {dppUnavailable
+                            ? '—'
+                            : formatUsd(getCatalogListAmount(item, employees))}
                           <br />
-                          {periodLabel(item)}
-                          {item.id === DESIGN_PARTNER_ID && (
+                          {dppUnavailable ? 'Enterprise+' : periodLabel(item)}
+                          {isDpp && quote.dppMultiplier != null && (
                             <>
                               <br />
                               <span className="item-price-note">
@@ -279,7 +298,8 @@ export default function App() {
                           {item.category}
                           {isSupport
                             ? ' · 3-month term'
-                            : item.id === DESIGN_PARTNER_ID
+                            : item.id === DESIGN_PARTNER_ID &&
+                                quote.dppMultiplier != null
                               ? ` · DPP ${formatMultiplier(quote.dppMultiplier)}`
                               : ''}
                         </span>
@@ -472,8 +492,8 @@ export default function App() {
           <h2>DPP headcount bands</h2>
         </div>
         <p className="band-table-intro">
-          Design Partner Program annual fees. Startup ($8,000) is the 1.0x
-          baseline; these multipliers are separate from product packaging bands.
+          Design Partner Program annual fees for Startup through Mid-Market only.
+          Not offered at Enterprise (500+) or above.
         </p>
         <div className="band-table-wrap">
           <table className="band-table">
@@ -509,7 +529,7 @@ export default function App() {
           <h2>Agency pass-through fees</h2>
         </div>
         <p className="band-table-intro">
-          Client pass-through pricing for agencies: 50% off product headcount
+          Client pass-through pricing for agencies: 30% off product headcount
           bands.
         </p>
         <div className="band-table-wrap">

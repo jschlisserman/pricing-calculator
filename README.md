@@ -11,10 +11,10 @@ npm run dev
 
 ## Pricing logic
 
-- Catalog prices are Growth-band (25–99) list prices at 1.0x
-- Headcount bands: Startup 0.5x · Growth 1.0x · Mid-Market 1.5x · Enterprise 2.0x · Enterprise+ 3.0x · Global 4.0x · Global+ custom with 5.0x floor
-- Design Partner Program uses separate DPP bands (Startup $8k at 1.0x → Global+ $100k at 12.5x)
-- Agency client pass-through fees are 50% off product headcount bands with a $7.5k minimum on the all-four total
+- Catalog prices are Growth-band (25–99) list prices at 1.0x (Deployment $12k · Security $10k · Agent Learning $14k · Collaboration $12k)
+- Headcount bands: Startup 0.5x · Growth 1.0x · Mid-Market 1.75x · Enterprise 2.5x · Enterprise+ 4.0x · Global 6.0x · Global+ custom with 8.0x floor
+- Design Partner Program is Startup–Mid-Market only: Startup $8k · Growth $15k · Mid-Market $22k (not offered Enterprise+)
+- Agency client pass-through fees are 30% off product headcount bands with a $7.5k minimum on the all-four total
 - Volume discount by distinct product purchase count: 2 → 15%, 3 → 20%, 4+ → 25%
 - Security and Agent Learning are bundles (one purchase each)
 - Deployment and Collaboration SKUs are individual purchases

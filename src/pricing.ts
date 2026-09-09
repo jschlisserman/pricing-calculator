@@ -20,7 +20,7 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-helm',
     name: 'Helm Chart',
     category: 'Deployment',
-    basePrice: 8_000,
+    basePrice: 12_000,
     billingPeriod: 'year',
     kind: 'individual',
   },
@@ -28,7 +28,7 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-byoc',
     name: 'BYOC',
     category: 'Deployment',
-    basePrice: 8_000,
+    basePrice: 12_000,
     billingPeriod: 'year',
     kind: 'individual',
     future: true,
@@ -39,7 +39,7 @@ export const CATALOG: CatalogItem[] = [
     category: 'Security and Controls',
     description: 'Sold as a bundle of features',
     features: ['FGA', 'RBAC', 'Auth', 'HIPAA', 'SOC II', 'FGC'],
-    basePrice: 6_000,
+    basePrice: 10_000,
     billingPeriod: 'year',
     kind: 'bundle',
   },
@@ -49,7 +49,7 @@ export const CATALOG: CatalogItem[] = [
     category: 'Agent Learning',
     description: 'Sold as a bundle of features',
     features: ['Trace Intelligence', 'Custom Signals', 'Agent Learning'],
-    basePrice: 8_000,
+    basePrice: 14_000,
     billingPeriod: 'year',
     kind: 'bundle',
   },
@@ -57,7 +57,7 @@ export const CATALOG: CatalogItem[] = [
     id: 'collab-agent-builder',
     name: 'Agent Builder',
     category: 'Collaboration',
-    basePrice: 8_000,
+    basePrice: 12_000,
     billingPeriod: 'year',
     kind: 'individual',
   },
@@ -66,7 +66,7 @@ export const CATALOG: CatalogItem[] = [
     name: 'Software Factory',
     category: 'Collaboration',
     description: 'TBD features on Software Factory',
-    basePrice: 8_000,
+    basePrice: 12_000,
     billingPeriod: 'year',
     kind: 'individual',
     future: true,
@@ -75,7 +75,7 @@ export const CATALOG: CatalogItem[] = [
     id: 'collab-company-brain',
     name: 'Company Brain',
     category: 'Collaboration',
-    basePrice: 8_000,
+    basePrice: 12_000,
     billingPeriod: 'year',
     kind: 'individual',
     future: true,
@@ -92,7 +92,7 @@ export const CATALOG: CatalogItem[] = [
     id: 'program-design-partner',
     name: 'Mastra Design Partner Program',
     category: 'Programs',
-    description: 'Uses DPP headcount bands (Startup baseline $8k)',
+    description: 'Startup–Mid-Market only · not offered Enterprise+',
     basePrice: 8_000,
     billingPeriod: 'year',
     kind: 'program',
@@ -164,11 +164,11 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     minEmployees: 1,
     maxEmployees: 24,
     multiplier: 0.5,
-    deployment: '$4,000',
-    security: '$3,000',
-    agentLearning: '$4,000',
-    collaboration: '$4,000',
-    allFour: '$15,000',
+    deployment: '$6,000',
+    security: '$5,000',
+    agentLearning: '$7,000',
+    collaboration: '$6,000',
+    allFour: '$24,000',
   },
   {
     id: 'growth',
@@ -177,11 +177,11 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     minEmployees: 25,
     maxEmployees: 99,
     multiplier: 1,
-    deployment: '$8,000',
-    security: '$6,000',
-    agentLearning: '$8,000',
-    collaboration: '$8,000',
-    allFour: '$30,000',
+    deployment: '$12,000',
+    security: '$10,000',
+    agentLearning: '$14,000',
+    collaboration: '$12,000',
+    allFour: '$48,000',
   },
   {
     id: 'mid-market',
@@ -189,12 +189,12 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     headcount: '100–499',
     minEmployees: 100,
     maxEmployees: 499,
-    multiplier: 1.5,
-    deployment: '$12,000',
-    security: '$9,000',
-    agentLearning: '$12,000',
-    collaboration: '$12,000',
-    allFour: '$45,000',
+    multiplier: 1.75,
+    deployment: '$21,000',
+    security: '$17,500',
+    agentLearning: '$24,500',
+    collaboration: '$21,000',
+    allFour: '$84,000',
   },
   {
     id: 'enterprise',
@@ -202,12 +202,12 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     headcount: '500–1,999',
     minEmployees: 500,
     maxEmployees: 1_999,
-    multiplier: 2,
-    deployment: '$16,000',
-    security: '$12,000',
-    agentLearning: '$16,000',
-    collaboration: '$16,000',
-    allFour: '$60,000',
+    multiplier: 2.5,
+    deployment: '$30,000',
+    security: '$25,000',
+    agentLearning: '$35,000',
+    collaboration: '$30,000',
+    allFour: '$120,000',
   },
   {
     id: 'enterprise-plus',
@@ -215,12 +215,12 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     headcount: '2,000–4,999',
     minEmployees: 2_000,
     maxEmployees: 4_999,
-    multiplier: 3,
-    deployment: '$24,000',
-    security: '$18,000',
-    agentLearning: '$24,000',
-    collaboration: '$24,000',
-    allFour: '$90,000',
+    multiplier: 4,
+    deployment: '$48,000',
+    security: '$40,000',
+    agentLearning: '$56,000',
+    collaboration: '$48,000',
+    allFour: '$192,000',
   },
   {
     id: 'global',
@@ -228,12 +228,12 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     headcount: '5,000–9,999',
     minEmployees: 5_000,
     maxEmployees: 9_999,
-    multiplier: 4,
-    deployment: '$32,000',
-    security: '$24,000',
-    agentLearning: '$32,000',
-    collaboration: '$32,000',
-    allFour: '$120,000',
+    multiplier: 6,
+    deployment: '$72,000',
+    security: '$60,000',
+    agentLearning: '$84,000',
+    collaboration: '$72,000',
+    allFour: '$288,000',
   },
   {
     id: 'global-plus',
@@ -241,13 +241,13 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     headcount: '10,000+',
     minEmployees: 10_000,
     maxEmployees: null,
-    multiplier: 5,
+    multiplier: 8,
     custom: true,
-    deployment: '$40,000+',
-    security: '$30,000+',
-    agentLearning: '$40,000+',
-    collaboration: '$40,000+',
-    allFour: '$150,000+',
+    deployment: '$96,000+',
+    security: '$80,000+',
+    agentLearning: '$112,000+',
+    collaboration: '$96,000+',
+    allFour: '$384,000+',
   },
 ]
 
@@ -275,7 +275,7 @@ export interface DppHeadcountBand {
   annualFee: number
 }
 
-/** Design Partner Program — Startup ($8k) is the 1.0x baseline. */
+/** Design Partner Program — Startup–Mid-Market only. Startup ($8k) is 1.0x. */
 export const DESIGN_PARTNER_BASE = 8_000
 
 export const DPP_HEADCOUNT_BANDS: DppHeadcountBand[] = [
@@ -294,8 +294,8 @@ export const DPP_HEADCOUNT_BANDS: DppHeadcountBand[] = [
     headcount: '25–99',
     minEmployees: 25,
     maxEmployees: 99,
-    multiplier: 1.5,
-    annualFee: 12_000,
+    multiplier: 15_000 / DESIGN_PARTNER_BASE,
+    annualFee: 15_000,
   },
   {
     id: 'mid-market',
@@ -303,51 +303,22 @@ export const DPP_HEADCOUNT_BANDS: DppHeadcountBand[] = [
     headcount: '100–499',
     minEmployees: 100,
     maxEmployees: 499,
-    multiplier: 2,
-    annualFee: 16_000,
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    headcount: '500–1,999',
-    minEmployees: 500,
-    maxEmployees: 1_999,
-    multiplier: 3,
-    annualFee: 24_000,
-  },
-  {
-    id: 'enterprise-plus',
-    name: 'Enterprise+',
-    headcount: '2,000–4,999',
-    minEmployees: 2_000,
-    maxEmployees: 4_999,
-    multiplier: 5,
-    annualFee: 40_000,
-  },
-  {
-    id: 'global',
-    name: 'Global',
-    headcount: '5,000–9,999',
-    minEmployees: 5_000,
-    maxEmployees: 9_999,
-    multiplier: 8,
-    annualFee: 64_000,
-  },
-  {
-    id: 'global-plus',
-    name: 'Global+',
-    headcount: '10,000+',
-    minEmployees: 10_000,
-    maxEmployees: null,
-    multiplier: 12.5,
-    annualFee: 100_000,
+    multiplier: 22_000 / DESIGN_PARTNER_BASE,
+    annualFee: 22_000,
   },
 ]
 
-export function getDppHeadcountBand(employees: number): DppHeadcountBand {
-  const normalized = Math.max(0, employees)
-  if (normalized < 1) return DPP_HEADCOUNT_BANDS[0]
+/** DPP is not offered at Enterprise (500+) or above. */
+export function isDppEligible(employees: number): boolean {
+  return employees >= 1 && employees <= 499
+}
 
+export function getDppHeadcountBand(
+  employees: number,
+): DppHeadcountBand | null {
+  if (!isDppEligible(employees)) return null
+
+  const normalized = Math.max(1, employees)
   for (const band of DPP_HEADCOUNT_BANDS) {
     const withinMin = normalized >= band.minEmployees
     const withinMax =
@@ -366,7 +337,8 @@ export function getCatalogListAmount(
   employees: number,
 ): number {
   if (item.id === DESIGN_PARTNER_ID) {
-    return getDppHeadcountBand(employees).annualFee
+    const band = getDppHeadcountBand(employees)
+    return band?.annualFee ?? 0
   }
   return item.basePrice * getHeadcountBand(employees).multiplier
 }
@@ -386,29 +358,30 @@ export function getCompanySizeLabel(employees: number): string {
 }
 
 export function formatMultiplier(multiplier: number, custom = false): string {
-  const value = Number.isInteger(multiplier)
-    ? `${multiplier}.0`
-    : String(multiplier)
+  const rounded = Math.round(multiplier * 1000) / 1000
+  const value = Number.isInteger(rounded)
+    ? `${rounded}.0`
+    : String(rounded)
   return custom ? `Custom, ${value}x floor` : `${value}x`
 }
 
 /** Growth-band category list prices used to derive band tables. */
 export const PRODUCT_CATEGORY_BASES = {
-  deployment: 8_000,
-  security: 6_000,
-  agentLearning: 8_000,
-  collaboration: 8_000,
+  deployment: 12_000,
+  security: 10_000,
+  agentLearning: 14_000,
+  collaboration: 12_000,
 } as const
 
-/** Agency client pass-through: 50% off product bands; $7.5k minimum on total. */
-export const AGENCY_PASS_THROUGH_RATE = 0.5
+/** Agency client pass-through: 30% off product bands; $7.5k minimum on total. */
+export const AGENCY_PASS_THROUGH_DISCOUNT = 0.3
 export const AGENCY_PASS_THROUGH_MINIMUM = 7_500
 
 export function agencyPassThroughFee(
   growthBase: number,
   multiplier: number,
 ): number {
-  return growthBase * multiplier * AGENCY_PASS_THROUGH_RATE
+  return growthBase * multiplier * (1 - AGENCY_PASS_THROUGH_DISCOUNT)
 }
 
 export interface AgencyPassThroughBand {
@@ -502,8 +475,9 @@ export interface Quote {
   companySizeLabel: string
   companyBandId: string
   companyCustom: boolean
-  dppBandId: string
-  dppMultiplier: number
+  dppEligible: boolean
+  dppBandId: string | null
+  dppMultiplier: number | null
   /** True when support is sold with ≥1 other purchase. */
   supportBundled: boolean
   /** Volume % off products only; 0 when support is bundled. */
@@ -522,7 +496,12 @@ export function buildQuote(
   selectedIds: string[],
   employees: number,
 ): Quote {
-  const selected = CATALOG.filter((item) => selectedIds.includes(item.id))
+  const dppEligible = isDppEligible(employees)
+  const selected = CATALOG.filter((item) => {
+    if (!selectedIds.includes(item.id)) return false
+    if (item.id === DESIGN_PARTNER_ID && !dppEligible) return false
+    return true
+  })
   const band = getHeadcountBand(employees)
   const dppBand = getDppHeadcountBand(employees)
   const multiplier = band.multiplier
@@ -587,8 +566,9 @@ export function buildQuote(
     companySizeLabel: getCompanySizeLabel(employees),
     companyBandId: band.id,
     companyCustom: Boolean(band.custom),
-    dppBandId: dppBand.id,
-    dppMultiplier: dppBand.multiplier,
+    dppEligible,
+    dppBandId: dppBand?.id ?? null,
+    dppMultiplier: dppBand?.multiplier ?? null,
     supportBundled,
     discountRate,
     discountAmount,
