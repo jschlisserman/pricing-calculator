@@ -5,19 +5,34 @@ import {
   CATEGORY_ORDER,
   DESIGN_PARTNER_ID,
   DPP_HEADCOUNT_BANDS,
+  DPP_USAGE_REFERENCE_ANNUAL,
   HEADCOUNT_BANDS,
   PLATFORM_ID,
+  PLATFORM_PACKAGES,
   PLATFORM_USAGE_METRICS,
+  PLATFORM_USAGE_REFERENCE_ANNUAL,
   buildQuote,
-  emptyPlatformUsage,
+  defaultDppUsageConfig,
+  defaultPlatformConfig,
+  dppUsageConfigFromEmployees,
   formatMultiplier,
   formatPercent,
   formatUnitCost,
   formatUsd,
   getCatalogListAmount,
+  getDppAnnualFee,
+  getPlatformListPrice,
+  hasSelfHostedDeployment,
   isDppEligible,
+  isGatedBySelfHosted,
+  isProgramExclusiveGated,
+  isProgramId,
+  platformConfigFromPackage,
+  withoutSelfHostedGatedItems,
   type CatalogItem,
-  type PlatformUsageAmounts,
+  type DppUsageConfig,
+  type PlatformConfig,
+  type PlatformPackageId,
 } from './pricing'
 
 const FUTURE_FEATURES: Record<string, string[]> = {
@@ -68,14 +83,18 @@ function categoryMeta(category: string): string {
     return 'Bundle'
   }
   if (category === 'Support') return '3-month terms'
-  return 'Programs'
+  return 'Exclusive'
 }
 
 export default function App() {
   const [employees, setEmployees] = useState(50)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [platformUsage, setPlatformUsage] =
-    useState<PlatformUsageAmounts>(emptyPlatformUsage)
+  const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(() =>
+    defaultPlatformConfig(50),
+  )
+  const [dppUsageConfig, setDppUsageConfig] = useState<DppUsageConfig>(() =>
+    defaultDppUsageConfig(50),
+  )
 
   useEffect(() => {
     if (!isDppEligible(employees)) {
@@ -83,17 +102,40 @@ export default function App() {
     }
   }, [employees])
 
+  useEffect(() => {
+    setPlatformConfig((prev) => {
+      const scaled = platformConfigFromPackage(prev.packageId, employees)
+      return { ...scaled, additional: prev.additional }
+    })
+    setDppUsageConfig((prev) => {
+      const scaled = dppUsageConfigFromEmployees(employees)
+      return { ...scaled, additional: prev.additional }
+    })
+  }, [employees])
+
   const quote = useMemo(
     () =>
       buildQuote(
         selectedIds,
         Number.isFinite(employees) ? employees : 0,
-        platformUsage,
+        platformConfig,
+        dppUsageConfig,
       ),
-    [selectedIds, employees, platformUsage],
+    [selectedIds, employees, platformConfig, dppUsageConfig],
   )
 
   const platformSelected = selectedIds.includes(PLATFORM_ID)
+  const dppSelected = selectedIds.includes(DESIGN_PARTNER_ID)
+  const platformListPrice = getPlatformListPrice(
+    Number.isFinite(employees) ? employees : 0,
+  )
+  const dppAnnualFee = getDppAnnualFee(
+    Number.isFinite(employees) ? employees : 0,
+  )
+  const usageScale = platformListPrice / PLATFORM_USAGE_REFERENCE_ANNUAL
+  const dppUsageScale =
+    dppAnnualFee > 0 ? dppAnnualFee / DPP_USAGE_REFERENCE_ANNUAL : 0
+  const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
 
   const byCategory = useMemo(() => {
     const map = new Map<string, CatalogItem[]>()
@@ -115,11 +157,23 @@ export default function App() {
         return prev.filter((x) => x !== id)
       }
 
-      if (isSupport) {
-        return [...prev.filter((x) => !SUPPORT_IDS.has(x)), id]
+      if (isProgramExclusiveGated(id, prev)) {
+        return prev
       }
 
-      return [...prev, id]
+      if (isGatedBySelfHosted(id) && hasSelfHostedDeployment(prev)) {
+        return prev
+      }
+
+      if (isSupport) {
+        return withoutSelfHostedGatedItems([
+          ...prev.filter((x) => !SUPPORT_IDS.has(x)),
+          id,
+        ])
+      }
+
+      const next = [...prev, id]
+      return withoutSelfHostedGatedItems(next)
     })
   }
 
@@ -129,15 +183,56 @@ export default function App() {
 
   function setUsageAmount(metricId: string, value: string) {
     const parsed = Number(value.replace(/,/g, ''))
-    setPlatformUsage((prev) => ({
+    setPlatformConfig((prev) => ({
       ...prev,
-      [metricId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+      additional: {
+        ...prev.additional,
+        [metricId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+      },
     }))
+  }
+
+  function setIncludeAmount(metricId: string, value: string) {
+    const parsed = Number(value.replace(/,/g, ''))
+    setPlatformConfig((prev) => ({
+      ...prev,
+      includes: {
+        ...prev.includes,
+        [metricId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+      },
+    }))
+  }
+
+  function setDppUsageAmount(metricId: string, value: string) {
+    const parsed = Number(value.replace(/,/g, ''))
+    setDppUsageConfig((prev) => ({
+      ...prev,
+      additional: {
+        ...prev.additional,
+        [metricId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+      },
+    }))
+  }
+
+  function setDppIncludeAmount(metricId: string, value: string) {
+    const parsed = Number(value.replace(/,/g, ''))
+    setDppUsageConfig((prev) => ({
+      ...prev,
+      includes: {
+        ...prev.includes,
+        [metricId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+      },
+    }))
+  }
+
+  function selectPlatformPackage(packageId: PlatformPackageId) {
+    setPlatformConfig(platformConfigFromPackage(packageId, employees))
   }
 
   function clearOrder() {
     setSelectedIds([])
-    setPlatformUsage(emptyPlatformUsage())
+    setPlatformConfig(defaultPlatformConfig(employees))
+    setDppUsageConfig(defaultDppUsageConfig(employees))
   }
 
   const hasProducts = quote.productLineItems.length > 0
@@ -227,23 +322,39 @@ export default function App() {
                     const isDpp = item.id === DESIGN_PARTNER_ID
                     const isPlatform = item.id === PLATFORM_ID
                     const dppUnavailable = isDpp && !quote.dppEligible
+                    const selfHostedGated =
+                      isGatedBySelfHosted(item.id) && selfHostedSelected
+                    const programGated =
+                      isProgramExclusiveGated(item.id, selectedIds) &&
+                      !selected
+                    const unavailable =
+                      dppUnavailable || selfHostedGated || programGated
                     const futureFeatures = FUTURE_FEATURES[item.id] ?? []
+                    const gateMessage = dppUnavailable
+                      ? null
+                      : selfHostedGated
+                        ? 'Unavailable with Helm Chart or BYOC. Use Platform deployment instead.'
+                        : programGated
+                          ? isProgramId(item.id)
+                            ? 'Programs cannot be combined with other purchases.'
+                            : 'Other options are unavailable while a program is selected.'
+                          : null
 
                     return (
                       <div
                         key={item.id}
-                        className={`item-wrap${isPlatform && selected ? ' open' : ''}`}
+                        className={`item-wrap${(isPlatform || isDpp) && selected ? ' open' : ''}`}
                       >
                         <button
                           type="button"
-                          className={`item${selected ? ' selected' : ''}${isSupport ? ' radio' : ''}${dppUnavailable ? ' unavailable' : ''}`}
+                          className={`item${selected ? ' selected' : ''}${isSupport ? ' radio' : ''}${unavailable ? ' unavailable' : ''}`}
                           onClick={() => {
-                            if (dppUnavailable) return
+                            if (unavailable) return
                             toggleItem(item.id)
                           }}
                           aria-pressed={selected}
-                          aria-disabled={dppUnavailable}
-                          disabled={dppUnavailable}
+                          aria-disabled={unavailable}
+                          disabled={unavailable}
                         >
                           <span className="check" aria-hidden="true">
                             {selected && !isSupport ? <CheckIcon /> : null}
@@ -263,11 +374,24 @@ export default function App() {
                               {dppUnavailable && (
                                 <span className="pill">Not offered</span>
                               )}
+                              {selfHostedGated && (
+                                <span className="pill">Not with Helm/BYOC</span>
+                              )}
+                              {programGated && (
+                                <span className="pill">
+                                  {isProgramId(item.id)
+                                    ? 'Exclusive'
+                                    : 'Program selected'}
+                                </span>
+                              )}
                             </span>
-                            {item.description && (
+                            {gateMessage && (
+                              <p className="item-desc">{gateMessage}</p>
+                            )}
+                            {!gateMessage && item.description && (
                               <p className="item-desc">{item.description}</p>
                             )}
-                            {item.features && (
+                            {item.features && !gateMessage && (
                               <div className="feature-list">
                                 {item.features.map((feature) => {
                                   const isFuture =
@@ -286,14 +410,8 @@ export default function App() {
                             )}
                           </span>
                           <span className="item-price">
-                            {dppUnavailable ? (
+                            {unavailable ? (
                               '—'
-                            ) : isPlatform ? (
-                              <>
-                                Metered
-                                <br />
-                                usage
-                              </>
                             ) : (
                               <>
                                 {formatUsd(
@@ -309,12 +427,10 @@ export default function App() {
                                 Enterprise+
                               </>
                             )}
-                            {isDpp && quote.dppMultiplier != null && (
+                            {(selfHostedGated || programGated) && (
                               <>
                                 <br />
-                                <span className="item-price-note">
-                                  DPP {formatMultiplier(quote.dppMultiplier)}
-                                </span>
+                                Gated
                               </>
                             )}
                           </span>
@@ -323,23 +439,54 @@ export default function App() {
                         {isPlatform && selected && (
                           <div className="platform-usage">
                             <p className="platform-usage-intro">
-                              Enter <strong>additional</strong> volume only.
-                              First 1,000,000 observability events and first 250
-                              CPU hours are included free.
+                              Package includes are authored for a{' '}
+                              {formatUsd(PLATFORM_USAGE_REFERENCE_ANNUAL)}
+                              /year Platform reference and scale with headcount
+                              (currently {formatUsd(platformListPrice)}
+                              /year, {usageScale.toFixed(2)}×). Enter{' '}
+                              <strong>additional</strong> volume beyond package
+                              includes to bill at unit cost.
                             </p>
-                            <div className="platform-usage-table">
-                              <div className="platform-usage-head">
+
+                            <div className="platform-package-toggles">
+                              {PLATFORM_PACKAGES.map((pkg) => (
+                                <button
+                                  key={pkg.id}
+                                  type="button"
+                                  className={`platform-package-toggle${
+                                    platformConfig.packageId === pkg.id
+                                      ? ' active'
+                                      : ''
+                                  }`}
+                                  onClick={() => selectPlatformPackage(pkg.id)}
+                                >
+                                  {pkg.name}
+                                </button>
+                              ))}
+                            </div>
+
+                            <div className="platform-base-row">
+                              <span>Platform base (by headcount)</span>
+                              <strong>{formatUsd(platformListPrice)}/yr</strong>
+                            </div>
+
+                            <div className="platform-usage-table package-table">
+                              <div className="platform-usage-head package-head">
                                 <span>Meter</span>
-                                <span>Additional amount</span>
+                                <span>Package include</span>
+                                <span>Additional</span>
                                 <span>Unit cost</span>
-                                <span>Line cost</span>
+                                <span>Overage</span>
                               </div>
                               {PLATFORM_USAGE_METRICS.map((metric) => {
-                                const amount = platformUsage[metric.id] ?? 0
-                                const lineCost = amount * metric.unitCost
+                                const included =
+                                  platformConfig.includes[metric.id] ?? 0
+                                const additional =
+                                  platformConfig.additional[metric.id] ?? 0
+                                const lineCost = additional * metric.unitCost
                                 return (
                                   <div
-                                    className="platform-usage-row"
+                                    className="platform-usage-row package-row"
                                     key={metric.id}
                                   >
                                     <div className="platform-usage-label">
@@ -354,11 +501,105 @@ export default function App() {
                                       type="number"
                                       min={0}
                                       step={1}
-                                      value={amount}
+                                      value={included}
+                                      onChange={(e) =>
+                                        setIncludeAmount(
+                                          metric.id,
+                                          e.target.value,
+                                        )
+                                      }
+                                      aria-label={`Package include ${metric.name}`}
+                                    />
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step={1}
+                                      value={additional}
                                       onChange={(e) =>
                                         setUsageAmount(metric.id, e.target.value)
                                       }
                                       aria-label={`Additional ${metric.name}`}
+                                    />
+                                    <span className="platform-usage-unit">
+                                      {formatUnitCost(metric.unitCost)}
+                                      <span className="platform-usage-note">
+                                        / {metric.unitLabel}
+                                      </span>
+                                    </span>
+                                    <span className="platform-usage-cost">
+                                      {formatUsd(lineCost)}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {isDpp && selected && !unavailable && (
+                          <div className="platform-usage">
+                            <p className="platform-usage-intro">
+                              Design Partner usage package is authored for a{' '}
+                              {formatUsd(DPP_USAGE_REFERENCE_ANNUAL)}
+                              /year DPP reference and scales with the DPP fee
+                              (currently {formatUsd(dppAnnualFee)}
+                              /year, {dppUsageScale.toFixed(2)}×). Enter{' '}
+                              <strong>additional</strong> volume beyond package
+                              includes to bill at unit cost.
+                            </p>
+
+                            <div className="platform-base-row">
+                              <span>DPP fee (by headcount)</span>
+                              <strong>{formatUsd(dppAnnualFee)}/yr</strong>
+                            </div>
+
+                            <div className="platform-usage-table package-table">
+                              <div className="platform-usage-head package-head">
+                                <span>Meter</span>
+                                <span>Package include</span>
+                                <span>Additional</span>
+                                <span>Unit cost</span>
+                                <span>Overage</span>
+                              </div>
+                              {PLATFORM_USAGE_METRICS.map((metric) => {
+                                const included =
+                                  dppUsageConfig.includes[metric.id] ?? 0
+                                const additional =
+                                  dppUsageConfig.additional[metric.id] ?? 0
+                                const lineCost = additional * metric.unitCost
+                                return (
+                                  <div
+                                    className="platform-usage-row package-row"
+                                    key={metric.id}
+                                  >
+                                    <div className="platform-usage-label">
+                                      <span>{metric.name}</span>
+                                    </div>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step={1}
+                                      value={included}
+                                      onChange={(e) =>
+                                        setDppIncludeAmount(
+                                          metric.id,
+                                          e.target.value,
+                                        )
+                                      }
+                                      aria-label={`DPP package include ${metric.name}`}
+                                    />
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step={1}
+                                      value={additional}
+                                      onChange={(e) =>
+                                        setDppUsageAmount(
+                                          metric.id,
+                                          e.target.value,
+                                        )
+                                      }
+                                      aria-label={`DPP additional ${metric.name}`}
                                     />
                                     <span className="platform-usage-unit">
                                       {formatUnitCost(metric.unitCost)}
@@ -399,6 +640,7 @@ export default function App() {
                 {quote.lineItems.map(({ item, listAmount, billedAmount }) => {
                   const isSupport = item.kind === 'support'
                   const isPlatform = item.id === PLATFORM_ID
+                  const isDpp = item.id === DESIGN_PARTNER_ID
                   return (
                     <li className="order-line" key={item.id}>
                       <div>
@@ -407,18 +649,34 @@ export default function App() {
                           {item.category}
                           {isSupport
                             ? ' · 3-month term'
-                            : isPlatform
-                              ? ' · usage-based'
-                              : item.id === DESIGN_PARTNER_ID &&
-                                  quote.dppMultiplier != null
-                                ? ` · DPP ${formatMultiplier(quote.dppMultiplier)}`
+                            : isPlatform && quote.platformPackageName
+                              ? ` · ${quote.platformPackageName}`
+                              : isDpp
+                                ? ' · usage package'
                                 : ''}
                         </span>
-                        {isPlatform && quote.platformUsageLines.length > 0 && (
+                        {isPlatform && (
                           <ul className="usage-breakdown">
+                            <li>
+                              Base price: {formatUsd(quote.platformBasePrice)}
+                              {quote.platformPackageName
+                                ? ` · ${quote.platformPackageName}`
+                                : ''}
+                            </li>
+                            {PLATFORM_USAGE_METRICS.map((metric) => {
+                              const included =
+                                quote.platformIncludes[metric.id] ?? 0
+                              if (included <= 0) return null
+                              return (
+                                <li key={`include-${metric.id}`}>
+                                  Include {metric.name}:{' '}
+                                  {included.toLocaleString('en-US')}
+                                </li>
+                              )
+                            })}
                             {quote.platformUsageLines.map((line) => (
                               <li key={line.metric.id}>
-                                {line.metric.name}:{' '}
+                                Additional {line.metric.name}:{' '}
                                 {line.additionalAmount.toLocaleString('en-US')} ×{' '}
                                 {formatUnitCost(line.metric.unitCost)} ={' '}
                                 {formatUsd(line.cost)}
@@ -426,12 +684,30 @@ export default function App() {
                             ))}
                           </ul>
                         )}
-                        {isPlatform &&
-                          quote.platformUsageLines.length === 0 && (
-                            <span className="order-line-meta">
-                              No additional usage entered
-                            </span>
-                          )}
+                        {isDpp && (
+                          <ul className="usage-breakdown">
+                            <li>DPP fee: {formatUsd(billedAmount)}</li>
+                            {PLATFORM_USAGE_METRICS.map((metric) => {
+                              const included =
+                                quote.dppIncludes[metric.id] ?? 0
+                              if (included <= 0) return null
+                              return (
+                                <li key={`dpp-include-${metric.id}`}>
+                                  Include {metric.name}:{' '}
+                                  {included.toLocaleString('en-US')}
+                                </li>
+                              )
+                            })}
+                            {quote.dppUsageLines.map((line) => (
+                              <li key={`dpp-${line.metric.id}`}>
+                                Additional {line.metric.name}:{' '}
+                                {line.additionalAmount.toLocaleString('en-US')} ×{' '}
+                                {formatUnitCost(line.metric.unitCost)} ={' '}
+                                {formatUsd(line.cost)}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                       <span className="order-line-price">
                         {isSupport && billedAmount !== listAmount ? (
@@ -441,6 +717,8 @@ export default function App() {
                           </>
                         ) : isPlatform ? (
                           formatUsd(quote.platformUsageTotal)
+                        ) : isDpp ? (
+                          formatUsd(billedAmount + quote.dppOverageTotal)
                         ) : (
                           formatUsd(billedAmount)
                         )}
@@ -501,13 +779,30 @@ export default function App() {
                 )}
 
                 {platformSelected && (
+                  <>
+                    <div className="total-row muted">
+                      <span>Platform base</span>
+                      <span>{formatUsd(quote.platformBasePrice)}</span>
+                    </div>
+                    <div className="total-row muted">
+                      <span>Platform overage</span>
+                      <span>{formatUsd(quote.platformOverageTotal)}</span>
+                    </div>
+                    <div className="total-row muted">
+                      <span>Platform total</span>
+                      <span>{formatUsd(quote.platformUsageTotal)}</span>
+                    </div>
+                  </>
+                )}
+
+                {dppSelected && (
                   <div className="total-row muted">
-                    <span>Platform usage</span>
-                    <span>{formatUsd(quote.platformUsageTotal)}</span>
+                    <span>DPP usage overage</span>
+                    <span>{formatUsd(quote.dppOverageTotal)}</span>
                   </div>
                 )}
 
-                {(hasProducts || platformSelected) && (
+                {(hasProducts || platformSelected || dppSelected) && (
                   <div className={`total-row${hasSupport ? '' : ' grand'}`}>
                     <span>Annual total</span>
                     <span>{formatUsd(quote.annualTotal)}</span>
@@ -544,7 +839,7 @@ export default function App() {
                   </>
                 )}
 
-                {!hasSupport && (hasProducts || platformSelected) && (
+                {!hasSupport && (hasProducts || platformSelected || dppSelected) && (
                   <div className="total-row muted">
                     <span>Effective / quarter</span>
                     <span>{formatUsd(quote.annualTotal / 4)}</span>

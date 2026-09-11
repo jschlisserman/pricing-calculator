@@ -20,7 +20,18 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-helm',
     name: 'Helm Chart',
     category: 'Deployment',
-    basePrice: 12_000,
+    description: '33% less than BYOC list (rounded down)',
+    basePrice: 8_000,
+    billingPeriod: 'year',
+    kind: 'individual',
+  },
+  {
+    id: 'deploy-platform',
+    name: 'Platform',
+    category: 'Deployment',
+    description:
+      'Between Helm and BYOC. Package usage scales from a $30k/year reference.',
+    basePrice: 10_000,
     billingPeriod: 'year',
     kind: 'individual',
   },
@@ -32,16 +43,6 @@ export const CATALOG: CatalogItem[] = [
     billingPeriod: 'year',
     kind: 'individual',
     future: true,
-  },
-  {
-    id: 'deploy-platform',
-    name: 'Platform',
-    category: 'Deployment',
-    description:
-      'Usage-based. Enter additional volume above included free tiers.',
-    basePrice: 0,
-    billingPeriod: 'year',
-    kind: 'individual',
   },
   {
     id: 'security-controls',
@@ -72,25 +73,6 @@ export const CATALOG: CatalogItem[] = [
     kind: 'individual',
   },
   {
-    id: 'collab-software-factory',
-    name: 'Software Factory',
-    category: 'Collaboration',
-    description: 'TBD features on Software Factory',
-    basePrice: 12_000,
-    billingPeriod: 'year',
-    kind: 'individual',
-    future: true,
-  },
-  {
-    id: 'collab-company-brain',
-    name: 'Company Brain',
-    category: 'Collaboration',
-    basePrice: 12_000,
-    billingPeriod: 'year',
-    kind: 'individual',
-    future: true,
-  },
-  {
     id: 'program-agency',
     name: 'Mastra Agency Program',
     category: 'Programs',
@@ -112,7 +94,7 @@ export const CATALOG: CatalogItem[] = [
     name: 'Support — Small',
     category: 'Support',
     description: '2 hrs / week · 3-month term',
-    basePrice: 9_000,
+    basePrice: 12_000,
     billingPeriod: 'quarter',
     kind: 'support',
   },
@@ -121,7 +103,7 @@ export const CATALOG: CatalogItem[] = [
     name: 'Support — Medium',
     category: 'Support',
     description: '6 hrs / week · 3-month term',
-    basePrice: 24_000,
+    basePrice: 36_000,
     billingPeriod: 'quarter',
     kind: 'support',
   },
@@ -130,7 +112,7 @@ export const CATALOG: CatalogItem[] = [
     name: 'Support — Large',
     category: 'Support',
     description: '20 hrs / week · 3-month term',
-    basePrice: 70_000,
+    basePrice: 80_000,
     billingPeriod: 'quarter',
     kind: 'support',
   },
@@ -341,6 +323,67 @@ export function getDppHeadcountBand(
 
 export const DESIGN_PARTNER_ID = 'program-design-partner'
 export const PLATFORM_ID = 'deploy-platform'
+export const HELM_ID = 'deploy-helm'
+export const BYOC_ID = 'deploy-byoc'
+export const AGENT_LEARNING_ID = 'agent-learning'
+
+export const PROGRAM_IDS = CATALOG.filter((item) => item.kind === 'program').map(
+  (item) => item.id,
+)
+
+/** Self-hosted deployment options that gate Agent Learning. */
+export const SELF_HOSTED_DEPLOYMENT_IDS = [HELM_ID, BYOC_ID] as const
+
+/** Catalog IDs unavailable when Helm Chart or BYOC is selected. */
+export const GATED_BY_SELF_HOSTED_IDS = [AGENT_LEARNING_ID] as const
+
+export function isProgramId(itemId: string): boolean {
+  return PROGRAM_IDS.includes(itemId)
+}
+
+export function hasProgramSelected(selectedIds: string[]): boolean {
+  return selectedIds.some((id) => isProgramId(id))
+}
+
+export function hasNonProgramSelected(selectedIds: string[]): boolean {
+  return selectedIds.some((id) => !isProgramId(id))
+}
+
+export function hasSelfHostedDeployment(selectedIds: string[]): boolean {
+  return SELF_HOSTED_DEPLOYMENT_IDS.some((id) => selectedIds.includes(id))
+}
+
+export function isGatedBySelfHosted(itemId: string): boolean {
+  return (GATED_BY_SELF_HOSTED_IDS as readonly string[]).includes(itemId)
+}
+
+/** Programs are exclusive vs all other catalog options. */
+export function isProgramExclusiveGated(
+  itemId: string,
+  selectedIds: string[],
+): boolean {
+  if (isProgramId(itemId)) {
+    return hasNonProgramSelected(selectedIds)
+  }
+  return hasProgramSelected(selectedIds)
+}
+
+export function withoutSelfHostedGatedItems(selectedIds: string[]): string[] {
+  if (!hasSelfHostedDeployment(selectedIds)) return selectedIds
+  return selectedIds.filter((id) => !isGatedBySelfHosted(id))
+}
+
+export function withoutIncompatibleProgramMix(selectedIds: string[]): string[] {
+  const hasProgram = hasProgramSelected(selectedIds)
+  const hasNonProgram = hasNonProgramSelected(selectedIds)
+  if (!(hasProgram && hasNonProgram)) return selectedIds
+  // Prefer keeping the side that matches the latest id in the list.
+  const lastId = selectedIds[selectedIds.length - 1]
+  if (isProgramId(lastId)) {
+    return selectedIds.filter((id) => isProgramId(id))
+  }
+  return selectedIds.filter((id) => !isProgramId(id))
+}
 
 export interface PlatformUsageMetric {
   id: string
@@ -348,7 +391,7 @@ export interface PlatformUsageMetric {
   unitCost: number
   /** Shown next to the unit cost, e.g. "event", "GB", "hour". */
   unitLabel: string
-  /** Included free tier note; input is additional volume only. */
+  /** Baseline free tier note (applies when package include is 0). */
   includedNote?: string
 }
 
@@ -358,7 +401,7 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     name: 'Observability Events',
     unitCost: 0.00008,
     unitLabel: 'event',
-    includedNote: 'First 1,000,000 events included / free',
+    includedNote: 'First 1,000,000 events free outside package includes',
   },
   {
     id: 'data-egress',
@@ -371,7 +414,7 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     name: 'CPU Time (Hour)',
     unitCost: 0.25,
     unitLabel: 'hour',
-    includedNote: 'First 250 hours included / free',
+    includedNote: 'First 250 hours free outside package includes',
   },
   {
     id: 'rows-written',
@@ -395,9 +438,186 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
 
 export type PlatformUsageAmounts = Record<string, number>
 
+export type PlatformPackageId =
+  | 'enterprise-standard'
+  | 'enterprise-observability'
+  | 'enterprise-obs-studio'
+
+export interface PlatformPackagePreset {
+  id: PlatformPackageId
+  name: string
+  /** Include amounts calibrated for PLATFORM_USAGE_REFERENCE_ANNUAL. */
+  includes: PlatformUsageAmounts
+}
+
+/** Package include tables are authored against this annual Platform reference. */
+export const PLATFORM_USAGE_REFERENCE_ANNUAL = 30_000
+
 export function emptyPlatformUsage(): PlatformUsageAmounts {
   return Object.fromEntries(
     PLATFORM_USAGE_METRICS.map((metric) => [metric.id, 0]),
+  )
+}
+
+export const PLATFORM_PACKAGES: PlatformPackagePreset[] = [
+  {
+    id: 'enterprise-standard',
+    name: 'Enterprise (Standard)',
+    includes: {
+      'observability-events': 10_000_000,
+      'data-egress': 1_000,
+      'cpu-time': 2_500,
+      'rows-written': 100_000_000,
+      'compute-hours': 500,
+      'data-storage': 100,
+    },
+  },
+  {
+    id: 'enterprise-observability',
+    name: 'Enterprise (Observability Package)',
+    includes: {
+      'observability-events': 100_000_000,
+      'data-egress': 0,
+      'cpu-time': 0,
+      'rows-written': 0,
+      'compute-hours': 0,
+      'data-storage': 0,
+    },
+  },
+  {
+    id: 'enterprise-obs-studio',
+    name: 'Enterprise (Obs + Studio Package)',
+    includes: {
+      'observability-events': 50_000_000,
+      'data-egress': 500,
+      'cpu-time': 250,
+      'rows-written': 50_000_000,
+      'compute-hours': 250,
+      'data-storage': 50,
+    },
+  },
+]
+
+/**
+ * Round to the nearest 1 / 2 / 2.5 / 5 × 10^n quantity.
+ * Keeps scaled package grants from jumping back up to the full reference
+ * (e.g. 5.83M → 5M, 2.67M → 2.5M).
+ */
+export function roundUpUsageQuantity(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0
+  const exp = Math.floor(Math.log10(value))
+  const magnitude = 10 ** exp
+  const fraction = value / magnitude
+  const candidates = [1, 2, 2.5, 5, 10]
+  let best = candidates[0]
+  let bestDist = Number.POSITIVE_INFINITY
+  for (const candidate of candidates) {
+    const dist = Math.abs(fraction - candidate)
+    if (dist < bestDist) {
+      bestDist = dist
+      best = candidate
+    }
+  }
+  return best * magnitude
+}
+
+export function scaleUsageIncludes(
+  referenceIncludes: PlatformUsageAmounts,
+  annualPrice: number,
+  referenceAnnual: number,
+): PlatformUsageAmounts {
+  const scale = annualPrice / referenceAnnual
+  return Object.fromEntries(
+    PLATFORM_USAGE_METRICS.map((metric) => [
+      metric.id,
+      roundUpUsageQuantity((referenceIncludes[metric.id] ?? 0) * scale),
+    ]),
+  )
+}
+
+export function scalePlatformIncludes(
+  referenceIncludes: PlatformUsageAmounts,
+  platformAnnual: number,
+): PlatformUsageAmounts {
+  return scaleUsageIncludes(
+    referenceIncludes,
+    platformAnnual,
+    PLATFORM_USAGE_REFERENCE_ANNUAL,
+  )
+}
+
+/** DPP usage package authored against Growth DPP fee ($15k/year). */
+export const DPP_USAGE_REFERENCE_ANNUAL = 15_000
+
+export const DPP_USAGE_REFERENCE_INCLUDES: PlatformUsageAmounts = {
+  'observability-events': 5_000_000,
+  'data-egress': 500,
+  'cpu-time': 1_250,
+  'rows-written': 50_000_000,
+  'compute-hours': 250,
+  'data-storage': 50,
+}
+
+export interface DppUsageConfig {
+  includes: PlatformUsageAmounts
+  additional: PlatformUsageAmounts
+}
+
+export function getDppAnnualFee(employees: number): number {
+  return getDppHeadcountBand(employees)?.annualFee ?? 0
+}
+
+export function dppUsageConfigFromEmployees(employees: number): DppUsageConfig {
+  const fee = getDppAnnualFee(employees)
+  return {
+    includes: scaleUsageIncludes(
+      DPP_USAGE_REFERENCE_INCLUDES,
+      fee > 0 ? fee : DPP_USAGE_REFERENCE_ANNUAL,
+      DPP_USAGE_REFERENCE_ANNUAL,
+    ),
+    additional: emptyPlatformUsage(),
+  }
+}
+
+export function defaultDppUsageConfig(employees = 50): DppUsageConfig {
+  return dppUsageConfigFromEmployees(employees)
+}
+
+export interface PlatformConfig {
+  packageId: PlatformPackageId
+  includes: PlatformUsageAmounts
+  /** Additional volume beyond package includes, billed at unit cost. */
+  additional: PlatformUsageAmounts
+}
+
+export function getPlatformListPrice(employees: number): number {
+  const platform = CATALOG.find((item) => item.id === PLATFORM_ID)
+  if (!platform) return 0
+  return platform.basePrice * getHeadcountBand(employees).multiplier
+}
+
+export function platformConfigFromPackage(
+  packageId: PlatformPackageId,
+  employees: number,
+): PlatformConfig {
+  const preset =
+    PLATFORM_PACKAGES.find((pkg) => pkg.id === packageId) ?? PLATFORM_PACKAGES[0]
+  const platformAnnual = getPlatformListPrice(employees)
+  return {
+    packageId: preset.id,
+    includes: scalePlatformIncludes(preset.includes, platformAnnual),
+    additional: emptyPlatformUsage(),
+  }
+}
+
+export function defaultPlatformConfig(employees = 50): PlatformConfig {
+  return platformConfigFromPackage('enterprise-standard', employees)
+}
+
+export function getPlatformPackageName(packageId: PlatformPackageId): string {
+  return (
+    PLATFORM_PACKAGES.find((pkg) => pkg.id === packageId)?.name ??
+    PLATFORM_PACKAGES[0].name
   )
 }
 
@@ -581,9 +801,17 @@ export interface Quote {
   supportCreditAmount: number
   productSubtotal: number
   productTotal: number
+  platformPackageId: PlatformPackageId | null
+  platformPackageName: string | null
+  platformBasePrice: number
+  platformIncludes: PlatformUsageAmounts
   platformUsageLines: PlatformUsageLine[]
+  platformOverageTotal: number
   platformUsageTotal: number
-  /** Products after discount + platform usage. */
+  dppIncludes: PlatformUsageAmounts
+  dppUsageLines: PlatformUsageLine[]
+  dppOverageTotal: number
+  /** Products after discount + platform/DPP overage. */
   annualTotal: number
   supportListQuarterly: number
   supportTotalQuarterly: number
@@ -592,12 +820,21 @@ export interface Quote {
 export function buildQuote(
   selectedIds: string[],
   employees: number,
-  platformUsage: PlatformUsageAmounts = emptyPlatformUsage(),
+  platformConfig: PlatformConfig = defaultPlatformConfig(),
+  dppUsageConfig: DppUsageConfig = defaultDppUsageConfig(),
 ): Quote {
   const dppEligible = isDppEligible(employees)
+  const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
+  const programSelected = hasProgramSelected(selectedIds)
+  const nonProgramSelected = hasNonProgramSelected(selectedIds)
   const selected = CATALOG.filter((item) => {
     if (!selectedIds.includes(item.id)) return false
     if (item.id === DESIGN_PARTNER_ID && !dppEligible) return false
+    if (selfHostedSelected && isGatedBySelfHosted(item.id)) return false
+    if (programSelected && nonProgramSelected) {
+      // Prefer non-programs if both somehow present; UI prevents this mix.
+      if (item.kind === 'program') return false
+    }
     return true
   })
   const band = getHeadcountBand(employees)
@@ -607,6 +844,7 @@ export function buildQuote(
   const productItems = selected.filter((item) => item.kind !== 'support')
   const supportItem = selected.find((item) => item.kind === 'support') ?? null
   const platformSelected = selected.some((item) => item.id === PLATFORM_ID)
+  const dppSelected = selected.some((item) => item.id === DESIGN_PARTNER_ID)
 
   const productLineItems: LineItem[] = productItems.map((item) => {
     const listAmount = getCatalogListAmount(item, employees)
@@ -638,7 +876,7 @@ export function buildQuote(
 
   // Volume discount only when support is not on the order.
   // Support never annualizes and never participates in volume %.
-  // Platform usage is metered separately and is not volume-discounted.
+  // Platform / DPP usage overage is metered separately and not volume-discounted.
   const discountRate = supportItem
     ? 0
     : getVolumeDiscount(productPurchaseCount)
@@ -650,14 +888,34 @@ export function buildQuote(
   const discountAmount = productSubtotal * discountRate
   const productTotal = productSubtotal - discountAmount
 
+  const platformBasePrice = platformSelected
+    ? getPlatformListPrice(employees)
+    : 0
+  const platformIncludes = platformSelected
+    ? platformConfig.includes
+    : emptyPlatformUsage()
   const platformUsageLines = platformSelected
-    ? buildPlatformUsageLines(platformUsage)
+    ? buildPlatformUsageLines(platformConfig.additional)
     : []
-  const platformUsageTotal = platformUsageLines.reduce(
+  const platformOverageTotal = platformUsageLines.reduce(
     (sum, line) => sum + line.cost,
     0,
   )
-  const annualTotal = productTotal + platformUsageTotal
+  // Base is already in productTotal via the Platform catalog line.
+  const platformUsageTotal = platformBasePrice + platformOverageTotal
+
+  const dppIncludes = dppSelected
+    ? dppUsageConfig.includes
+    : emptyPlatformUsage()
+  const dppUsageLines = dppSelected
+    ? buildPlatformUsageLines(dppUsageConfig.additional)
+    : []
+  const dppOverageTotal = dppUsageLines.reduce(
+    (sum, line) => sum + line.cost,
+    0,
+  )
+
+  const annualTotal = productTotal + platformOverageTotal + dppOverageTotal
 
   const supportListQuarterly = supportLineItem?.listAmount ?? 0
   const supportCreditAmount = supportLineItem
@@ -685,8 +943,18 @@ export function buildQuote(
     supportCreditAmount,
     productSubtotal,
     productTotal,
+    platformPackageId: platformSelected ? platformConfig.packageId : null,
+    platformPackageName: platformSelected
+      ? getPlatformPackageName(platformConfig.packageId)
+      : null,
+    platformBasePrice,
+    platformIncludes,
     platformUsageLines,
+    platformOverageTotal,
     platformUsageTotal,
+    dppIncludes,
+    dppUsageLines,
+    dppOverageTotal,
     annualTotal,
     supportListQuarterly,
     supportTotalQuarterly,
