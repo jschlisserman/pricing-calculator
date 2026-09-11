@@ -23,6 +23,8 @@ import {
   getDppAnnualFee,
   getPlatformListPrice,
   hasSelfHostedDeployment,
+  isDeploymentExclusiveGated,
+  isDeploymentId,
   isDppEligible,
   isGatedBySelfHosted,
   isProgramExclusiveGated,
@@ -76,13 +78,15 @@ function periodLabel(item: CatalogItem): string {
 }
 
 function categoryMeta(category: string): string {
-  if (category === 'Deployment' || category === 'Collaboration') {
+  if (category === 'Deployment') return 'Pick one'
+  if (category === 'Collaboration') {
     return 'Individual SKUs'
   }
   if (category === 'Security and Controls' || category === 'Agent Learning') {
     return 'Bundle'
   }
   if (category === 'Support') return '3-month terms'
+  if (category === 'Programs') return 'Pick one'
   return 'Exclusive'
 }
 
@@ -151,6 +155,7 @@ export default function App() {
   function toggleItem(id: string) {
     setSelectedIds((prev) => {
       const isSupport = SUPPORT_IDS.has(id)
+      const isProgram = isProgramId(id)
       const already = prev.includes(id)
 
       if (already) {
@@ -161,6 +166,10 @@ export default function App() {
         return prev
       }
 
+      if (isDeploymentExclusiveGated(id, prev)) {
+        return prev
+      }
+
       if (isGatedBySelfHosted(id) && hasSelfHostedDeployment(prev)) {
         return prev
       }
@@ -168,6 +177,20 @@ export default function App() {
       if (isSupport) {
         return withoutSelfHostedGatedItems([
           ...prev.filter((x) => !SUPPORT_IDS.has(x)),
+          id,
+        ])
+      }
+
+      if (isProgram) {
+        return withoutSelfHostedGatedItems([
+          ...prev.filter((x) => !isProgramId(x)),
+          id,
+        ])
+      }
+
+      if (isDeploymentId(id)) {
+        return withoutSelfHostedGatedItems([
+          ...prev.filter((x) => !isDeploymentId(x)),
           id,
         ])
       }
@@ -327,8 +350,13 @@ export default function App() {
                     const programGated =
                       isProgramExclusiveGated(item.id, selectedIds) &&
                       !selected
+                    const deploymentGated =
+                      isDeploymentExclusiveGated(item.id, selectedIds)
                     const unavailable =
-                      dppUnavailable || selfHostedGated || programGated
+                      dppUnavailable ||
+                      selfHostedGated ||
+                      programGated ||
+                      deploymentGated
                     const futureFeatures = FUTURE_FEATURES[item.id] ?? []
                     const gateMessage = dppUnavailable
                       ? null
@@ -338,7 +366,9 @@ export default function App() {
                           ? isProgramId(item.id)
                             ? 'Programs cannot be combined with other purchases.'
                             : 'Other options are unavailable while a program is selected.'
-                          : null
+                          : deploymentGated
+                            ? 'Deselect the current Deployment option to choose a different one.'
+                            : null
 
                     return (
                       <div
@@ -347,7 +377,7 @@ export default function App() {
                       >
                         <button
                           type="button"
-                          className={`item${selected ? ' selected' : ''}${isSupport ? ' radio' : ''}${unavailable ? ' unavailable' : ''}`}
+                          className={`item${selected ? ' selected' : ''}${isSupport || item.kind === 'program' || isDeploymentId(item.id) ? ' radio' : ''}${unavailable ? ' unavailable' : ''}`}
                           onClick={() => {
                             if (unavailable) return
                             toggleItem(item.id)
@@ -357,7 +387,14 @@ export default function App() {
                           disabled={unavailable}
                         >
                           <span className="check" aria-hidden="true">
-                            {selected && !isSupport ? <CheckIcon /> : null}
+                            {selected &&
+                            !(
+                              isSupport ||
+                              item.kind === 'program' ||
+                              isDeploymentId(item.id)
+                            ) ? (
+                              <CheckIcon />
+                            ) : null}
                           </span>
                           <span className="item-body">
                             <span className="item-name">
@@ -376,6 +413,9 @@ export default function App() {
                               )}
                               {selfHostedGated && (
                                 <span className="pill">Not with Helm/BYOC</span>
+                              )}
+                              {deploymentGated && (
+                                <span className="pill">Pick one</span>
                               )}
                               {programGated && (
                                 <span className="pill">
@@ -427,7 +467,9 @@ export default function App() {
                                 Enterprise+
                               </>
                             )}
-                            {(selfHostedGated || programGated) && (
+                            {(selfHostedGated ||
+                              programGated ||
+                              deploymentGated) && (
                               <>
                                 <br />
                                 Gated

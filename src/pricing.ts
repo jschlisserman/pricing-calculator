@@ -20,7 +20,6 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-helm',
     name: 'Helm Chart',
     category: 'Deployment',
-    description: '33% less than BYOC list (rounded down)',
     basePrice: 8_000,
     billingPeriod: 'year',
     kind: 'individual',
@@ -30,7 +29,7 @@ export const CATALOG: CatalogItem[] = [
     name: 'Platform',
     category: 'Deployment',
     description:
-      'Between Helm and BYOC. Package usage scales from a $30k/year reference.',
+      'Package usage scales from a $30k/year reference.',
     basePrice: 10_000,
     billingPeriod: 'year',
     kind: 'individual',
@@ -39,7 +38,8 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-byoc',
     name: 'BYOC',
     category: 'Deployment',
-    basePrice: 12_000,
+    description: 'Startup & Growth $100k/year · scales from Mid-Market',
+    basePrice: 100_000,
     billingPeriod: 'year',
     kind: 'individual',
     future: true,
@@ -331,6 +331,10 @@ export const PROGRAM_IDS = CATALOG.filter((item) => item.kind === 'program').map
   (item) => item.id,
 )
 
+export const DEPLOYMENT_IDS = CATALOG.filter(
+  (item) => item.category === 'Deployment',
+).map((item) => item.id)
+
 /** Self-hosted deployment options that gate Agent Learning. */
 export const SELF_HOSTED_DEPLOYMENT_IDS = [HELM_ID, BYOC_ID] as const
 
@@ -341,12 +345,49 @@ export function isProgramId(itemId: string): boolean {
   return PROGRAM_IDS.includes(itemId)
 }
 
+export function isDeploymentId(itemId: string): boolean {
+  return DEPLOYMENT_IDS.includes(itemId)
+}
+
+export function hasDeploymentSelected(selectedIds: string[]): boolean {
+  return selectedIds.some((id) => isDeploymentId(id))
+}
+
+/** Another Deployment SKU is already selected — deselect it first. */
+export function isDeploymentExclusiveGated(
+  itemId: string,
+  selectedIds: string[],
+): boolean {
+  if (!isDeploymentId(itemId) || selectedIds.includes(itemId)) return false
+  return selectedIds.some((id) => isDeploymentId(id))
+}
+
+/** Keep at most one Deployment option. */
+export function withoutOtherDeployments(
+  selectedIds: string[],
+  keepDeploymentId: string,
+): string[] {
+  return selectedIds.filter(
+    (id) => !isDeploymentId(id) || id === keepDeploymentId,
+  )
+}
+
 export function hasProgramSelected(selectedIds: string[]): boolean {
   return selectedIds.some((id) => isProgramId(id))
 }
 
 export function hasNonProgramSelected(selectedIds: string[]): boolean {
   return selectedIds.some((id) => !isProgramId(id))
+}
+
+/** Keep at most one program (Agency vs Design Partner are mutually exclusive). */
+export function withoutOtherPrograms(
+  selectedIds: string[],
+  keepProgramId: string,
+): string[] {
+  return selectedIds.filter(
+    (id) => !isProgramId(id) || id === keepProgramId,
+  )
 }
 
 export function hasSelfHostedDeployment(selectedIds: string[]): boolean {
@@ -374,15 +415,22 @@ export function withoutSelfHostedGatedItems(selectedIds: string[]): string[] {
 }
 
 export function withoutIncompatibleProgramMix(selectedIds: string[]): string[] {
-  const hasProgram = hasProgramSelected(selectedIds)
-  const hasNonProgram = hasNonProgramSelected(selectedIds)
-  if (!(hasProgram && hasNonProgram)) return selectedIds
+  const programs = selectedIds.filter((id) => isProgramId(id))
+  // Agency and Design Partner cannot both be selected — keep the latest.
+  let next =
+    programs.length > 1
+      ? withoutOtherPrograms(selectedIds, programs[programs.length - 1])
+      : selectedIds
+
+  const hasProgram = hasProgramSelected(next)
+  const hasNonProgram = hasNonProgramSelected(next)
+  if (!(hasProgram && hasNonProgram)) return next
   // Prefer keeping the side that matches the latest id in the list.
-  const lastId = selectedIds[selectedIds.length - 1]
+  const lastId = next[next.length - 1]
   if (isProgramId(lastId)) {
-    return selectedIds.filter((id) => isProgramId(id))
+    return next.filter((id) => isProgramId(id))
   }
-  return selectedIds.filter((id) => !isProgramId(id))
+  return next.filter((id) => !isProgramId(id))
 }
 
 export interface PlatformUsageMetric {
@@ -653,6 +701,11 @@ export function getCatalogListAmount(
     const band = getDppHeadcountBand(employees)
     return band?.annualFee ?? 0
   }
+  // BYOC: Startup and Growth share the $100k Growth list; scale from Mid-Market up.
+  if (item.id === BYOC_ID) {
+    const multiplier = Math.max(1, getHeadcountBand(employees).multiplier)
+    return item.basePrice * multiplier
+  }
   return item.basePrice * getHeadcountBand(employees).multiplier
 }
 
@@ -837,14 +890,48 @@ export function buildQuote(
     }
     return true
   })
+  // Agency and Design Partner are mutually exclusive — keep the last selected.
+  const programIdsInOrder = selectedIds.filter((id) => isProgramId(id))
+  const keepProgramId =
+    programIdsInOrder.length > 0
+      ? programIdsInOrder[programIdsInOrder.length - 1]
+      : null
+  // Deployment options are mutually exclusive — keep the last selected.
+  const deploymentIdsInOrder = selectedIds.filter((id) => isDeploymentId(id))
+  const keepDeploymentId =
+    deploymentIdsInOrder.length > 0
+      ? deploymentIdsInOrder[deploymentIdsInOrder.length - 1]
+      : null
+  const selectedExclusive = selected.filter((item) => {
+    if (
+      keepProgramId !== null &&
+      item.kind === 'program' &&
+      item.id !== keepProgramId
+    ) {
+      return false
+    }
+    if (
+      keepDeploymentId !== null &&
+      isDeploymentId(item.id) &&
+      item.id !== keepDeploymentId
+    ) {
+      return false
+    }
+    return true
+  })
   const band = getHeadcountBand(employees)
   const dppBand = getDppHeadcountBand(employees)
   const multiplier = band.multiplier
 
-  const productItems = selected.filter((item) => item.kind !== 'support')
-  const supportItem = selected.find((item) => item.kind === 'support') ?? null
-  const platformSelected = selected.some((item) => item.id === PLATFORM_ID)
-  const dppSelected = selected.some((item) => item.id === DESIGN_PARTNER_ID)
+  const productItems = selectedExclusive.filter((item) => item.kind !== 'support')
+  const supportItem =
+    selectedExclusive.find((item) => item.kind === 'support') ?? null
+  const platformSelected = selectedExclusive.some(
+    (item) => item.id === PLATFORM_ID,
+  )
+  const dppSelected = selectedExclusive.some(
+    (item) => item.id === DESIGN_PARTNER_ID,
+  )
 
   const productLineItems: LineItem[] = productItems.map((item) => {
     const listAmount = getCatalogListAmount(item, employees)
