@@ -743,11 +743,19 @@ export const PRODUCT_CATEGORY_BASES = {
 export const AGENCY_PASS_THROUGH_DISCOUNT = 0.3
 export const AGENCY_PASS_THROUGH_MINIMUM = 7_500
 
+/** Round dollars to the nearest significant whole amount (nearest $1,000). */
+export function roundAgencyPassThroughFee(amount: number): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0
+  return Math.round(amount / 1_000) * 1_000
+}
+
 export function agencyPassThroughFee(
   growthBase: number,
   multiplier: number,
 ): number {
-  return growthBase * multiplier * (1 - AGENCY_PASS_THROUGH_DISCOUNT)
+  return roundAgencyPassThroughFee(
+    growthBase * multiplier * (1 - AGENCY_PASS_THROUGH_DISCOUNT),
+  )
 }
 
 export interface AgencyPassThroughBand {
@@ -766,6 +774,48 @@ export interface AgencyPassThroughBand {
 function formatBandUsd(amount: number, custom = false): string {
   return `${formatUsd(amount)}${custom ? '+' : ''}`
 }
+
+/** Quarterly Support list by headcount band (Growth bases × multiplier). */
+export interface SupportHeadcountBand {
+  id: string
+  name: string
+  headcount: string
+  multiplier: number
+  custom?: boolean
+  small: string
+  medium: string
+  large: string
+}
+
+const SUPPORT_GROWTH_BASES = {
+  small: 12_000,
+  medium: 36_000,
+  large: 80_000,
+} as const
+
+export const SUPPORT_HEADCOUNT_BANDS: SupportHeadcountBand[] =
+  HEADCOUNT_BANDS.map((band) => {
+    const custom = Boolean(band.custom)
+    return {
+      id: band.id,
+      name: band.name,
+      headcount: band.headcount,
+      multiplier: band.multiplier,
+      custom: band.custom,
+      small: formatBandUsd(
+        SUPPORT_GROWTH_BASES.small * band.multiplier,
+        custom,
+      ),
+      medium: formatBandUsd(
+        SUPPORT_GROWTH_BASES.medium * band.multiplier,
+        custom,
+      ),
+      large: formatBandUsd(
+        SUPPORT_GROWTH_BASES.large * band.multiplier,
+        custom,
+      ),
+    }
+  })
 
 export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
   HEADCOUNT_BANDS.map((band) => {

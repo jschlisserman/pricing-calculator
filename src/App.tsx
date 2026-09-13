@@ -11,6 +11,7 @@ import {
   PLATFORM_PACKAGES,
   PLATFORM_USAGE_METRICS,
   PLATFORM_USAGE_REFERENCE_ANNUAL,
+  SUPPORT_HEADCOUNT_BANDS,
   buildQuote,
   defaultDppUsageConfig,
   defaultPlatformConfig,
@@ -979,6 +980,48 @@ export default function App() {
 
       <section className="band-table-section">
         <div className="panel-head">
+          <h2>Support headcount bands</h2>
+        </div>
+        <p className="band-table-intro">
+          Quarterly Support list prices by headcount band. Growth is the
+          baseline ($12k / $36k / $80k); Startup starts at $6k / $18k / $40k.
+          Support is never annualized.
+        </p>
+        <div className="band-table-wrap">
+          <table className="band-table">
+            <thead>
+              <tr>
+                <th>Band</th>
+                <th>Headcount</th>
+                <th>Multiplier</th>
+                <th>Small / qtr</th>
+                <th>Medium / qtr</th>
+                <th>Large / qtr</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SUPPORT_HEADCOUNT_BANDS.map((band) => (
+                <tr
+                  key={band.id}
+                  className={
+                    band.id === quote.companyBandId ? 'active-band' : undefined
+                  }
+                >
+                  <td>{band.name}</td>
+                  <td>{band.headcount}</td>
+                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
+                  <td>{band.small}</td>
+                  <td>{band.medium}</td>
+                  <td>{band.large}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="band-table-section">
+        <div className="panel-head">
           <h2>DPP headcount bands</h2>
         </div>
         <p className="band-table-intro">
@@ -1020,7 +1063,7 @@ export default function App() {
         </div>
         <p className="band-table-intro">
           Client pass-through pricing for agencies: 30% off product headcount
-          bands.
+          bands, rounded to the nearest $1,000.
         </p>
         <div className="band-table-wrap">
           <table className="band-table">
