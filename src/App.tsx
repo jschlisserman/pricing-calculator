@@ -1,6 +1,31 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  AUDIT_ID,
+  CONCIERGE_AUDIT_BANDS,
+  CONCIERGE_PATH1_ADVISORY_BANDS,
+  CONCIERGE_PATH1_HANDS_ON_BANDS,
+  CONCIERGE_PATH2_BANDS,
+  DEFAULT_ENGINEER_COST_PER_HOUR,
+  PATH1_TIERS,
+  PATH2_PACKAGES,
+  buildConciergeMargin,
+  buildConciergeQuote,
+  getAuditFee,
+  getPath1ImpliedHourly,
+  getPath1QuarterlyList,
+  getPath2Floor,
+  isConciergeId,
+  isPath1Id,
+  isPath2Id,
+  withoutOtherPath1Tiers,
+  type Path1Mode,
+  type Path2EstimatedCosts,
+  type Path2PackageId,
+  type Path2ScopedPrices,
+} from './concierge'
+import {
   AGENCY_PASS_THROUGH_BANDS,
+  BYOC_ID,
   CATALOG,
   CATEGORY_ORDER,
   DESIGN_PARTNER_ID,
@@ -11,7 +36,6 @@ import {
   PLATFORM_PACKAGES,
   PLATFORM_USAGE_METRICS,
   PLATFORM_USAGE_REFERENCE_ANNUAL,
-  SUPPORT_HEADCOUNT_BANDS,
   buildQuote,
   defaultDppUsageConfig,
   defaultPlatformConfig,
@@ -26,11 +50,13 @@ import {
   hasSelfHostedDeployment,
   isDeploymentExclusiveGated,
   isDeploymentId,
+  isDeploymentRequiredGated,
   isDppEligible,
   isGatedBySelfHosted,
   isProgramExclusiveGated,
   isProgramId,
   platformConfigFromPackage,
+  withoutDeploymentRequiredItems,
   withoutSelfHostedGatedItems,
   type CatalogItem,
   type DppUsageConfig,
@@ -42,10 +68,6 @@ const FUTURE_FEATURES: Record<string, string[]> = {
   'security-controls': ['FGC'],
   'agent-learning': ['Custom Signals', 'Agent Learning'],
 }
-
-const SUPPORT_IDS = new Set(
-  CATALOG.filter((item) => item.kind === 'support').map((item) => item.id),
-)
 
 function CheckIcon() {
   return (
@@ -79,16 +101,19 @@ function periodLabel(item: CatalogItem): string {
 }
 
 function categoryMeta(category: string): string {
-  if (category === 'Deployment') return 'Pick one'
+  if (category === 'Deployment') return 'Pick one · required for packages'
   if (category === 'Collaboration') {
-    return 'Individual SKUs'
+    return 'Requires Deployment'
   }
   if (category === 'Security and Controls' || category === 'Agent Learning') {
-    return 'Bundle'
+    return 'Bundle · requires Deployment'
   }
-  if (category === 'Support') return '3-month terms'
-  if (category === 'Programs') return 'Pick one'
+  if (category === 'Programs') return 'Pick one · gated by Deployment'
   return 'Exclusive'
+}
+
+function path1ModeLabel(mode: Path1Mode): string {
+  return mode === 'hands-on' ? 'Hands-On' : 'Advisory'
 }
 
 export default function App() {
@@ -99,6 +124,15 @@ export default function App() {
   )
   const [dppUsageConfig, setDppUsageConfig] = useState<DppUsageConfig>(() =>
     defaultDppUsageConfig(50),
+  )
+  const [path1Mode, setPath1Mode] = useState<Path1Mode>('advisory')
+  const [path2ScopedPrices, setPath2ScopedPrices] = useState<Path2ScopedPrices>(
+    {},
+  )
+  const [path2EstimatedCosts, setPath2EstimatedCosts] =
+    useState<Path2EstimatedCosts>({})
+  const [engineerCostPerHour, setEngineerCostPerHour] = useState(
+    DEFAULT_ENGINEER_COST_PER_HOUR,
   )
 
   useEffect(() => {
@@ -129,6 +163,30 @@ export default function App() {
     [selectedIds, employees, platformConfig, dppUsageConfig],
   )
 
+  const concierge = useMemo(
+    () =>
+      buildConciergeQuote(
+        selectedIds,
+        Number.isFinite(employees) ? employees : 0,
+        path1Mode,
+        path2ScopedPrices,
+        quote.productPurchaseCount,
+      ),
+    [
+      selectedIds,
+      employees,
+      path1Mode,
+      path2ScopedPrices,
+      quote.productPurchaseCount,
+    ],
+  )
+
+  const margin = useMemo(
+    () =>
+      buildConciergeMargin(concierge, engineerCostPerHour, path2EstimatedCosts),
+    [concierge, engineerCostPerHour, path2EstimatedCosts],
+  )
+
   const platformSelected = selectedIds.includes(PLATFORM_ID)
   const dppSelected = selectedIds.includes(DESIGN_PARTNER_ID)
   const platformListPrice = getPlatformListPrice(
@@ -141,6 +199,16 @@ export default function App() {
   const dppUsageScale =
     dppAnnualFee > 0 ? dppAnnualFee / DPP_USAGE_REFERENCE_ANNUAL : 0
   const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
+  const headcount = Number.isFinite(employees) ? employees : 0
+  const selectedPath1Id = selectedIds.find(isPath1Id)
+  const hasPath2Selected = selectedIds.some(isPath2Id)
+  const auditSelected = selectedIds.includes(AUDIT_ID)
+  const hasConcierge =
+    concierge.path1 != null ||
+    concierge.path2.length > 0 ||
+    concierge.audit != null
+  const hasProducts = quote.productLineItems.length > 0
+  const hasOrder = quote.lineItems.length > 0 || hasConcierge
 
   const byCategory = useMemo(() => {
     const map = new Map<string, CatalogItem[]>()
@@ -155,12 +223,14 @@ export default function App() {
 
   function toggleItem(id: string) {
     setSelectedIds((prev) => {
-      const isSupport = SUPPORT_IDS.has(id)
-      const isProgram = isProgramId(id)
       const already = prev.includes(id)
 
       if (already) {
-        return prev.filter((x) => x !== id)
+        const next = prev.filter((x) => x !== id)
+        if (isDeploymentId(id)) {
+          return withoutDeploymentRequiredItems(next)
+        }
+        return next
       }
 
       if (isProgramExclusiveGated(id, prev)) {
@@ -171,18 +241,32 @@ export default function App() {
         return prev
       }
 
+      if (isDeploymentRequiredGated(id, prev)) {
+        return prev
+      }
+
       if (isGatedBySelfHosted(id) && hasSelfHostedDeployment(prev)) {
         return prev
       }
 
-      if (isSupport) {
-        return withoutSelfHostedGatedItems([
-          ...prev.filter((x) => !SUPPORT_IDS.has(x)),
-          id,
-        ])
+      if (isConciergeId(id)) {
+        if (isPath1Id(id)) {
+          return withoutSelfHostedGatedItems(
+            withoutOtherPath1Tiers([...prev, id], id),
+          )
+        }
+
+        if (isPath2Id(id)) {
+          const next = prev.includes(AUDIT_ID)
+            ? [...prev, id]
+            : [...prev, id, AUDIT_ID]
+          return withoutSelfHostedGatedItems(next)
+        }
+
+        return withoutSelfHostedGatedItems([...prev, id])
       }
 
-      if (isProgram) {
+      if (isProgramId(id)) {
         return withoutSelfHostedGatedItems([
           ...prev.filter((x) => !isProgramId(x)),
           id,
@@ -196,13 +280,18 @@ export default function App() {
         ])
       }
 
-      const next = [...prev, id]
-      return withoutSelfHostedGatedItems(next)
+      return withoutSelfHostedGatedItems([...prev, id])
     })
   }
 
   function removeItem(id: string) {
-    setSelectedIds((prev) => prev.filter((x) => x !== id))
+    setSelectedIds((prev) => {
+      const next = prev.filter((x) => x !== id)
+      if (isDeploymentId(id)) {
+        return withoutDeploymentRequiredItems(next)
+      }
+      return next
+    })
   }
 
   function setUsageAmount(metricId: string, value: string) {
@@ -253,15 +342,42 @@ export default function App() {
     setPlatformConfig(platformConfigFromPackage(packageId, employees))
   }
 
+  function setScopedPrice(packageId: Path2PackageId, value: string) {
+    const trimmed = value.trim()
+    if (trimmed === '') {
+      setPath2ScopedPrices((prev) => {
+        const next = { ...prev }
+        delete next[packageId]
+        return next
+      })
+      return
+    }
+    const parsed = Number(trimmed.replace(/,/g, ''))
+    setPath2ScopedPrices((prev) => ({
+      ...prev,
+      [packageId]: Number.isFinite(parsed) ? Math.max(0, parsed) : null,
+    }))
+  }
+
+  function setPath2Cost(packageId: Path2PackageId, value: string) {
+    const parsed = Number(value.replace(/,/g, ''))
+    setPath2EstimatedCosts((prev) => ({
+      ...prev,
+      [packageId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+    }))
+  }
+
   function clearOrder() {
     setSelectedIds([])
     setPlatformConfig(defaultPlatformConfig(employees))
     setDppUsageConfig(defaultDppUsageConfig(employees))
+    setPath1Mode('advisory')
+    setPath2ScopedPrices({})
+    setPath2EstimatedCosts({})
+    setEngineerCostPerHour(DEFAULT_ENGINEER_COST_PER_HOUR)
   }
 
-  const hasProducts = quote.productLineItems.length > 0
-  const hasSupport = quote.supportLineItem !== null
-  const hasOrder = quote.lineItems.length > 0
+  const auditFee = getAuditFee(headcount)
 
   return (
     <div className="app">
@@ -285,8 +401,9 @@ export default function App() {
         <h1>Build an order. Adjust as you go.</h1>
         <p>
           Select products against Growth-band list pricing, then scale by
-          headcount band. Volume discounts apply across product purchases;
-          support is a separate quarterly engagement.
+          headcount band. Package volume discounts and Concierge discounts run
+          on parallel ladders — packages keep their volume rate; Concierge
+          discounts when sold alongside packages.
         </p>
       </section>
 
@@ -342,7 +459,6 @@ export default function App() {
                 <div className="items">
                   {items.map((item) => {
                     const selected = selectedIds.includes(item.id)
-                    const isSupport = item.kind === 'support'
                     const isDpp = item.id === DESIGN_PARTNER_ID
                     const isPlatform = item.id === PLATFORM_ID
                     const dppUnavailable = isDpp && !quote.dppEligible
@@ -353,23 +469,34 @@ export default function App() {
                       !selected
                     const deploymentGated =
                       isDeploymentExclusiveGated(item.id, selectedIds)
+                    const needsDeploymentGated =
+                      isDeploymentRequiredGated(item.id, selectedIds)
                     const unavailable =
                       dppUnavailable ||
                       selfHostedGated ||
                       programGated ||
-                      deploymentGated
+                      deploymentGated ||
+                      needsDeploymentGated
                     const futureFeatures = FUTURE_FEATURES[item.id] ?? []
                     const gateMessage = dppUnavailable
                       ? null
                       : selfHostedGated
-                        ? 'Unavailable with Helm Chart or BYOC. Use Platform deployment instead.'
-                        : programGated
-                          ? isProgramId(item.id)
-                            ? 'Programs cannot be combined with other purchases.'
-                            : 'Other options are unavailable while a program is selected.'
-                          : deploymentGated
-                            ? 'Deselect the current Deployment option to choose a different one.'
-                            : null
+                        ? 'Unavailable with Helm Chart, Self-Hosted, or BYOC. Use Platform deployment instead.'
+                        : needsDeploymentGated
+                          ? 'Select a Deployment option first.'
+                          : programGated
+                            ? isProgramId(item.id)
+                              ? selectedIds.includes(BYOC_ID)
+                                ? 'Unavailable with BYOC unless explicit permission is given. Agency and Design Partner are otherwise deployment-agnostic.'
+                                : 'Unavailable while a Deployment is selected. Agency and Design Partner are deployment-agnostic, but BYOC is not offered with either unless explicit permission is given.'
+                              : isDeploymentId(item.id)
+                                ? item.id === BYOC_ID
+                                  ? 'BYOC is not offered with Agency or Design Partner unless explicit permission is given.'
+                                  : 'Unavailable while a Program is selected.'
+                                : 'Unavailable while a Program is selected.'
+                            : deploymentGated
+                              ? 'Deselect the current Deployment option to choose a different one.'
+                              : null
 
                     return (
                       <div
@@ -378,7 +505,7 @@ export default function App() {
                       >
                         <button
                           type="button"
-                          className={`item${selected ? ' selected' : ''}${isSupport || item.kind === 'program' || isDeploymentId(item.id) ? ' radio' : ''}${unavailable ? ' unavailable' : ''}`}
+                          className={`item${selected ? ' selected' : ''}${item.kind === 'program' || isDeploymentId(item.id) ? ' radio' : ''}${unavailable ? ' unavailable' : ''}`}
                           onClick={() => {
                             if (unavailable) return
                             toggleItem(item.id)
@@ -390,7 +517,6 @@ export default function App() {
                           <span className="check" aria-hidden="true">
                             {selected &&
                             !(
-                              isSupport ||
                               item.kind === 'program' ||
                               isDeploymentId(item.id)
                             ) ? (
@@ -413,7 +539,12 @@ export default function App() {
                                 <span className="pill">Not offered</span>
                               )}
                               {selfHostedGated && (
-                                <span className="pill">Not with Helm/BYOC</span>
+                                <span className="pill">
+                                  Not with Helm/Self-Hosted/BYOC
+                                </span>
+                              )}
+                              {needsDeploymentGated && (
+                                <span className="pill">Needs Deployment</span>
                               )}
                               {deploymentGated && (
                                 <span className="pill">Pick one</span>
@@ -421,8 +552,10 @@ export default function App() {
                               {programGated && (
                                 <span className="pill">
                                   {isProgramId(item.id)
-                                    ? 'Exclusive'
-                                    : 'Program selected'}
+                                    ? 'Not with Deployment'
+                                    : item.id === BYOC_ID
+                                      ? 'Needs permission'
+                                      : 'Program selected'}
                                 </span>
                               )}
                             </span>
@@ -470,7 +603,8 @@ export default function App() {
                             )}
                             {(selfHostedGated ||
                               programGated ||
-                              deploymentGated) && (
+                              deploymentGated ||
+                              needsDeploymentGated) && (
                               <>
                                 <br />
                                 Gated
@@ -666,6 +800,238 @@ export default function App() {
               </section>
             )
           })}
+
+          <section className="category concierge-section">
+            <div className="category-title">
+              <h3>Concierge</h3>
+              <span className="category-meta">Services</span>
+            </div>
+
+            <div className="concierge-subhead">
+              <h4>Path 1 — Hours-based</h4>
+              <p>Customer owns the outcome</p>
+            </div>
+            <div className="items">
+              {PATH1_TIERS.map((tier) => {
+                const selected = selectedPath1Id === tier.id
+                const advisoryList = getPath1QuarterlyList(
+                  tier,
+                  'advisory',
+                  headcount,
+                )
+                const advisoryHourly = getPath1ImpliedHourly(
+                  advisoryList,
+                  tier,
+                )
+                return (
+                  <div
+                    key={tier.id}
+                    className={`item-wrap${selected ? ' open' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className={`item radio${selected ? ' selected' : ''}`}
+                      onClick={() => {
+                        toggleItem(tier.id)
+                      }}
+                      aria-pressed={selected}
+                    >
+                      <span className="check" aria-hidden="true" />
+                      <span className="item-body">
+                        <span className="item-name">
+                          {tier.name}
+                          <span className="pill">{tier.hoursPerWeek} hrs/wk</span>
+                        </span>
+                        <p className="item-desc">
+                          Advisory {formatUsd(advisoryList)}/qtr ·{' '}
+                          {formatUsd(Math.round(advisoryHourly))}/hr ·{' '}
+                          {formatUsd(advisoryList * 4)}/yr annualized
+                        </p>
+                      </span>
+                      <span className="item-price">
+                        {formatUsd(advisoryList)}
+                        <br />
+                        / qtr
+                      </span>
+                    </button>
+
+                    {selected && (
+                      <div className="mode-picker" role="radiogroup" aria-label="Path 1 mode">
+                        <button
+                          type="button"
+                          className={`mode-option${path1Mode === 'advisory' ? ' active' : ''}`}
+                          role="radio"
+                          aria-checked={path1Mode === 'advisory'}
+                          onClick={() => setPath1Mode('advisory')}
+                        >
+                          <strong>Advisory</strong>
+                          <span>
+                            {formatUsd(advisoryList)}/qtr ·{' '}
+                            {formatUsd(Math.round(advisoryHourly))}/hr
+                          </span>
+                          <span className="item-price-note">
+                            {formatUsd(advisoryList * 4)} annualized
+                          </span>
+                        </button>
+                        {(() => {
+                          const handsOnList = getPath1QuarterlyList(
+                            tier,
+                            'hands-on',
+                            headcount,
+                          )
+                          const handsOnHourly = getPath1ImpliedHourly(
+                            handsOnList,
+                            tier,
+                          )
+                          return (
+                            <button
+                              type="button"
+                              className={`mode-option${path1Mode === 'hands-on' ? ' active' : ''}`}
+                              role="radio"
+                              aria-checked={path1Mode === 'hands-on'}
+                              onClick={() => setPath1Mode('hands-on')}
+                            >
+                              <strong>Hands-On</strong>
+                              <span>
+                                {formatUsd(handsOnList)}/qtr ·{' '}
+                                {formatUsd(Math.round(handsOnHourly))}/hr
+                              </span>
+                              <span className="item-price-note">
+                                {formatUsd(handsOnList * 4)} annualized
+                              </span>
+                            </button>
+                          )
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="concierge-subhead">
+              <h4>Path 2 — Outcome-based</h4>
+              <p>Mastra owns the outcome</p>
+            </div>
+            <div className="items">
+              {PATH2_PACKAGES.map((pkg) => {
+                const selected = selectedIds.includes(pkg.id)
+                const floor = getPath2Floor(pkg, headcount)
+                const scoped = path2ScopedPrices[pkg.id]
+                const isOverridden =
+                  scoped != null && Number.isFinite(scoped) && scoped > 0
+                return (
+                  <div
+                    key={pkg.id}
+                    className={`item-wrap${selected ? ' open' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className={`item${selected ? ' selected' : ''}`}
+                      onClick={() => {
+                        toggleItem(pkg.id)
+                      }}
+                      aria-pressed={selected}
+                    >
+                      <span className="check" aria-hidden="true">
+                        {selected ? <CheckIcon /> : null}
+                      </span>
+                      <span className="item-body">
+                        <span className="item-name">
+                          {pkg.name}
+                          <span className="pill">Indicative floor</span>
+                        </span>
+                        <p className="item-desc">
+                          Scaled floor for current headcount:{' '}
+                          {formatUsd(floor)} one-time
+                        </p>
+                      </span>
+                      <span className="item-price">
+                        {formatUsd(floor)}
+                        <br />
+                        / one-time
+                      </span>
+                    </button>
+                    {selected && (
+                      <div className="scoped-price">
+                        <label htmlFor={`scoped-${pkg.id}`}>
+                          Scoped price (from Mastra Audit)
+                        </label>
+                        <input
+                          id={`scoped-${pkg.id}`}
+                          type="number"
+                          min={0}
+                          step={1000}
+                          placeholder={String(floor)}
+                          value={
+                            path2ScopedPrices[pkg.id] != null
+                              ? String(path2ScopedPrices[pkg.id])
+                              : ''
+                          }
+                          onChange={(e) =>
+                            setScopedPrice(pkg.id, e.target.value)
+                          }
+                        />
+                        {isOverridden ? (
+                          <span className="item-price-note">
+                            Indicative floor: {formatUsd(floor)}
+                          </span>
+                        ) : (
+                          <span className="item-price-note">
+                            Outcome pricing is set by the Mastra Audit.
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="concierge-subhead">
+              <h4>Mastra Audit</h4>
+              <p>One-time scoping fee</p>
+            </div>
+            <div className="items">
+              <div className="item-wrap">
+                <button
+                  type="button"
+                  className={`item${auditSelected ? ' selected' : ''}`}
+                  onClick={() => {
+                    toggleItem(AUDIT_ID)
+                  }}
+                  aria-pressed={auditSelected}
+                >
+                  <span className="check" aria-hidden="true">
+                    {auditSelected ? <CheckIcon /> : null}
+                  </span>
+                  <span className="item-body">
+                    <span className="item-name">Mastra Audit</span>
+                    {hasPath2Selected && auditSelected && (
+                      <p className="item-desc">
+                        Audit scopes Path 2 outcome pricing for this engagement.
+                      </p>
+                    )}
+                    {hasPath2Selected && !auditSelected && (
+                      <p className="item-desc">
+                        Audit can be deselected when already completed.
+                      </p>
+                    )}
+                    {!hasPath2Selected && (
+                      <p className="item-desc">
+                        Fee for the current headcount band.
+                      </p>
+                    )}
+                  </span>
+                  <span className="item-price">
+                    {formatUsd(auditFee)}
+                    <br />
+                    / one-time
+                  </span>
+                </button>
+              </div>
+            </div>
+          </section>
         </div>
 
         <aside className="panel summary">
@@ -674,113 +1040,104 @@ export default function App() {
             <span className="category-meta">
               {quote.purchaseCount} purchase
               {quote.purchaseCount === 1 ? '' : 's'}
+              {hasConcierge ? ' + Concierge' : ''}
             </span>
           </div>
 
           {hasOrder ? (
             <>
-              <ul className="order-lines">
-                {quote.lineItems.map(({ item, listAmount, billedAmount }) => {
-                  const isSupport = item.kind === 'support'
-                  const isPlatform = item.id === PLATFORM_ID
-                  const isDpp = item.id === DESIGN_PARTNER_ID
-                  return (
-                    <li className="order-line" key={item.id}>
-                      <div>
-                        <span className="order-line-name">{item.name}</span>
-                        <span className="order-line-meta">
-                          {item.category}
-                          {isSupport
-                            ? ' · 3-month term'
-                            : isPlatform && quote.platformPackageName
+              {quote.lineItems.length > 0 && (
+                <ul className="order-lines">
+                  {quote.lineItems.map(({ item, billedAmount }) => {
+                    const isPlatform = item.id === PLATFORM_ID
+                    const isDpp = item.id === DESIGN_PARTNER_ID
+                    return (
+                      <li className="order-line" key={item.id}>
+                        <div>
+                          <span className="order-line-name">{item.name}</span>
+                          <span className="order-line-meta">
+                            {item.category}
+                            {isPlatform && quote.platformPackageName
                               ? ` · ${quote.platformPackageName}`
                               : isDpp
                                 ? ' · usage package'
                                 : ''}
-                        </span>
-                        {isPlatform && (
-                          <ul className="usage-breakdown">
-                            <li>
-                              Base price: {formatUsd(quote.platformBasePrice)}
-                              {quote.platformPackageName
-                                ? ` · ${quote.platformPackageName}`
-                                : ''}
-                            </li>
-                            {PLATFORM_USAGE_METRICS.map((metric) => {
-                              const included =
-                                quote.platformIncludes[metric.id] ?? 0
-                              if (included <= 0) return null
-                              return (
-                                <li key={`include-${metric.id}`}>
-                                  Include {metric.name}:{' '}
-                                  {included.toLocaleString('en-US')}
-                                </li>
-                              )
-                            })}
-                            {quote.platformUsageLines.map((line) => (
-                              <li key={line.metric.id}>
-                                Additional {line.metric.name}:{' '}
-                                {line.additionalAmount.toLocaleString('en-US')} ×{' '}
-                                {formatUnitCost(line.metric.unitCost)} ={' '}
-                                {formatUsd(line.cost)}
+                          </span>
+                          {isPlatform && (
+                            <ul className="usage-breakdown">
+                              <li>
+                                Base price: {formatUsd(quote.platformBasePrice)}
+                                {quote.platformPackageName
+                                  ? ` · ${quote.platformPackageName}`
+                                  : ''}
                               </li>
-                            ))}
-                          </ul>
-                        )}
-                        {isDpp && (
-                          <ul className="usage-breakdown">
-                            <li>DPP fee: {formatUsd(billedAmount)}</li>
-                            {PLATFORM_USAGE_METRICS.map((metric) => {
-                              const included =
-                                quote.dppIncludes[metric.id] ?? 0
-                              if (included <= 0) return null
-                              return (
-                                <li key={`dpp-include-${metric.id}`}>
-                                  Include {metric.name}:{' '}
-                                  {included.toLocaleString('en-US')}
+                              {PLATFORM_USAGE_METRICS.map((metric) => {
+                                const included =
+                                  quote.platformIncludes[metric.id] ?? 0
+                                if (included <= 0) return null
+                                return (
+                                  <li key={`include-${metric.id}`}>
+                                    Include {metric.name}:{' '}
+                                    {included.toLocaleString('en-US')}
+                                  </li>
+                                )
+                              })}
+                              {quote.platformUsageLines.map((line) => (
+                                <li key={line.metric.id}>
+                                  Additional {line.metric.name}:{' '}
+                                  {line.additionalAmount.toLocaleString('en-US')}{' '}
+                                  × {formatUnitCost(line.metric.unitCost)} ={' '}
+                                  {formatUsd(line.cost)}
                                 </li>
-                              )
-                            })}
-                            {quote.dppUsageLines.map((line) => (
-                              <li key={`dpp-${line.metric.id}`}>
-                                Additional {line.metric.name}:{' '}
-                                {line.additionalAmount.toLocaleString('en-US')} ×{' '}
-                                {formatUnitCost(line.metric.unitCost)} ={' '}
-                                {formatUsd(line.cost)}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                      <span className="order-line-price">
-                        {isSupport && billedAmount !== listAmount ? (
-                          <>
-                            <span className="strike">{formatUsd(listAmount)}</span>
-                            {formatUsd(billedAmount)}
-                          </>
-                        ) : isPlatform ? (
-                          formatUsd(quote.platformUsageTotal)
-                        ) : isDpp ? (
-                          formatUsd(billedAmount + quote.dppOverageTotal)
-                        ) : (
-                          formatUsd(billedAmount)
-                        )}
-                        <span className="order-line-meta">
-                          {isSupport ? '/ qtr' : '/ yr'}
+                              ))}
+                            </ul>
+                          )}
+                          {isDpp && (
+                            <ul className="usage-breakdown">
+                              <li>DPP fee: {formatUsd(billedAmount)}</li>
+                              {PLATFORM_USAGE_METRICS.map((metric) => {
+                                const included =
+                                  quote.dppIncludes[metric.id] ?? 0
+                                if (included <= 0) return null
+                                return (
+                                  <li key={`dpp-include-${metric.id}`}>
+                                    Include {metric.name}:{' '}
+                                    {included.toLocaleString('en-US')}
+                                  </li>
+                                )
+                              })}
+                              {quote.dppUsageLines.map((line) => (
+                                <li key={`dpp-${line.metric.id}`}>
+                                  Additional {line.metric.name}:{' '}
+                                  {line.additionalAmount.toLocaleString('en-US')}{' '}
+                                  × {formatUnitCost(line.metric.unitCost)} ={' '}
+                                  {formatUsd(line.cost)}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                        <span className="order-line-price">
+                          {isPlatform
+                            ? formatUsd(quote.platformUsageTotal)
+                            : isDpp
+                              ? formatUsd(billedAmount + quote.dppOverageTotal)
+                              : formatUsd(billedAmount)}
+                          <span className="order-line-meta">/ yr</span>
                         </span>
-                      </span>
-                      <button
-                        type="button"
-                        className="remove"
-                        onClick={() => removeItem(item.id)}
-                        aria-label={`Remove ${item.name}`}
-                      >
-                        <CloseIcon />
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
+                        <button
+                          type="button"
+                          className="remove"
+                          onClick={() => removeItem(item.id)}
+                          aria-label={`Remove ${item.name}`}
+                        >
+                          <CloseIcon />
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
 
               <div className="totals">
                 {hasProducts && (
@@ -801,11 +1158,6 @@ export default function App() {
                           Volume discount ({formatPercent(quote.discountRate)})
                         </span>
                         <span>−{formatUsd(quote.discountAmount)}</span>
-                      </div>
-                    ) : quote.supportBundled ? (
-                      <div className="total-row muted">
-                        <span>Volume discount</span>
-                        <span>Waived (support credit)</span>
                       </div>
                     ) : (
                       <div className="total-row muted">
@@ -846,55 +1198,186 @@ export default function App() {
                 )}
 
                 {(hasProducts || platformSelected || dppSelected) && (
-                  <div className={`total-row${hasSupport ? '' : ' grand'}`}>
-                    <span>Annual total</span>
+                  <div
+                    className={`total-row${hasConcierge ? '' : ' grand'}`}
+                  >
+                    <span>Annual package total</span>
                     <span>{formatUsd(quote.annualTotal)}</span>
                   </div>
                 )}
 
-                {hasSupport && quote.supportLineItem && (
+                {(hasProducts || platformSelected || dppSelected) &&
+                  !hasConcierge && (
+                    <div className="total-row muted">
+                      <span>Effective / quarter</span>
+                      <span>{formatUsd(quote.annualTotal / 4)}</span>
+                    </div>
+                  )}
+
+                {hasConcierge && (
                   <>
-                    {(hasProducts || platformSelected) && (
+                    {(hasProducts || platformSelected || dppSelected) && (
                       <div className="totals-divider" />
                     )}
 
-                    <div className="total-row muted">
-                      <span>Support engagement (list)</span>
-                      <span>
-                        {formatUsd(quote.supportListQuarterly)}
-                        /qtr
-                      </span>
-                    </div>
+                    {concierge.path1 && (
+                      <ul className="order-lines">
+                        <li className="order-line">
+                          <div>
+                            <span className="order-line-name">
+                              Path 1 · {concierge.path1.tier.name}
+                            </span>
+                            <span className="order-line-meta">
+                              {path1ModeLabel(concierge.path1.mode)} ·{' '}
+                              {concierge.path1.tier.hoursPerWeek} hrs/wk
+                            </span>
+                            <span className="order-line-meta">
+                              {formatUsd(
+                                Math.round(concierge.path1.impliedHourly),
+                              )}
+                              /hr · {formatUsd(concierge.path1.annualized)}{' '}
+                              annualized
+                            </span>
+                          </div>
+                          <span className="order-line-price">
+                            {concierge.discountRate > 0 &&
+                            concierge.path1.billedAmount !==
+                              concierge.path1.listAmount ? (
+                              <>
+                                <span className="strike">
+                                  {formatUsd(concierge.path1.listAmount)}
+                                </span>
+                                {formatUsd(concierge.path1.billedAmount)}
+                              </>
+                            ) : (
+                              formatUsd(concierge.path1.billedAmount)
+                            )}
+                            <span className="order-line-meta">/ qtr</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="remove"
+                            onClick={() => removeItem(concierge.path1!.tier.id)}
+                            aria-label={`Remove Path 1 ${concierge.path1.tier.name}`}
+                          >
+                            <CloseIcon />
+                          </button>
+                        </li>
+                      </ul>
+                    )}
 
-                    {quote.supportCreditAmount > 0 ? (
+                    {concierge.path2.length > 0 && (
+                      <ul className="order-lines">
+                        {concierge.path2.map((line) => (
+                          <li className="order-line" key={line.package.id}>
+                            <div>
+                              <span className="order-line-name">
+                                Path 2 · {line.package.name}
+                              </span>
+                              <span className="order-line-meta">
+                                {line.isOverridden
+                                  ? `Scoped · floor ${formatUsd(line.floor)}`
+                                  : 'Indicative floor'}
+                              </span>
+                            </div>
+                            <span className="order-line-price">
+                              {concierge.discountRate > 0 &&
+                              line.billedAmount !== line.listAmount ? (
+                                <>
+                                  <span className="strike">
+                                    {formatUsd(line.listAmount)}
+                                  </span>
+                                  {formatUsd(line.billedAmount)}
+                                </>
+                              ) : (
+                                formatUsd(line.billedAmount)
+                              )}
+                              <span className="order-line-meta">
+                                / one-time
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              className="remove"
+                              onClick={() => removeItem(line.package.id)}
+                              aria-label={`Remove ${line.package.name}`}
+                            >
+                              <CloseIcon />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {concierge.audit && (
+                      <ul className="order-lines">
+                        <li className="order-line">
+                          <div>
+                            <span className="order-line-name">Mastra Audit</span>
+                            <span className="order-line-meta">One-time</span>
+                          </div>
+                          <span className="order-line-price">
+                            {concierge.discountRate > 0 &&
+                            concierge.audit.billedAmount !==
+                              concierge.audit.listAmount ? (
+                              <>
+                                <span className="strike">
+                                  {formatUsd(concierge.audit.listAmount)}
+                                </span>
+                                {formatUsd(concierge.audit.billedAmount)}
+                              </>
+                            ) : (
+                              formatUsd(concierge.audit.billedAmount)
+                            )}
+                            <span className="order-line-meta">/ one-time</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="remove"
+                            onClick={() => removeItem(AUDIT_ID)}
+                            aria-label="Remove Mastra Audit"
+                          >
+                            <CloseIcon />
+                          </button>
+                        </li>
+                      </ul>
+                    )}
+
+                    {concierge.discountRate > 0 && (
                       <div className="total-row discount">
                         <span>
-                          Support credit ({formatPercent(quote.supportCreditRate)})
+                          Concierge discount (
+                          {formatPercent(concierge.discountRate)})
                         </span>
-                        <span>−{formatUsd(quote.supportCreditAmount)}</span>
+                        <span>−{formatUsd(concierge.discountAmount)}</span>
                       </div>
-                    ) : null}
+                    )}
 
-                    <div className="total-row grand">
-                      <span>Support / quarter</span>
-                      <span>{formatUsd(quote.supportTotalQuarterly)}</span>
-                    </div>
+                    {concierge.path1 && (
+                      <div className="total-row grand">
+                        <span>Concierge / quarter</span>
+                        <span>{formatUsd(concierge.path1TotalQuarterly)}</span>
+                      </div>
+                    )}
+
+                    {(concierge.path2.length > 0 || concierge.audit) && (
+                      <div
+                        className={`total-row${concierge.path1 ? '' : ' grand'}`}
+                      >
+                        <span>Concierge one-time</span>
+                        <span>{formatUsd(concierge.oneTimeTotal)}</span>
+                      </div>
+                    )}
                   </>
-                )}
-
-                {!hasSupport && (hasProducts || platformSelected || dppSelected) && (
-                  <div className="total-row muted">
-                    <span>Effective / quarter</span>
-                    <span>{formatUsd(quote.annualTotal / 4)}</span>
-                  </div>
                 )}
               </div>
 
               <p className="footnote">
-                Support is billed on 3-month engagements only and is never
-                annualized. When support is sold with other purchases, volume
-                discount is waived: 15% credit with 1 purchase, 20% with 2+.
-                Platform usage is metered separately and is not volume-discounted.
+                Concierge Path 1 is billed quarterly; Path 2 and Mastra Audit are
+                one-time. Concierge discount (15% with 1 package, 20% with 2+)
+                runs parallel to package volume discount — packages always keep
+                their volume rate. Platform usage is metered separately and is
+                not volume-discounted.
               </p>
 
               <button
@@ -907,9 +1390,72 @@ export default function App() {
             </>
           ) : (
             <p className="summary-empty">
-              Select products from the catalog. You can add or remove anything
-              after the order is started.
+              Select products or Concierge from the catalog. You can add or
+              remove anything after the order is started.
             </p>
+          )}
+
+          {hasConcierge && (
+            <div className="margin-panel">
+              <div className="panel-head">
+                <h2>Concierge margin</h2>
+              </div>
+              <div className="field">
+                <label htmlFor="engineer-cost">
+                  Fully loaded engineer $/hr
+                </label>
+                <input
+                  id="engineer-cost"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={engineerCostPerHour}
+                  onChange={(e) => {
+                    const next = Number(e.target.value)
+                    setEngineerCostPerHour(
+                      Number.isFinite(next) ? Math.max(0, next) : 0,
+                    )
+                  }}
+                />
+              </div>
+
+              {concierge.path1 && (
+                <div className="margin-row">
+                  <strong>Path 1</strong>
+                  <span>Revenue {formatUsd(margin.path1Revenue)}</span>
+                  <span>Cost {formatUsd(margin.path1Cost)}</span>
+                  <span>Margin {formatUsd(margin.path1Margin)}</span>
+                  <span>
+                    {margin.path1MarginRate != null
+                      ? formatPercent(margin.path1MarginRate)
+                      : '—'}
+                  </span>
+                </div>
+              )}
+
+              {margin.path2.map((row) => (
+                <div className="margin-row" key={row.id}>
+                  <strong>Path 2 · {row.name}</strong>
+                  <label className="scoped-price">
+                    Estimated cost
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={path2EstimatedCosts[row.id] ?? ''}
+                      onChange={(e) => setPath2Cost(row.id, e.target.value)}
+                    />
+                  </label>
+                  <span>Revenue {formatUsd(row.revenue)}</span>
+                  <span>Margin {formatUsd(row.margin)}</span>
+                  <span>
+                    {row.marginRate != null
+                      ? formatPercent(row.marginRate)
+                      : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </aside>
       </div>
@@ -928,8 +1474,11 @@ export default function App() {
           <p>25% off product total</p>
         </div>
         <div className="rule">
-          <h4>Support + products</h4>
-          <p>No volume discount. 15% with 1 purchase, 20% with 2+.</p>
+          <h4>Concierge + packages</h4>
+          <p>
+            15% Concierge with 1 package, 20% with 2+. Package volume still
+            applies.
+          </p>
         </div>
       </section>
 
@@ -980,12 +1529,11 @@ export default function App() {
 
       <section className="band-table-section">
         <div className="panel-head">
-          <h2>Support headcount bands</h2>
+          <h2>Concierge Path 1 — Advisory</h2>
         </div>
         <p className="band-table-intro">
-          Quarterly Support list prices by headcount band. Growth is the
-          baseline ($12k / $36k / $80k); Startup starts at $6k / $18k / $40k.
-          Support is never annualized.
+          Quarterly Advisory list prices by headcount band (implied hourly in
+          parentheses). Growth is the 1.0× baseline.
         </p>
         <div className="band-table-wrap">
           <table className="band-table">
@@ -1000,7 +1548,7 @@ export default function App() {
               </tr>
             </thead>
             <tbody>
-              {SUPPORT_HEADCOUNT_BANDS.map((band) => (
+              {CONCIERGE_PATH1_ADVISORY_BANDS.map((band) => (
                 <tr
                   key={band.id}
                   className={
@@ -1013,6 +1561,122 @@ export default function App() {
                   <td>{band.small}</td>
                   <td>{band.medium}</td>
                   <td>{band.large}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="band-table-section">
+        <div className="panel-head">
+          <h2>Concierge Path 1 — Hands-On</h2>
+        </div>
+        <p className="band-table-intro">
+          Hands-On is 30% above Advisory. Same hours; higher quarterly rate and
+          implied hourly.
+        </p>
+        <div className="band-table-wrap">
+          <table className="band-table">
+            <thead>
+              <tr>
+                <th>Band</th>
+                <th>Headcount</th>
+                <th>Multiplier</th>
+                <th>Small / qtr</th>
+                <th>Medium / qtr</th>
+                <th>Large / qtr</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CONCIERGE_PATH1_HANDS_ON_BANDS.map((band) => (
+                <tr
+                  key={band.id}
+                  className={
+                    band.id === quote.companyBandId ? 'active-band' : undefined
+                  }
+                >
+                  <td>{band.name}</td>
+                  <td>{band.headcount}</td>
+                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
+                  <td>{band.small}</td>
+                  <td>{band.medium}</td>
+                  <td>{band.large}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="band-table-section">
+        <div className="panel-head">
+          <h2>Concierge Path 2 — Indicative floors</h2>
+        </div>
+        <p className="band-table-intro">
+          Indicative one-time floors by headcount band. Final Path 2 pricing is
+          set by the Mastra Audit.
+        </p>
+        <div className="band-table-wrap">
+          <table className="band-table">
+            <thead>
+              <tr>
+                <th>Band</th>
+                <th>Headcount</th>
+                <th>Multiplier</th>
+                <th>Evals</th>
+                <th>Integrations</th>
+                <th>Infrastructure</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CONCIERGE_PATH2_BANDS.map((band) => (
+                <tr
+                  key={band.id}
+                  className={
+                    band.id === quote.companyBandId ? 'active-band' : undefined
+                  }
+                >
+                  <td>{band.name}</td>
+                  <td>{band.headcount}</td>
+                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
+                  <td>{band.evals}</td>
+                  <td>{band.integrations}</td>
+                  <td>{band.infrastructure}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="band-table-section">
+        <div className="panel-head">
+          <h2>Mastra Audit fees</h2>
+        </div>
+        <p className="band-table-intro">
+          One-time Audit fee by headcount band.
+        </p>
+        <div className="band-table-wrap">
+          <table className="band-table">
+            <thead>
+              <tr>
+                <th>Band</th>
+                <th>Headcount</th>
+                <th>Audit fee</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CONCIERGE_AUDIT_BANDS.map((band) => (
+                <tr
+                  key={band.id}
+                  className={
+                    band.id === quote.companyBandId ? 'active-band' : undefined
+                  }
+                >
+                  <td>{band.name}</td>
+                  <td>{band.headcount}</td>
+                  <td>{band.fee}</td>
                 </tr>
               ))}
             </tbody>

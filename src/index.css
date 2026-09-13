@@ -857,3 +857,142 @@ button {
 .animate-in.delay-2 {
   animation-delay: 160ms;
 }
+
+.concierge-section {
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.concierge-subhead {
+  margin: 1.1rem 0 0.55rem;
+}
+
+.concierge-subhead h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.concierge-subhead p {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.mode-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem 0.85rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.mode-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.7rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.mode-option strong {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.mode-option span {
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.mode-option:hover {
+  border-color: color-mix(in srgb, var(--green) 35%, var(--border-strong));
+  color: var(--text);
+}
+
+.mode-option.active {
+  border-color: color-mix(in srgb, var(--green) 55%, var(--border-strong));
+  background: color-mix(in srgb, var(--green) 10%, var(--surface-3));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 25%, transparent);
+}
+
+.scoped-price {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.7rem 0.85rem 0.9rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.scoped-price label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.scoped-price input {
+  width: 100%;
+  max-width: 14rem;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.scoped-price input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--green) 50%, var(--border-strong));
+}
+
+.margin-panel {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-strong);
+}
+
+.margin-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.margin-row strong {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.margin-row span {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .mode-picker {
+    grid-template-columns: 1fr;
+  }
+}

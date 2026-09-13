@@ -1,6 +1,6 @@
 export type BillingPeriod = 'year' | 'quarter'
 
-export type ProductKind = 'individual' | 'bundle' | 'program' | 'support'
+export type ProductKind = 'individual' | 'bundle' | 'program'
 
 export interface CatalogItem {
   id: string
@@ -25,6 +25,15 @@ export const CATALOG: CatalogItem[] = [
     kind: 'individual',
   },
   {
+    id: 'deploy-self-hosted',
+    name: 'Self-Hosted',
+    category: 'Deployment',
+    description: 'Same pricing and scale as Helm Chart',
+    basePrice: 8_000,
+    billingPeriod: 'year',
+    kind: 'individual',
+  },
+  {
     id: 'deploy-platform',
     name: 'Platform',
     category: 'Deployment',
@@ -38,7 +47,8 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-byoc',
     name: 'BYOC',
     category: 'Deployment',
-    description: 'Startup & Growth $100k/year · scales from Mid-Market',
+    description:
+      'Startup & Growth $100k/year · scales from Mid-Market. Not offered with Agency or Design Partner unless explicit permission is given.',
     basePrice: 100_000,
     billingPeriod: 'year',
     kind: 'individual',
@@ -76,6 +86,8 @@ export const CATALOG: CatalogItem[] = [
     id: 'program-agency',
     name: 'Mastra Agency Program',
     category: 'Programs',
+    description:
+      'Deployment-agnostic. BYOC is not offered with Agency unless explicit permission is given.',
     basePrice: 10_000,
     billingPeriod: 'year',
     kind: 'program',
@@ -84,37 +96,11 @@ export const CATALOG: CatalogItem[] = [
     id: 'program-design-partner',
     name: 'Mastra Design Partner Program',
     category: 'Programs',
-    description: 'Startup–Mid-Market only · not offered Enterprise+',
+    description:
+      'Startup–Mid-Market only · not offered Enterprise+. Deployment-agnostic; BYOC is not offered with Design Partner unless explicit permission is given.',
     basePrice: 8_000,
     billingPeriod: 'year',
     kind: 'program',
-  },
-  {
-    id: 'support-small',
-    name: 'Support — Small',
-    category: 'Support',
-    description: '2 hrs / week · 3-month term',
-    basePrice: 12_000,
-    billingPeriod: 'quarter',
-    kind: 'support',
-  },
-  {
-    id: 'support-medium',
-    name: 'Support — Medium',
-    category: 'Support',
-    description: '6 hrs / week · 3-month term',
-    basePrice: 36_000,
-    billingPeriod: 'quarter',
-    kind: 'support',
-  },
-  {
-    id: 'support-large',
-    name: 'Support — Large',
-    category: 'Support',
-    description: '20 hrs / week · 3-month term',
-    basePrice: 80_000,
-    billingPeriod: 'quarter',
-    kind: 'support',
   },
 ]
 
@@ -124,7 +110,6 @@ export const CATEGORY_ORDER = [
   'Agent Learning',
   'Collaboration',
   'Programs',
-  'Support',
 ] as const
 
 export interface HeadcountBand {
@@ -324,8 +309,11 @@ export function getDppHeadcountBand(
 export const DESIGN_PARTNER_ID = 'program-design-partner'
 export const PLATFORM_ID = 'deploy-platform'
 export const HELM_ID = 'deploy-helm'
+export const SELF_HOSTED_ID = 'deploy-self-hosted'
 export const BYOC_ID = 'deploy-byoc'
 export const AGENT_LEARNING_ID = 'agent-learning'
+export const SECURITY_ID = 'security-controls'
+export const AGENT_BUILDER_ID = 'collab-agent-builder'
 
 export const PROGRAM_IDS = CATALOG.filter((item) => item.kind === 'program').map(
   (item) => item.id,
@@ -335,11 +323,25 @@ export const DEPLOYMENT_IDS = CATALOG.filter(
   (item) => item.category === 'Deployment',
 ).map((item) => item.id)
 
-/** Self-hosted deployment options that gate Agent Learning. */
-export const SELF_HOSTED_DEPLOYMENT_IDS = [HELM_ID, BYOC_ID] as const
+/**
+ * Self-managed deployment options that gate Agent Learning.
+ * (Platform keeps Agent Learning available.)
+ */
+export const SELF_HOSTED_DEPLOYMENT_IDS = [
+  HELM_ID,
+  SELF_HOSTED_ID,
+  BYOC_ID,
+] as const
 
-/** Catalog IDs unavailable when Helm Chart or BYOC is selected. */
+/** Catalog IDs unavailable when Helm / Self-Hosted / BYOC is selected. */
 export const GATED_BY_SELF_HOSTED_IDS = [AGENT_LEARNING_ID] as const
+
+/** Must pick a Deployment before these can be selected. */
+export const REQUIRES_DEPLOYMENT_IDS = [
+  SECURITY_ID,
+  AGENT_LEARNING_ID,
+  AGENT_BUILDER_ID,
+] as const
 
 export function isProgramId(itemId: string): boolean {
   return PROGRAM_IDS.includes(itemId)
@@ -351,6 +353,27 @@ export function isDeploymentId(itemId: string): boolean {
 
 export function hasDeploymentSelected(selectedIds: string[]): boolean {
   return selectedIds.some((id) => isDeploymentId(id))
+}
+
+export function requiresDeployment(itemId: string): boolean {
+  return (REQUIRES_DEPLOYMENT_IDS as readonly string[]).includes(itemId)
+}
+
+/** Security / Agent Learning / Collaboration need a Deployment first. */
+export function isDeploymentRequiredGated(
+  itemId: string,
+  selectedIds: string[],
+): boolean {
+  if (!requiresDeployment(itemId) || selectedIds.includes(itemId)) return false
+  return !hasDeploymentSelected(selectedIds)
+}
+
+/** Drop packages that require Deployment when none is selected. */
+export function withoutDeploymentRequiredItems(
+  selectedIds: string[],
+): string[] {
+  if (hasDeploymentSelected(selectedIds)) return selectedIds
+  return selectedIds.filter((id) => !requiresDeployment(id))
 }
 
 /** Another Deployment SKU is already selected — deselect it first. */
@@ -398,15 +421,21 @@ export function isGatedBySelfHosted(itemId: string): boolean {
   return (GATED_BY_SELF_HOSTED_IDS as readonly string[]).includes(itemId)
 }
 
-/** Programs are exclusive vs all other catalog options. */
+/**
+ * Programs are gated when a Deployment is selected (and vice versa).
+ * Agency / DPP are otherwise deployment-agnostic; BYOC still needs permission.
+ */
 export function isProgramExclusiveGated(
   itemId: string,
   selectedIds: string[],
 ): boolean {
   if (isProgramId(itemId)) {
-    return hasNonProgramSelected(selectedIds)
+    return hasDeploymentSelected(selectedIds)
   }
-  return hasProgramSelected(selectedIds)
+  if (isDeploymentId(itemId)) {
+    return hasProgramSelected(selectedIds)
+  }
+  return false
 }
 
 export function withoutSelfHostedGatedItems(selectedIds: string[]): string[] {
@@ -423,12 +452,14 @@ export function withoutIncompatibleProgramMix(selectedIds: string[]): string[] {
       : selectedIds
 
   const hasProgram = hasProgramSelected(next)
-  const hasNonProgram = hasNonProgramSelected(next)
-  if (!(hasProgram && hasNonProgram)) return next
+  const hasDeployment = hasDeploymentSelected(next)
+  if (!(hasProgram && hasDeployment)) return next
   // Prefer keeping the side that matches the latest id in the list.
   const lastId = next[next.length - 1]
   if (isProgramId(lastId)) {
-    return next.filter((id) => isProgramId(id))
+    return withoutDeploymentRequiredItems(
+      next.filter((id) => !isDeploymentId(id)),
+    )
   }
   return next.filter((id) => !isProgramId(id))
 }
@@ -709,11 +740,6 @@ export function getCatalogListAmount(
   return item.basePrice * getHeadcountBand(employees).multiplier
 }
 
-/** Credit on support when sold with exactly one other purchase. */
-export const SUPPORT_BUNDLE_CREDIT_ONE = 0.15
-/** Discount on support when sold with 2+ other purchases. */
-export const SUPPORT_BUNDLE_CREDIT_MULTI = 0.2
-
 export function getCompanySizeMultiplier(employees: number): number {
   return getHeadcountBand(employees).multiplier
 }
@@ -775,48 +801,6 @@ function formatBandUsd(amount: number, custom = false): string {
   return `${formatUsd(amount)}${custom ? '+' : ''}`
 }
 
-/** Quarterly Support list by headcount band (Growth bases × multiplier). */
-export interface SupportHeadcountBand {
-  id: string
-  name: string
-  headcount: string
-  multiplier: number
-  custom?: boolean
-  small: string
-  medium: string
-  large: string
-}
-
-const SUPPORT_GROWTH_BASES = {
-  small: 12_000,
-  medium: 36_000,
-  large: 80_000,
-} as const
-
-export const SUPPORT_HEADCOUNT_BANDS: SupportHeadcountBand[] =
-  HEADCOUNT_BANDS.map((band) => {
-    const custom = Boolean(band.custom)
-    return {
-      id: band.id,
-      name: band.name,
-      headcount: band.headcount,
-      multiplier: band.multiplier,
-      custom: band.custom,
-      small: formatBandUsd(
-        SUPPORT_GROWTH_BASES.small * band.multiplier,
-        custom,
-      ),
-      medium: formatBandUsd(
-        SUPPORT_GROWTH_BASES.medium * band.multiplier,
-        custom,
-      ),
-      large: formatBandUsd(
-        SUPPORT_GROWTH_BASES.large * band.multiplier,
-        custom,
-      ),
-    }
-  })
-
 export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
   HEADCOUNT_BANDS.map((band) => {
     const deployment = agencyPassThroughFee(
@@ -855,7 +839,7 @@ export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
     }
   })
 
-/** Multi-purchase discount from count of distinct non-support purchases. */
+/** Multi-purchase discount from count of distinct package purchases. */
 export function getVolumeDiscount(purchaseCount: number): number {
   if (purchaseCount >= 4) return 0.25
   if (purchaseCount === 3) return 0.2
@@ -863,28 +847,17 @@ export function getVolumeDiscount(purchaseCount: number): number {
   return 0
 }
 
-/**
- * Support credit/discount when bundled with other purchases.
- * 1 other purchase → 15%; 2+ → 20%; otherwise 0.
- */
-export function getSupportCreditRate(productPurchaseCount: number): number {
-  if (productPurchaseCount >= 2) return SUPPORT_BUNDLE_CREDIT_MULTI
-  if (productPurchaseCount === 1) return SUPPORT_BUNDLE_CREDIT_ONE
-  return 0
-}
-
 export interface LineItem {
   item: CatalogItem
   /** Sized list price in the item's native billing period. */
   listAmount: number
-  /** Amount after support credit (products unchanged). */
+  /** Billed amount (same as list for packages; Concierge handled separately). */
   billedAmount: number
 }
 
 export interface Quote {
   lineItems: LineItem[]
   productLineItems: LineItem[]
-  supportLineItem: LineItem | null
   purchaseCount: number
   productPurchaseCount: number
   companyMultiplier: number
@@ -894,14 +867,9 @@ export interface Quote {
   dppEligible: boolean
   dppBandId: string | null
   dppMultiplier: number | null
-  /** True when support is sold with ≥1 other purchase. */
-  supportBundled: boolean
-  /** Volume % off products only; 0 when support is bundled. */
+  /** Volume % off package products. Concierge does not waive this. */
   discountRate: number
   discountAmount: number
-  /** Credit/discount on support when bundled; else 0. */
-  supportCreditRate: number
-  supportCreditAmount: number
   productSubtotal: number
   productTotal: number
   platformPackageId: PlatformPackageId | null
@@ -914,10 +882,8 @@ export interface Quote {
   dppIncludes: PlatformUsageAmounts
   dppUsageLines: PlatformUsageLine[]
   dppOverageTotal: number
-  /** Products after discount + platform/DPP overage. */
+  /** Products after discount + platform/DPP overage (excludes Concierge). */
   annualTotal: number
-  supportListQuarterly: number
-  supportTotalQuarterly: number
 }
 
 export function buildQuote(
@@ -929,13 +895,14 @@ export function buildQuote(
   const dppEligible = isDppEligible(employees)
   const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
   const programSelected = hasProgramSelected(selectedIds)
-  const nonProgramSelected = hasNonProgramSelected(selectedIds)
+  const deploymentSelected = hasDeploymentSelected(selectedIds)
   const selected = CATALOG.filter((item) => {
     if (!selectedIds.includes(item.id)) return false
     if (item.id === DESIGN_PARTNER_ID && !dppEligible) return false
     if (selfHostedSelected && isGatedBySelfHosted(item.id)) return false
-    if (programSelected && nonProgramSelected) {
-      // Prefer non-programs if both somehow present; UI prevents this mix.
+    if (requiresDeployment(item.id) && !deploymentSelected) return false
+    if (programSelected && deploymentSelected) {
+      // Prefer deployment side if both somehow present; UI prevents this mix.
       if (item.kind === 'program') return false
     }
     return true
@@ -973,9 +940,7 @@ export function buildQuote(
   const dppBand = getDppHeadcountBand(employees)
   const multiplier = band.multiplier
 
-  const productItems = selectedExclusive.filter((item) => item.kind !== 'support')
-  const supportItem =
-    selectedExclusive.find((item) => item.kind === 'support') ?? null
+  const productItems = selectedExclusive
   const platformSelected = selectedExclusive.some(
     (item) => item.id === PLATFORM_ID,
   )
@@ -989,34 +954,11 @@ export function buildQuote(
   })
 
   const productPurchaseCount = productLineItems.length
-  const supportBundled = supportItem !== null && productPurchaseCount > 0
-  const supportCreditRate = supportItem
-    ? getSupportCreditRate(productPurchaseCount)
-    : 0
+  const lineItems = [...productLineItems]
 
-  const supportLineItem: LineItem | null = supportItem
-    ? (() => {
-        const listAmount = getCatalogListAmount(supportItem, employees)
-        const credit = listAmount * supportCreditRate
-        return {
-          item: supportItem,
-          listAmount,
-          billedAmount: listAmount - credit,
-        }
-      })()
-    : null
-
-  const lineItems = [
-    ...productLineItems,
-    ...(supportLineItem ? [supportLineItem] : []),
-  ]
-
-  // Volume discount only when support is not on the order.
-  // Support never annualizes and never participates in volume %.
+  // Concierge never participates in or suppresses the package volume ladder.
   // Platform / DPP usage overage is metered separately and not volume-discounted.
-  const discountRate = supportItem
-    ? 0
-    : getVolumeDiscount(productPurchaseCount)
+  const discountRate = getVolumeDiscount(productPurchaseCount)
 
   const productSubtotal = productLineItems.reduce(
     (sum, li) => sum + li.listAmount,
@@ -1054,16 +996,9 @@ export function buildQuote(
 
   const annualTotal = productTotal + platformOverageTotal + dppOverageTotal
 
-  const supportListQuarterly = supportLineItem?.listAmount ?? 0
-  const supportCreditAmount = supportLineItem
-    ? supportLineItem.listAmount - supportLineItem.billedAmount
-    : 0
-  const supportTotalQuarterly = supportLineItem?.billedAmount ?? 0
-
   return {
     lineItems,
     productLineItems,
-    supportLineItem,
     purchaseCount: lineItems.length,
     productPurchaseCount,
     companyMultiplier: multiplier,
@@ -1073,11 +1008,8 @@ export function buildQuote(
     dppEligible,
     dppBandId: dppBand?.id ?? null,
     dppMultiplier: dppBand?.multiplier ?? null,
-    supportBundled,
     discountRate,
     discountAmount,
-    supportCreditRate,
-    supportCreditAmount,
     productSubtotal,
     productTotal,
     platformPackageId: platformSelected ? platformConfig.packageId : null,
@@ -1093,8 +1025,6 @@ export function buildQuote(
     dppUsageLines,
     dppOverageTotal,
     annualTotal,
-    supportListQuarterly,
-    supportTotalQuarterly,
   }
 }
 
