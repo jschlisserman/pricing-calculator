@@ -28,4 +28,4 @@ npm run dev
   - **Path 2 (outcome):** Evals / Integrations / Infrastructure indicative floors scaled by Concierge multiplier; editable scoped price override. Multiple packages allowed. Selecting Path 2 auto-selects Mastra Audit (can deselect if audit already done)
   - **Mastra Audit:** one-time flat fee by band ($1k–$5k)
   - Concierge does not count toward or waive package volume discount. Parallel Concierge discount: 15% with 1 package, 20% with 2+, applied to Concierge lines only
-  - Summary keeps Path 1 quarterly totals separate from Path 2 / Audit one-time totals. Margin view: Path 1 vs configurable engineer $/hr (default $120); Path 2 vs per-engagement estimated cost
+  - Summary keeps Path 1 quarterly totals separate from Path 2 / Audit one-time totals. Margin uses fully loaded engineer $/hr (default $110): Path 1 cost = rate × hours/week × 13; Path 2 cost = rate × manually entered hours

@@ -25,8 +25,8 @@ export const HANDS_ON_MODE_FACTOR = 1.3
 /** Weeks in a quarterly Path 1 engagement (for implied hourly). */
 export const PATH1_WEEKS_PER_QUARTER = 13
 
-/** Default fully loaded engineer cost for Path 1 margin. */
-export const DEFAULT_ENGINEER_COST_PER_HOUR = 120
+/** Default fully loaded engineer cost for Concierge margin ($/hr). */
+export const DEFAULT_ENGINEER_COST_PER_HOUR = 110
 
 /** Concierge discount when purchased with platform packages. */
 export const CONCIERGE_DISCOUNT_ONE = 0.15
@@ -244,7 +244,8 @@ export interface ConciergeQuote {
 }
 
 export type Path2ScopedPrices = Partial<Record<Path2PackageId, number | null>>
-export type Path2EstimatedCosts = Partial<Record<Path2PackageId, number>>
+/** Manual Path 2 delivery hours for margin (× engineer $/hr). */
+export type Path2Hours = Partial<Record<Path2PackageId, number>>
 
 export function buildConciergeQuote(
   selectedIds: string[],
@@ -332,12 +333,15 @@ export function buildConciergeQuote(
 export interface ConciergeMargin {
   path1Revenue: number
   path1Cost: number
+  path1HoursPerWeek: number
+  path1HoursPerQuarter: number
   path1Margin: number
   path1MarginRate: number | null
   path2: Array<{
     id: Path2PackageId
     name: string
     revenue: number
+    hours: number
     cost: number
     margin: number
     marginRate: number | null
@@ -346,29 +350,38 @@ export interface ConciergeMargin {
   path2Cost: number
   path2Margin: number
   path2MarginRate: number | null
+  engineerCostPerHour: number
 }
 
+/**
+ * Concierge margin against fully loaded engineer $/hr.
+ * Path 1: quarterly revenue vs rate × hours/week × 13 weeks.
+ * Path 2: one-time revenue vs rate × entered engagement hours.
+ */
 export function buildConciergeMargin(
   concierge: ConciergeQuote,
   engineerCostPerHour: number,
-  path2EstimatedCosts: Path2EstimatedCosts,
+  path2Hours: Path2Hours,
 ): ConciergeMargin {
+  const rate = Math.max(0, engineerCostPerHour)
+  const path1HoursPerWeek = concierge.path1?.tier.hoursPerWeek ?? 0
+  const path1HoursPerQuarter = path1HoursPerWeek * PATH1_WEEKS_PER_QUARTER
   const path1Revenue = concierge.path1TotalQuarterly
-  const path1Cost = concierge.path1
-    ? concierge.path1.hoursPerQuarter * engineerCostPerHour
-    : 0
+  const path1Cost = path1HoursPerQuarter * rate
   const path1Margin = path1Revenue - path1Cost
   const path1MarginRate =
     path1Revenue > 0 ? path1Margin / path1Revenue : null
 
   const path2 = concierge.path2.map((line) => {
     const revenue = line.billedAmount
-    const cost = path2EstimatedCosts[line.package.id] ?? 0
+    const hours = Math.max(0, path2Hours[line.package.id] ?? 0)
+    const cost = hours * rate
     const margin = revenue - cost
     return {
       id: line.package.id,
       name: line.package.name,
       revenue,
+      hours,
       cost,
       margin,
       marginRate: revenue > 0 ? margin / revenue : null,
@@ -381,6 +394,8 @@ export function buildConciergeMargin(
   return {
     path1Revenue,
     path1Cost,
+    path1HoursPerWeek,
+    path1HoursPerQuarter,
     path1Margin,
     path1MarginRate,
     path2,
@@ -388,6 +403,7 @@ export function buildConciergeMargin(
     path2Cost,
     path2Margin,
     path2MarginRate: path2Revenue > 0 ? path2Margin / path2Revenue : null,
+    engineerCostPerHour: rate,
   }
 }
 

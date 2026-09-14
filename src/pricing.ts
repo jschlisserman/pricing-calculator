@@ -723,6 +723,74 @@ export function sumPlatformUsage(amounts: PlatformUsageAmounts): number {
   return buildPlatformUsageLines(amounts).reduce((sum, line) => sum + line.cost, 0)
 }
 
+/** Value (at list unit cost) of a usage quantity map. */
+export function costOfUsageAmounts(amounts: PlatformUsageAmounts): number {
+  return PLATFORM_USAGE_METRICS.reduce((sum, metric) => {
+    const qty = Math.max(0, amounts[metric.id] ?? 0)
+    return sum + qty * metric.unitCost
+  }, 0)
+}
+
+export interface PlatformUsageCostLine {
+  metric: PlatformUsageMetric
+  amount: number
+  cost: number
+}
+
+export function buildUsageCostLines(
+  amounts: PlatformUsageAmounts,
+): PlatformUsageCostLine[] {
+  return PLATFORM_USAGE_METRICS.map((metric) => {
+    const amount = Math.max(0, amounts[metric.id] ?? 0)
+    return {
+      metric,
+      amount,
+      cost: amount * metric.unitCost,
+    }
+  }).filter((line) => line.amount > 0)
+}
+
+export interface PlatformMargin {
+  revenue: number
+  includeCost: number
+  additionalCost: number
+  totalCost: number
+  margin: number
+  marginRate: number | null
+  includeLines: PlatformUsageCostLine[]
+  additionalLines: PlatformUsageCostLine[]
+}
+
+/**
+ * Platform margin: base list price vs unit-cost value of package includes
+ * plus additional (overage) usage.
+ */
+export function buildPlatformMargin(
+  platformBasePrice: number,
+  includes: PlatformUsageAmounts,
+  additional: PlatformUsageAmounts,
+): PlatformMargin {
+  const includeLines = buildUsageCostLines(includes)
+  const additionalLines = buildUsageCostLines(additional)
+  const includeCost = includeLines.reduce((sum, line) => sum + line.cost, 0)
+  const additionalCost = additionalLines.reduce(
+    (sum, line) => sum + line.cost,
+    0,
+  )
+  const totalCost = includeCost + additionalCost
+  const margin = platformBasePrice - totalCost
+  return {
+    revenue: platformBasePrice,
+    includeCost,
+    additionalCost,
+    totalCost,
+    margin,
+    marginRate: platformBasePrice > 0 ? margin / platformBasePrice : null,
+    includeLines,
+    additionalLines,
+  }
+}
+
 /** Sized list amount for a catalog item at a given headcount. */
 export function getCatalogListAmount(
   item: CatalogItem,

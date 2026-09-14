@@ -7,6 +7,7 @@ import {
   CONCIERGE_PATH2_BANDS,
   DEFAULT_ENGINEER_COST_PER_HOUR,
   PATH1_TIERS,
+  PATH1_WEEKS_PER_QUARTER,
   PATH2_PACKAGES,
   buildConciergeMargin,
   buildConciergeQuote,
@@ -19,7 +20,7 @@ import {
   isPath2Id,
   withoutOtherPath1Tiers,
   type Path1Mode,
-  type Path2EstimatedCosts,
+  type Path2Hours,
   type Path2PackageId,
   type Path2ScopedPrices,
 } from './concierge'
@@ -47,6 +48,7 @@ import {
   getCatalogListAmount,
   getDppAnnualFee,
   getPlatformListPrice,
+  buildPlatformMargin,
   hasSelfHostedDeployment,
   isDeploymentExclusiveGated,
   isDeploymentId,
@@ -129,8 +131,7 @@ export default function App() {
   const [path2ScopedPrices, setPath2ScopedPrices] = useState<Path2ScopedPrices>(
     {},
   )
-  const [path2EstimatedCosts, setPath2EstimatedCosts] =
-    useState<Path2EstimatedCosts>({})
+  const [path2Hours, setPath2Hours] = useState<Path2Hours>({})
   const [engineerCostPerHour, setEngineerCostPerHour] = useState(
     DEFAULT_ENGINEER_COST_PER_HOUR,
   )
@@ -182,12 +183,25 @@ export default function App() {
   )
 
   const margin = useMemo(
-    () =>
-      buildConciergeMargin(concierge, engineerCostPerHour, path2EstimatedCosts),
-    [concierge, engineerCostPerHour, path2EstimatedCosts],
+    () => buildConciergeMargin(concierge, engineerCostPerHour, path2Hours),
+    [concierge, engineerCostPerHour, path2Hours],
   )
 
   const platformSelected = selectedIds.includes(PLATFORM_ID)
+  const platformMargin = useMemo(() => {
+    if (!platformSelected) return null
+    return buildPlatformMargin(
+      quote.platformBasePrice,
+      quote.platformIncludes,
+      platformConfig.additional,
+    )
+  }, [
+    platformSelected,
+    quote.platformBasePrice,
+    quote.platformIncludes,
+    platformConfig.additional,
+  ])
+
   const dppSelected = selectedIds.includes(DESIGN_PARTNER_ID)
   const platformListPrice = getPlatformListPrice(
     Number.isFinite(employees) ? employees : 0,
@@ -359,9 +373,18 @@ export default function App() {
     }))
   }
 
-  function setPath2Cost(packageId: Path2PackageId, value: string) {
-    const parsed = Number(value.replace(/,/g, ''))
-    setPath2EstimatedCosts((prev) => ({
+  function setPath2DeliveryHours(packageId: Path2PackageId, value: string) {
+    const trimmed = value.trim()
+    if (trimmed === '') {
+      setPath2Hours((prev) => {
+        const next = { ...prev }
+        delete next[packageId]
+        return next
+      })
+      return
+    }
+    const parsed = Number(trimmed.replace(/,/g, ''))
+    setPath2Hours((prev) => ({
       ...prev,
       [packageId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
     }))
@@ -373,7 +396,7 @@ export default function App() {
     setDppUsageConfig(defaultDppUsageConfig(employees))
     setPath1Mode('advisory')
     setPath2ScopedPrices({})
-    setPath2EstimatedCosts({})
+    setPath2Hours({})
     setEngineerCostPerHour(DEFAULT_ENGINEER_COST_PER_HOUR)
   }
 
@@ -1395,6 +1418,63 @@ export default function App() {
             </p>
           )}
 
+          {platformSelected && platformMargin && (
+            <div className="margin-panel">
+              <div className="panel-head">
+                <h2>Platform margin</h2>
+              </div>
+              <p className="item-desc">
+                Base list price vs unit-cost value of package includes plus
+                additional usage.
+              </p>
+              <div className="margin-row">
+                <strong>Revenue</strong>
+                <span>Platform base {formatUsd(platformMargin.revenue)}</span>
+              </div>
+              <div className="margin-row">
+                <strong>Include cost</strong>
+                <span>{formatUsd(platformMargin.includeCost)}</span>
+                {platformMargin.includeLines.map((line) => (
+                  <span key={`include-${line.metric.id}`}>
+                    {line.metric.name}: {line.amount.toLocaleString('en-US')} ×{' '}
+                    {formatUnitCost(line.metric.unitCost)} ={' '}
+                    {formatUsd(line.cost)}
+                  </span>
+                ))}
+                {platformMargin.includeLines.length === 0 && (
+                  <span>No package includes</span>
+                )}
+              </div>
+              <div className="margin-row">
+                <strong>Additional usage cost</strong>
+                <span>{formatUsd(platformMargin.additionalCost)}</span>
+                {platformMargin.additionalLines.map((line) => (
+                  <span key={`add-${line.metric.id}`}>
+                    {line.metric.name}: {line.amount.toLocaleString('en-US')} ×{' '}
+                    {formatUnitCost(line.metric.unitCost)} ={' '}
+                    {formatUsd(line.cost)}
+                  </span>
+                ))}
+                {platformMargin.additionalLines.length === 0 && (
+                  <span>No additional usage</span>
+                )}
+              </div>
+              <div className="margin-row">
+                <strong>Total delivery cost</strong>
+                <span>{formatUsd(platformMargin.totalCost)}</span>
+              </div>
+              <div className="margin-row">
+                <strong>Margin</strong>
+                <span>{formatUsd(platformMargin.margin)}</span>
+                <span>
+                  {platformMargin.marginRate != null
+                    ? formatPercent(platformMargin.marginRate)
+                    : '—'}
+                </span>
+              </div>
+            </div>
+          )}
+
           {hasConcierge && (
             <div className="margin-panel">
               <div className="panel-head">
@@ -1418,12 +1498,25 @@ export default function App() {
                   }}
                 />
               </div>
+              <p className="item-desc">
+                Path 1: quarterly revenue vs rate × hours/week ×{' '}
+                {PATH1_WEEKS_PER_QUARTER} weeks. Path 2: one-time revenue vs rate
+                × entered hours.
+              </p>
 
               {concierge.path1 && (
                 <div className="margin-row">
                   <strong>Path 1</strong>
-                  <span>Revenue {formatUsd(margin.path1Revenue)}</span>
-                  <span>Cost {formatUsd(margin.path1Cost)}</span>
+                  <span>
+                    {margin.path1HoursPerWeek} hrs/wk × {PATH1_WEEKS_PER_QUARTER}{' '}
+                    wks = {margin.path1HoursPerQuarter} hrs/qtr
+                  </span>
+                  <span>
+                    {margin.path1HoursPerQuarter} hrs ×{' '}
+                    {formatUsd(margin.engineerCostPerHour)}/hr ={' '}
+                    {formatUsd(margin.path1Cost)}
+                  </span>
+                  <span>Revenue {formatUsd(margin.path1Revenue)}/qtr</span>
                   <span>Margin {formatUsd(margin.path1Margin)}</span>
                   <span>
                     {margin.path1MarginRate != null
@@ -1437,15 +1530,22 @@ export default function App() {
                 <div className="margin-row" key={row.id}>
                   <strong>Path 2 · {row.name}</strong>
                   <label className="scoped-price">
-                    Estimated cost
+                    Hours
                     <input
                       type="number"
                       min={0}
-                      step={1000}
-                      value={path2EstimatedCosts[row.id] ?? ''}
-                      onChange={(e) => setPath2Cost(row.id, e.target.value)}
+                      step={1}
+                      value={path2Hours[row.id] ?? ''}
+                      onChange={(e) =>
+                        setPath2DeliveryHours(row.id, e.target.value)
+                      }
                     />
                   </label>
+                  <span>
+                    {row.hours.toLocaleString('en-US')} hrs ×{' '}
+                    {formatUsd(margin.engineerCostPerHour)}/hr ={' '}
+                    {formatUsd(row.cost)}
+                  </span>
                   <span>Revenue {formatUsd(row.revenue)}</span>
                   <span>Margin {formatUsd(row.margin)}</span>
                   <span>
