@@ -1126,216 +1126,229 @@ export default function App() {
 
           {hasOrder ? (
             <>
-              <ul className="order-lines">
-                {quote.lineItems.map(({ item, billedAmount }) => {
-                  const isPlatform = item.id === PLATFORM_ID
-                  const isDpp = item.id === DESIGN_PARTNER_ID
-                  const price = isPlatform
-                    ? quote.platformUsageTotal
-                    : isDpp
-                      ? billedAmount + quote.dppOverageTotal
-                      : billedAmount
-                  return (
-                    <li className="order-line" key={item.id}>
-                      <div>
-                        <span className="order-line-name">{item.name}</span>
+              {hasProducts && (
+                <div className="summary-group">
+                  <h3 className="summary-group-title">Products</h3>
+                  <ul className="order-lines">
+                    {quote.lineItems.map(({ item, billedAmount }) => {
+                      const isPlatform = item.id === PLATFORM_ID
+                      const isDpp = item.id === DESIGN_PARTNER_ID
+                      const price = isPlatform
+                        ? quote.platformUsageTotal
+                        : isDpp
+                          ? billedAmount + quote.dppOverageTotal
+                          : billedAmount
+                      return (
+                        <li className="order-line" key={item.id}>
+                          <div>
+                            <span className="order-line-name">{item.name}</span>
+                          </div>
+                          <span className="order-line-price">
+                            {formatUsd(price)}
+                            <span className="order-line-meta">/ yr</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="remove"
+                            onClick={() => removeItem(item.id)}
+                            aria-label={`Remove ${item.name}`}
+                          >
+                            <CloseIcon />
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+
+                  <div className="totals">
+                    {quote.discountRate > 0 && (
+                      <div className="total-row discount">
+                        <span>
+                          Volume discount ({formatPercent(quote.discountRate)})
+                        </span>
+                        <span>−{formatUsd(quote.discountAmount)}</span>
                       </div>
-                      <span className="order-line-price">
-                        {formatUsd(price)}
-                        <span className="order-line-meta">/ yr</span>
-                      </span>
-                      <button
-                        type="button"
-                        className="remove"
-                        onClick={() => removeItem(item.id)}
-                        aria-label={`Remove ${item.name}`}
-                      >
-                        <CloseIcon />
-                      </button>
-                    </li>
-                  )
-                })}
+                    )}
 
-                {concierge.path1 && (
-                  <li className="order-line">
-                    <div>
-                      <span className="order-line-name">
-                        Concierge Path 1 · {concierge.path1.tier.name}
-                      </span>
-                      <span className="order-line-meta">
-                        {path1ModeLabel(concierge.path1.mode)}
-                      </span>
+                    <div className="total-row grand">
+                      <span>Product total / year</span>
+                      <span>{formatUsd(quote.annualTotal)}</span>
                     </div>
-                    <span className="order-line-price">
-                      {formatUsd(concierge.path1.listAmount)}
-                      <span className="order-line-meta">/ qtr</span>
-                    </span>
-                    <button
-                      type="button"
-                      className="remove"
-                      onClick={() => removeItem(concierge.path1!.tier.id)}
-                      aria-label={`Remove Path 1 ${concierge.path1.tier.name}`}
-                    >
-                      <CloseIcon />
-                    </button>
-                  </li>
-                )}
 
-                {concierge.path2.map((line) => (
-                  <li className="order-line" key={line.package.id}>
-                    <div>
-                      <span className="order-line-name">
-                        Concierge Path 2 · {line.package.name}
-                      </span>
-                    </div>
-                    <span className="order-line-price">
-                      {formatUsd(line.listAmount)}
-                      <span className="order-line-meta">/ one-time</span>
-                    </span>
-                    <button
-                      type="button"
-                      className="remove"
-                      onClick={() => removeItem(line.package.id)}
-                      aria-label={`Remove ${line.package.name}`}
-                    >
-                      <CloseIcon />
-                    </button>
-                  </li>
-                ))}
+                    {platformSelected && platformMargin && (
+                      <div className="total-row muted">
+                        <span>Platform margin</span>
+                        <span>
+                          {formatUsd(platformMargin.margin)}
+                          {platformMargin.marginRate != null
+                            ? ` (${formatPercent(platformMargin.marginRate)})`
+                            : ''}
+                        </span>
+                      </div>
+                    )}
 
-                {concierge.audit && (
-                  <li className="order-line">
-                    <div>
-                      <span className="order-line-name">Mastra Audit</span>
-                    </div>
-                    <span className="order-line-price">
-                      {formatUsd(concierge.audit.listAmount)}
-                      <span className="order-line-meta">/ one-time</span>
-                    </span>
-                    <button
-                      type="button"
-                      className="remove"
-                      onClick={() => removeItem(AUDIT_ID)}
-                      aria-label="Remove Mastra Audit"
-                    >
-                      <CloseIcon />
-                    </button>
-                  </li>
-                )}
-              </ul>
-
-              <div className="totals">
-                {hasProducts && quote.discountRate > 0 && (
-                  <div className="total-row discount">
-                    <span>
-                      Volume discount ({formatPercent(quote.discountRate)})
-                    </span>
-                    <span>−{formatUsd(quote.discountAmount)}</span>
+                    {dppSelected && dppMargin && (
+                      <div className="total-row muted">
+                        <span>Design Partner margin</span>
+                        <span>
+                          {formatUsd(dppMargin.margin)}
+                          {dppMargin.marginRate != null
+                            ? ` (${formatPercent(dppMargin.marginRate)})`
+                            : ''}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+              )}
 
-                {hasConcierge && concierge.discountRate > 0 && (
-                  <div className="total-row discount">
-                    <span>
-                      Concierge discount (
-                      {formatPercent(concierge.discountRate)})
-                    </span>
-                    <span>−{formatUsd(concierge.discountAmount)}</span>
-                  </div>
-                )}
+              {hasConcierge && (
+                <div className="summary-group">
+                  <h3 className="summary-group-title">Concierge</h3>
+                  <ul className="order-lines">
+                    {concierge.path1 && (
+                      <li className="order-line">
+                        <div>
+                          <span className="order-line-name">
+                            Path 1 · {concierge.path1.tier.name}
+                          </span>
+                          <span className="order-line-meta">
+                            {path1ModeLabel(concierge.path1.mode)}
+                          </span>
+                        </div>
+                        <span className="order-line-price">
+                          {formatUsd(concierge.path1.listAmount)}
+                          <span className="order-line-meta">/ qtr</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="remove"
+                          onClick={() => removeItem(concierge.path1!.tier.id)}
+                          aria-label={`Remove Path 1 ${concierge.path1.tier.name}`}
+                        >
+                          <CloseIcon />
+                        </button>
+                      </li>
+                    )}
 
-                {(hasProducts || platformSelected || dppSelected) && (
-                  <div
-                    className={`total-row${hasConcierge ? '' : ' grand'}`}
-                  >
-                    <span>Annual total</span>
-                    <span>{formatUsd(quote.annualTotal)}</span>
-                  </div>
-                )}
-
-                {concierge.path1 && (
-                  <div className="total-row grand">
-                    <span>Concierge / quarter</span>
-                    <span>{formatUsd(concierge.path1TotalQuarterly)}</span>
-                  </div>
-                )}
-
-                {(concierge.path2.length > 0 || concierge.audit) && (
-                  <div
-                    className={`total-row${concierge.path1 ? '' : ' grand'}`}
-                  >
-                    <span>Concierge one-time</span>
-                    <span>{formatUsd(concierge.oneTimeTotal)}</span>
-                  </div>
-                )}
-
-                {platformSelected && platformMargin && (
-                  <div className="total-row muted">
-                    <span>Platform margin</span>
-                    <span>
-                      {formatUsd(platformMargin.margin)}
-                      {platformMargin.marginRate != null
-                        ? ` (${formatPercent(platformMargin.marginRate)})`
-                        : ''}
-                    </span>
-                  </div>
-                )}
-
-                {dppSelected && dppMargin && (
-                  <div className="total-row muted">
-                    <span>Design Partner margin</span>
-                    <span>
-                      {formatUsd(dppMargin.margin)}
-                      {dppMargin.marginRate != null
-                        ? ` (${formatPercent(dppMargin.marginRate)})`
-                        : ''}
-                    </span>
-                  </div>
-                )}
-
-                {concierge.path1 && (
-                  <div className="total-row muted">
-                    <span>Concierge Path 1 margin</span>
-                    <span>
-                      {formatUsd(margin.path1Margin)}
-                      {margin.path1MarginRate != null
-                        ? ` (${formatPercent(margin.path1MarginRate)})`
-                        : ''}
-                    </span>
-                  </div>
-                )}
-
-                {margin.path2.map((row) => (
-                  <div className="total-row muted" key={`margin-${row.id}`}>
-                    <span>Concierge Path 2 · {row.name} margin</span>
-                    <span>
-                      {formatUsd(row.margin)}
-                      {row.marginRate != null
-                        ? ` (${formatPercent(row.marginRate)})`
-                        : ''}
-                    </span>
-                  </div>
-                ))}
-
-                {margin.path2.length > 0 && (
-                  <div className="margin-hours">
-                    {margin.path2.map((row) => (
-                      <label key={`hours-${row.id}`} className="scoped-price">
-                        {row.name} hours
-                        <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          value={path2Hours[row.id] ?? ''}
-                          onChange={(e) =>
-                            setPath2DeliveryHours(row.id, e.target.value)
-                          }
-                        />
-                      </label>
+                    {concierge.path2.map((line) => (
+                      <li className="order-line" key={line.package.id}>
+                        <div>
+                          <span className="order-line-name">
+                            Path 2 · {line.package.name}
+                          </span>
+                        </div>
+                        <span className="order-line-price">
+                          {formatUsd(line.listAmount)}
+                          <span className="order-line-meta">/ one-time</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="remove"
+                          onClick={() => removeItem(line.package.id)}
+                          aria-label={`Remove ${line.package.name}`}
+                        >
+                          <CloseIcon />
+                        </button>
+                      </li>
                     ))}
+
+                    {concierge.audit && (
+                      <li className="order-line">
+                        <div>
+                          <span className="order-line-name">Mastra Audit</span>
+                        </div>
+                        <span className="order-line-price">
+                          {formatUsd(concierge.audit.listAmount)}
+                          <span className="order-line-meta">/ one-time</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="remove"
+                          onClick={() => removeItem(AUDIT_ID)}
+                          aria-label="Remove Mastra Audit"
+                        >
+                          <CloseIcon />
+                        </button>
+                      </li>
+                    )}
+                  </ul>
+
+                  <div className="totals">
+                    {concierge.discountRate > 0 && (
+                      <div className="total-row discount">
+                        <span>
+                          Concierge discount (
+                          {formatPercent(concierge.discountRate)})
+                        </span>
+                        <span>−{formatUsd(concierge.discountAmount)}</span>
+                      </div>
+                    )}
+
+                    {concierge.path1 && (
+                      <div className="total-row grand">
+                        <span>Concierge / quarter</span>
+                        <span>{formatUsd(concierge.path1TotalQuarterly)}</span>
+                      </div>
+                    )}
+
+                    {(concierge.path2.length > 0 || concierge.audit) && (
+                      <div
+                        className={`total-row${concierge.path1 ? '' : ' grand'}`}
+                      >
+                        <span>Concierge one-time</span>
+                        <span>{formatUsd(concierge.oneTimeTotal)}</span>
+                      </div>
+                    )}
+
+                    {concierge.path1 && (
+                      <div className="total-row muted">
+                        <span>Path 1 margin</span>
+                        <span>
+                          {formatUsd(margin.path1Margin)}
+                          {margin.path1MarginRate != null
+                            ? ` (${formatPercent(margin.path1MarginRate)})`
+                            : ''}
+                        </span>
+                      </div>
+                    )}
+
+                    {margin.path2.map((row) => (
+                      <div className="total-row muted" key={`margin-${row.id}`}>
+                        <span>Path 2 · {row.name} margin</span>
+                        <span>
+                          {formatUsd(row.margin)}
+                          {row.marginRate != null
+                            ? ` (${formatPercent(row.marginRate)})`
+                            : ''}
+                        </span>
+                      </div>
+                    ))}
+
+                    {margin.path2.length > 0 && (
+                      <div className="margin-hours">
+                        {margin.path2.map((row) => (
+                          <label
+                            key={`hours-${row.id}`}
+                            className="scoped-price"
+                          >
+                            {row.name} hours
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={path2Hours[row.id] ?? ''}
+                              onChange={(e) =>
+                                setPath2DeliveryHours(row.id, e.target.value)
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <button
                 type="button"

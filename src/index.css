@@ -643,6 +643,27 @@ button {
   top: 1rem;
 }
 
+.summary-group {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.15rem;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.summary-group:last-of-type {
+  margin-bottom: 0.5rem;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.summary-group-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 .summary-empty {
   padding: 1.5rem 0.25rem;
   color: var(--text-muted);
