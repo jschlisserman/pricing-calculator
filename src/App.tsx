@@ -1,13 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   AUDIT_ID,
-  CONCIERGE_AUDIT_BANDS,
-  CONCIERGE_PATH1_ADVISORY_BANDS,
-  CONCIERGE_PATH1_HANDS_ON_BANDS,
-  CONCIERGE_PATH2_BANDS,
   DEFAULT_ENGINEER_COST_PER_HOUR,
   PATH1_TIERS,
-  PATH1_WEEKS_PER_QUARTER,
   PATH2_PACKAGES,
   buildConciergeMargin,
   buildConciergeQuote,
@@ -25,18 +20,16 @@ import {
   type Path2ScopedPrices,
 } from './concierge'
 import {
-  AGENCY_PASS_THROUGH_BANDS,
+  ADDITIONAL_USAGE_DISCOUNT,
   BYOC_ID,
   CATALOG,
   CATEGORY_ORDER,
   DESIGN_PARTNER_ID,
-  DPP_HEADCOUNT_BANDS,
   DPP_USAGE_REFERENCE_ANNUAL,
-  HEADCOUNT_BANDS,
   PLATFORM_ID,
   PLATFORM_PACKAGES,
   PLATFORM_USAGE_METRICS,
-  PLATFORM_USAGE_REFERENCE_ANNUAL,
+  buildPlatformMargin,
   buildQuote,
   defaultDppUsageConfig,
   defaultPlatformConfig,
@@ -45,10 +38,10 @@ import {
   formatPercent,
   formatUnitCost,
   formatUsd,
+  getAdditionalUsageUnitPrice,
   getCatalogListAmount,
   getDppAnnualFee,
   getPlatformListPrice,
-  buildPlatformMargin,
   hasSelfHostedDeployment,
   isDeploymentExclusiveGated,
   isDeploymentId,
@@ -65,6 +58,7 @@ import {
   type PlatformConfig,
   type PlatformPackageId,
 } from './pricing'
+import TablesPage from './TablesPage'
 
 const FUTURE_FEATURES: Record<string, string[]> = {
   'security-controls': ['FGC'],
@@ -118,7 +112,10 @@ function path1ModeLabel(mode: Path1Mode): string {
   return mode === 'hands-on' ? 'Hands-On' : 'Advisory'
 }
 
+type AppPage = 'order' | 'tables'
+
 export default function App() {
+  const [page, setPage] = useState<AppPage>('order')
   const [employees, setEmployees] = useState(50)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(() =>
@@ -209,13 +206,11 @@ export default function App() {
   const dppAnnualFee = getDppAnnualFee(
     Number.isFinite(employees) ? employees : 0,
   )
-  const usageScale = platformListPrice / PLATFORM_USAGE_REFERENCE_ANNUAL
   const dppUsageScale =
     dppAnnualFee > 0 ? dppAnnualFee / DPP_USAGE_REFERENCE_ANNUAL : 0
   const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
   const headcount = Number.isFinite(employees) ? employees : 0
   const selectedPath1Id = selectedIds.find(isPath1Id)
-  const hasPath2Selected = selectedIds.some(isPath2Id)
   const auditSelected = selectedIds.includes(AUDIT_ID)
   const hasConcierge =
     concierge.path1 != null ||
@@ -418,8 +413,33 @@ export default function App() {
             <span className="brand-sub">Pricing calculator</span>
           </div>
         </a>
+        <nav className="app-nav" aria-label="Primary">
+          <button
+            type="button"
+            className={`nav-tab${page === 'order' ? ' active' : ''}`}
+            onClick={() => setPage('order')}
+            aria-current={page === 'order' ? 'page' : undefined}
+          >
+            Order builder
+          </button>
+          <button
+            type="button"
+            className={`nav-tab${page === 'tables' ? ' active' : ''}`}
+            onClick={() => setPage('tables')}
+            aria-current={page === 'tables' ? 'page' : undefined}
+          >
+            Tables
+          </button>
+        </nav>
       </header>
 
+      {page === 'tables' ? (
+        <TablesPage
+          activeBandId={quote.companyBandId}
+          dppBandId={quote.dppBandId}
+        />
+      ) : (
+        <>
       <section className="hero animate-in delay-1">
         <h1>Build an order. Adjust as you go.</h1>
         <p>
@@ -461,10 +481,6 @@ export default function App() {
                 </strong>
               </div>
             </div>
-            <p className="size-hint">
-              Growth (25–99) is 1.0x list. Startup is 0.5x; larger bands scale up
-              to an 8.0x floor for Global+.
-            </p>
           </div>
 
           <div className="panel-head">
@@ -510,8 +526,8 @@ export default function App() {
                           : programGated
                             ? isProgramId(item.id)
                               ? selectedIds.includes(BYOC_ID)
-                                ? 'Unavailable with BYOC unless explicit permission is given. Agency and Design Partner are otherwise deployment-agnostic.'
-                                : 'Unavailable while a Deployment is selected. Agency and Design Partner are deployment-agnostic, but BYOC is not offered with either unless explicit permission is given.'
+                                ? 'Unavailable with BYOC unless explicit permission is given.'
+                                : 'Unavailable while a Deployment is selected. BYOC is not offered with Agency or Design Partner unless explicit permission is given.'
                               : isDeploymentId(item.id)
                                 ? item.id === BYOC_ID
                                   ? 'BYOC is not offered with Agency or Design Partner unless explicit permission is given.'
@@ -638,16 +654,6 @@ export default function App() {
 
                         {isPlatform && selected && (
                           <div className="platform-usage">
-                            <p className="platform-usage-intro">
-                              Package includes are authored for a{' '}
-                              {formatUsd(PLATFORM_USAGE_REFERENCE_ANNUAL)}
-                              /year Platform reference and scale with headcount
-                              (currently {formatUsd(platformListPrice)}
-                              /year, {usageScale.toFixed(2)}×). Enter{' '}
-                              <strong>additional</strong> volume beyond package
-                              includes to bill at unit cost.
-                            </p>
-
                             <div className="platform-package-toggles">
                               {PLATFORM_PACKAGES.map((pkg) => (
                                 <button
@@ -675,15 +681,18 @@ export default function App() {
                                 <span>Meter</span>
                                 <span>Package include</span>
                                 <span>Additional</span>
-                                <span>Unit cost</span>
-                                <span>Overage</span>
+                                <span>Unit / overage</span>
+                                <span>Additional @ 50%</span>
                               </div>
                               {PLATFORM_USAGE_METRICS.map((metric) => {
                                 const included =
                                   platformConfig.includes[metric.id] ?? 0
                                 const additional =
                                   platformConfig.additional[metric.id] ?? 0
-                                const lineCost = additional * metric.unitCost
+                                const billedUnit = getAdditionalUsageUnitPrice(
+                                  metric.unitCost,
+                                )
+                                const lineCost = additional * billedUnit
                                 return (
                                   <div
                                     className="platform-usage-row package-row"
@@ -723,11 +732,14 @@ export default function App() {
                                     <span className="platform-usage-unit">
                                       {formatUnitCost(metric.unitCost)}
                                       <span className="platform-usage-note">
-                                        / {metric.unitLabel}
+                                        fixed / {metric.unitLabel}
                                       </span>
                                     </span>
                                     <span className="platform-usage-cost">
                                       {formatUsd(lineCost)}
+                                      <span className="platform-usage-note">
+                                        @ {formatUnitCost(billedUnit)}
+                                      </span>
                                     </span>
                                   </div>
                                 )
@@ -745,7 +757,10 @@ export default function App() {
                               (currently {formatUsd(dppAnnualFee)}
                               /year, {dppUsageScale.toFixed(2)}×). Enter{' '}
                               <strong>additional</strong> volume beyond package
-                              includes to bill at unit cost.
+                              includes. List/overage unit costs are fixed.
+                              Purchased additional usage is billed at{' '}
+                              {formatPercent(ADDITIONAL_USAGE_DISCOUNT)} of list
+                              unit cost.
                             </p>
 
                             <div className="platform-base-row">
@@ -758,15 +773,18 @@ export default function App() {
                                 <span>Meter</span>
                                 <span>Package include</span>
                                 <span>Additional</span>
-                                <span>Unit cost</span>
-                                <span>Overage</span>
+                                <span>Unit / overage</span>
+                                <span>Additional @ 50%</span>
                               </div>
                               {PLATFORM_USAGE_METRICS.map((metric) => {
                                 const included =
                                   dppUsageConfig.includes[metric.id] ?? 0
                                 const additional =
                                   dppUsageConfig.additional[metric.id] ?? 0
-                                const lineCost = additional * metric.unitCost
+                                const billedUnit = getAdditionalUsageUnitPrice(
+                                  metric.unitCost,
+                                )
+                                const lineCost = additional * billedUnit
                                 return (
                                   <div
                                     className="platform-usage-row package-row"
@@ -804,11 +822,14 @@ export default function App() {
                                     <span className="platform-usage-unit">
                                       {formatUnitCost(metric.unitCost)}
                                       <span className="platform-usage-note">
-                                        / {metric.unitLabel}
+                                        fixed / {metric.unitLabel}
                                       </span>
                                     </span>
                                     <span className="platform-usage-cost">
                                       {formatUsd(lineCost)}
+                                      <span className="platform-usage-note">
+                                        @ {formatUnitCost(billedUnit)}
+                                      </span>
                                     </span>
                                   </div>
                                 )
@@ -865,11 +886,6 @@ export default function App() {
                           {tier.name}
                           <span className="pill">{tier.hoursPerWeek} hrs/wk</span>
                         </span>
-                        <p className="item-desc">
-                          Advisory {formatUsd(advisoryList)}/qtr ·{' '}
-                          {formatUsd(Math.round(advisoryHourly))}/hr ·{' '}
-                          {formatUsd(advisoryList * 4)}/yr annualized
-                        </p>
                       </span>
                       <span className="item-price">
                         {formatUsd(advisoryList)}
@@ -964,10 +980,6 @@ export default function App() {
                           {pkg.name}
                           <span className="pill">Indicative floor</span>
                         </span>
-                        <p className="item-desc">
-                          Scaled floor for current headcount:{' '}
-                          {formatUsd(floor)} one-time
-                        </p>
                       </span>
                       <span className="item-price">
                         {formatUsd(floor)}
@@ -1030,21 +1042,6 @@ export default function App() {
                   </span>
                   <span className="item-body">
                     <span className="item-name">Mastra Audit</span>
-                    {hasPath2Selected && auditSelected && (
-                      <p className="item-desc">
-                        Audit scopes Path 2 outcome pricing for this engagement.
-                      </p>
-                    )}
-                    {hasPath2Selected && !auditSelected && (
-                      <p className="item-desc">
-                        Audit can be deselected when already completed.
-                      </p>
-                    )}
-                    {!hasPath2Selected && (
-                      <p className="item-desc">
-                        Fee for the current headcount band.
-                      </p>
-                    )}
                   </span>
                   <span className="item-price">
                     {formatUsd(auditFee)}
@@ -1060,163 +1057,125 @@ export default function App() {
         <aside className="panel summary">
           <div className="panel-head">
             <h2>Order summary</h2>
-            <span className="category-meta">
-              {quote.purchaseCount} purchase
-              {quote.purchaseCount === 1 ? '' : 's'}
-              {hasConcierge ? ' + Concierge' : ''}
-            </span>
           </div>
 
           {hasOrder ? (
             <>
-              {quote.lineItems.length > 0 && (
-                <ul className="order-lines">
-                  {quote.lineItems.map(({ item, billedAmount }) => {
-                    const isPlatform = item.id === PLATFORM_ID
-                    const isDpp = item.id === DESIGN_PARTNER_ID
-                    return (
-                      <li className="order-line" key={item.id}>
-                        <div>
-                          <span className="order-line-name">{item.name}</span>
-                          <span className="order-line-meta">
-                            {item.category}
-                            {isPlatform && quote.platformPackageName
-                              ? ` · ${quote.platformPackageName}`
-                              : isDpp
-                                ? ' · usage package'
-                                : ''}
-                          </span>
-                          {isPlatform && (
-                            <ul className="usage-breakdown">
-                              <li>
-                                Base price: {formatUsd(quote.platformBasePrice)}
-                                {quote.platformPackageName
-                                  ? ` · ${quote.platformPackageName}`
-                                  : ''}
-                              </li>
-                              {PLATFORM_USAGE_METRICS.map((metric) => {
-                                const included =
-                                  quote.platformIncludes[metric.id] ?? 0
-                                if (included <= 0) return null
-                                return (
-                                  <li key={`include-${metric.id}`}>
-                                    Include {metric.name}:{' '}
-                                    {included.toLocaleString('en-US')}
-                                  </li>
-                                )
-                              })}
-                              {quote.platformUsageLines.map((line) => (
-                                <li key={line.metric.id}>
-                                  Additional {line.metric.name}:{' '}
-                                  {line.additionalAmount.toLocaleString('en-US')}{' '}
-                                  × {formatUnitCost(line.metric.unitCost)} ={' '}
-                                  {formatUsd(line.cost)}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                          {isDpp && (
-                            <ul className="usage-breakdown">
-                              <li>DPP fee: {formatUsd(billedAmount)}</li>
-                              {PLATFORM_USAGE_METRICS.map((metric) => {
-                                const included =
-                                  quote.dppIncludes[metric.id] ?? 0
-                                if (included <= 0) return null
-                                return (
-                                  <li key={`dpp-include-${metric.id}`}>
-                                    Include {metric.name}:{' '}
-                                    {included.toLocaleString('en-US')}
-                                  </li>
-                                )
-                              })}
-                              {quote.dppUsageLines.map((line) => (
-                                <li key={`dpp-${line.metric.id}`}>
-                                  Additional {line.metric.name}:{' '}
-                                  {line.additionalAmount.toLocaleString('en-US')}{' '}
-                                  × {formatUnitCost(line.metric.unitCost)} ={' '}
-                                  {formatUsd(line.cost)}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                        <span className="order-line-price">
-                          {isPlatform
-                            ? formatUsd(quote.platformUsageTotal)
-                            : isDpp
-                              ? formatUsd(billedAmount + quote.dppOverageTotal)
-                              : formatUsd(billedAmount)}
-                          <span className="order-line-meta">/ yr</span>
-                        </span>
-                        <button
-                          type="button"
-                          className="remove"
-                          onClick={() => removeItem(item.id)}
-                          aria-label={`Remove ${item.name}`}
-                        >
-                          <CloseIcon />
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
+              <ul className="order-lines">
+                {quote.lineItems.map(({ item, billedAmount }) => {
+                  const isPlatform = item.id === PLATFORM_ID
+                  const isDpp = item.id === DESIGN_PARTNER_ID
+                  const price = isPlatform
+                    ? quote.platformUsageTotal
+                    : isDpp
+                      ? billedAmount + quote.dppOverageTotal
+                      : billedAmount
+                  return (
+                    <li className="order-line" key={item.id}>
+                      <div>
+                        <span className="order-line-name">{item.name}</span>
+                      </div>
+                      <span className="order-line-price">
+                        {formatUsd(price)}
+                        <span className="order-line-meta">/ yr</span>
+                      </span>
+                      <button
+                        type="button"
+                        className="remove"
+                        onClick={() => removeItem(item.id)}
+                        aria-label={`Remove ${item.name}`}
+                      >
+                        <CloseIcon />
+                      </button>
+                    </li>
+                  )
+                })}
+
+                {concierge.path1 && (
+                  <li className="order-line">
+                    <div>
+                      <span className="order-line-name">
+                        Concierge Path 1 · {concierge.path1.tier.name}
+                      </span>
+                      <span className="order-line-meta">
+                        {path1ModeLabel(concierge.path1.mode)}
+                      </span>
+                    </div>
+                    <span className="order-line-price">
+                      {formatUsd(concierge.path1.listAmount)}
+                      <span className="order-line-meta">/ qtr</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="remove"
+                      onClick={() => removeItem(concierge.path1!.tier.id)}
+                      aria-label={`Remove Path 1 ${concierge.path1.tier.name}`}
+                    >
+                      <CloseIcon />
+                    </button>
+                  </li>
+                )}
+
+                {concierge.path2.map((line) => (
+                  <li className="order-line" key={line.package.id}>
+                    <div>
+                      <span className="order-line-name">
+                        Concierge Path 2 · {line.package.name}
+                      </span>
+                    </div>
+                    <span className="order-line-price">
+                      {formatUsd(line.listAmount)}
+                      <span className="order-line-meta">/ one-time</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="remove"
+                      onClick={() => removeItem(line.package.id)}
+                      aria-label={`Remove ${line.package.name}`}
+                    >
+                      <CloseIcon />
+                    </button>
+                  </li>
+                ))}
+
+                {concierge.audit && (
+                  <li className="order-line">
+                    <div>
+                      <span className="order-line-name">Mastra Audit</span>
+                    </div>
+                    <span className="order-line-price">
+                      {formatUsd(concierge.audit.listAmount)}
+                      <span className="order-line-meta">/ one-time</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="remove"
+                      onClick={() => removeItem(AUDIT_ID)}
+                      aria-label="Remove Mastra Audit"
+                    >
+                      <CloseIcon />
+                    </button>
+                  </li>
+                )}
+              </ul>
 
               <div className="totals">
-                {hasProducts && (
-                  <>
-                    <div className="total-row muted">
-                      <span>
-                        Products subtotal
-                        {quote.companyMultiplier !== 1
-                          ? ` (${quote.companySizeLabel})`
-                          : ''}
-                      </span>
-                      <span>{formatUsd(quote.productSubtotal)}</span>
-                    </div>
-
-                    {quote.discountRate > 0 ? (
-                      <div className="total-row discount">
-                        <span>
-                          Volume discount ({formatPercent(quote.discountRate)})
-                        </span>
-                        <span>−{formatUsd(quote.discountAmount)}</span>
-                      </div>
-                    ) : (
-                      <div className="total-row muted">
-                        <span>Volume discount</span>
-                        <span>None</span>
-                      </div>
-                    )}
-
-                    <div className="total-row muted">
-                      <span>Products after discount</span>
-                      <span>{formatUsd(quote.productTotal)}</span>
-                    </div>
-                  </>
+                {hasProducts && quote.discountRate > 0 && (
+                  <div className="total-row discount">
+                    <span>
+                      Volume discount ({formatPercent(quote.discountRate)})
+                    </span>
+                    <span>−{formatUsd(quote.discountAmount)}</span>
+                  </div>
                 )}
 
-                {platformSelected && (
-                  <>
-                    <div className="total-row muted">
-                      <span>Platform base</span>
-                      <span>{formatUsd(quote.platformBasePrice)}</span>
-                    </div>
-                    <div className="total-row muted">
-                      <span>Platform overage</span>
-                      <span>{formatUsd(quote.platformOverageTotal)}</span>
-                    </div>
-                    <div className="total-row muted">
-                      <span>Platform total</span>
-                      <span>{formatUsd(quote.platformUsageTotal)}</span>
-                    </div>
-                  </>
-                )}
-
-                {dppSelected && (
-                  <div className="total-row muted">
-                    <span>DPP usage overage</span>
-                    <span>{formatUsd(quote.dppOverageTotal)}</span>
+                {hasConcierge && concierge.discountRate > 0 && (
+                  <div className="total-row discount">
+                    <span>
+                      Concierge discount (
+                      {formatPercent(concierge.discountRate)})
+                    </span>
+                    <span>−{formatUsd(concierge.discountAmount)}</span>
                   </div>
                 )}
 
@@ -1224,184 +1183,82 @@ export default function App() {
                   <div
                     className={`total-row${hasConcierge ? '' : ' grand'}`}
                   >
-                    <span>Annual package total</span>
+                    <span>Annual total</span>
                     <span>{formatUsd(quote.annualTotal)}</span>
                   </div>
                 )}
 
-                {(hasProducts || platformSelected || dppSelected) &&
-                  !hasConcierge && (
-                    <div className="total-row muted">
-                      <span>Effective / quarter</span>
-                      <span>{formatUsd(quote.annualTotal / 4)}</span>
-                    </div>
-                  )}
+                {concierge.path1 && (
+                  <div className="total-row grand">
+                    <span>Concierge / quarter</span>
+                    <span>{formatUsd(concierge.path1TotalQuarterly)}</span>
+                  </div>
+                )}
 
-                {hasConcierge && (
-                  <>
-                    {(hasProducts || platformSelected || dppSelected) && (
-                      <div className="totals-divider" />
-                    )}
+                {(concierge.path2.length > 0 || concierge.audit) && (
+                  <div
+                    className={`total-row${concierge.path1 ? '' : ' grand'}`}
+                  >
+                    <span>Concierge one-time</span>
+                    <span>{formatUsd(concierge.oneTimeTotal)}</span>
+                  </div>
+                )}
 
-                    {concierge.path1 && (
-                      <ul className="order-lines">
-                        <li className="order-line">
-                          <div>
-                            <span className="order-line-name">
-                              Path 1 · {concierge.path1.tier.name}
-                            </span>
-                            <span className="order-line-meta">
-                              {path1ModeLabel(concierge.path1.mode)} ·{' '}
-                              {concierge.path1.tier.hoursPerWeek} hrs/wk
-                            </span>
-                            <span className="order-line-meta">
-                              {formatUsd(
-                                Math.round(concierge.path1.impliedHourly),
-                              )}
-                              /hr · {formatUsd(concierge.path1.annualized)}{' '}
-                              annualized
-                            </span>
-                          </div>
-                          <span className="order-line-price">
-                            {concierge.discountRate > 0 &&
-                            concierge.path1.billedAmount !==
-                              concierge.path1.listAmount ? (
-                              <>
-                                <span className="strike">
-                                  {formatUsd(concierge.path1.listAmount)}
-                                </span>
-                                {formatUsd(concierge.path1.billedAmount)}
-                              </>
-                            ) : (
-                              formatUsd(concierge.path1.billedAmount)
-                            )}
-                            <span className="order-line-meta">/ qtr</span>
-                          </span>
-                          <button
-                            type="button"
-                            className="remove"
-                            onClick={() => removeItem(concierge.path1!.tier.id)}
-                            aria-label={`Remove Path 1 ${concierge.path1.tier.name}`}
-                          >
-                            <CloseIcon />
-                          </button>
-                        </li>
-                      </ul>
-                    )}
+                {platformSelected && platformMargin && (
+                  <div className="total-row muted">
+                    <span>Platform margin</span>
+                    <span>
+                      {formatUsd(platformMargin.margin)}
+                      {platformMargin.marginRate != null
+                        ? ` (${formatPercent(platformMargin.marginRate)})`
+                        : ''}
+                    </span>
+                  </div>
+                )}
 
-                    {concierge.path2.length > 0 && (
-                      <ul className="order-lines">
-                        {concierge.path2.map((line) => (
-                          <li className="order-line" key={line.package.id}>
-                            <div>
-                              <span className="order-line-name">
-                                Path 2 · {line.package.name}
-                              </span>
-                              <span className="order-line-meta">
-                                {line.isOverridden
-                                  ? `Scoped · floor ${formatUsd(line.floor)}`
-                                  : 'Indicative floor'}
-                              </span>
-                            </div>
-                            <span className="order-line-price">
-                              {concierge.discountRate > 0 &&
-                              line.billedAmount !== line.listAmount ? (
-                                <>
-                                  <span className="strike">
-                                    {formatUsd(line.listAmount)}
-                                  </span>
-                                  {formatUsd(line.billedAmount)}
-                                </>
-                              ) : (
-                                formatUsd(line.billedAmount)
-                              )}
-                              <span className="order-line-meta">
-                                / one-time
-                              </span>
-                            </span>
-                            <button
-                              type="button"
-                              className="remove"
-                              onClick={() => removeItem(line.package.id)}
-                              aria-label={`Remove ${line.package.name}`}
-                            >
-                              <CloseIcon />
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                {concierge.path1 && (
+                  <div className="total-row muted">
+                    <span>Concierge Path 1 margin</span>
+                    <span>
+                      {formatUsd(margin.path1Margin)}
+                      {margin.path1MarginRate != null
+                        ? ` (${formatPercent(margin.path1MarginRate)})`
+                        : ''}
+                    </span>
+                  </div>
+                )}
 
-                    {concierge.audit && (
-                      <ul className="order-lines">
-                        <li className="order-line">
-                          <div>
-                            <span className="order-line-name">Mastra Audit</span>
-                            <span className="order-line-meta">One-time</span>
-                          </div>
-                          <span className="order-line-price">
-                            {concierge.discountRate > 0 &&
-                            concierge.audit.billedAmount !==
-                              concierge.audit.listAmount ? (
-                              <>
-                                <span className="strike">
-                                  {formatUsd(concierge.audit.listAmount)}
-                                </span>
-                                {formatUsd(concierge.audit.billedAmount)}
-                              </>
-                            ) : (
-                              formatUsd(concierge.audit.billedAmount)
-                            )}
-                            <span className="order-line-meta">/ one-time</span>
-                          </span>
-                          <button
-                            type="button"
-                            className="remove"
-                            onClick={() => removeItem(AUDIT_ID)}
-                            aria-label="Remove Mastra Audit"
-                          >
-                            <CloseIcon />
-                          </button>
-                        </li>
-                      </ul>
-                    )}
+                {margin.path2.map((row) => (
+                  <div className="total-row muted" key={`margin-${row.id}`}>
+                    <span>Concierge Path 2 · {row.name} margin</span>
+                    <span>
+                      {formatUsd(row.margin)}
+                      {row.marginRate != null
+                        ? ` (${formatPercent(row.marginRate)})`
+                        : ''}
+                    </span>
+                  </div>
+                ))}
 
-                    {concierge.discountRate > 0 && (
-                      <div className="total-row discount">
-                        <span>
-                          Concierge discount (
-                          {formatPercent(concierge.discountRate)})
-                        </span>
-                        <span>−{formatUsd(concierge.discountAmount)}</span>
-                      </div>
-                    )}
-
-                    {concierge.path1 && (
-                      <div className="total-row grand">
-                        <span>Concierge / quarter</span>
-                        <span>{formatUsd(concierge.path1TotalQuarterly)}</span>
-                      </div>
-                    )}
-
-                    {(concierge.path2.length > 0 || concierge.audit) && (
-                      <div
-                        className={`total-row${concierge.path1 ? '' : ' grand'}`}
-                      >
-                        <span>Concierge one-time</span>
-                        <span>{formatUsd(concierge.oneTimeTotal)}</span>
-                      </div>
-                    )}
-                  </>
+                {margin.path2.length > 0 && (
+                  <div className="margin-hours">
+                    {margin.path2.map((row) => (
+                      <label key={`hours-${row.id}`} className="scoped-price">
+                        {row.name} hours
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={path2Hours[row.id] ?? ''}
+                          onChange={(e) =>
+                            setPath2DeliveryHours(row.id, e.target.value)
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
                 )}
               </div>
-
-              <p className="footnote">
-                Concierge Path 1 is billed quarterly; Path 2 and Mastra Audit are
-                one-time. Concierge discount (15% with 1 package, 20% with 2+)
-                runs parallel to package volume discount — packages always keep
-                their volume rate. Platform usage is metered separately and is
-                not volume-discounted.
-              </p>
 
               <button
                 type="button"
@@ -1413,458 +1270,13 @@ export default function App() {
             </>
           ) : (
             <p className="summary-empty">
-              Select products or Concierge from the catalog. You can add or
-              remove anything after the order is started.
+              Select items from the catalog to build an order.
             </p>
-          )}
-
-          {platformSelected && platformMargin && (
-            <div className="margin-panel">
-              <div className="panel-head">
-                <h2>Platform margin</h2>
-              </div>
-              <p className="item-desc">
-                Base list price vs unit-cost value of package includes plus
-                additional usage.
-              </p>
-              <div className="margin-row">
-                <strong>Revenue</strong>
-                <span>Platform base {formatUsd(platformMargin.revenue)}</span>
-              </div>
-              <div className="margin-row">
-                <strong>Include cost</strong>
-                <span>{formatUsd(platformMargin.includeCost)}</span>
-                {platformMargin.includeLines.map((line) => (
-                  <span key={`include-${line.metric.id}`}>
-                    {line.metric.name}: {line.amount.toLocaleString('en-US')} ×{' '}
-                    {formatUnitCost(line.metric.unitCost)} ={' '}
-                    {formatUsd(line.cost)}
-                  </span>
-                ))}
-                {platformMargin.includeLines.length === 0 && (
-                  <span>No package includes</span>
-                )}
-              </div>
-              <div className="margin-row">
-                <strong>Additional usage cost</strong>
-                <span>{formatUsd(platformMargin.additionalCost)}</span>
-                {platformMargin.additionalLines.map((line) => (
-                  <span key={`add-${line.metric.id}`}>
-                    {line.metric.name}: {line.amount.toLocaleString('en-US')} ×{' '}
-                    {formatUnitCost(line.metric.unitCost)} ={' '}
-                    {formatUsd(line.cost)}
-                  </span>
-                ))}
-                {platformMargin.additionalLines.length === 0 && (
-                  <span>No additional usage</span>
-                )}
-              </div>
-              <div className="margin-row">
-                <strong>Total delivery cost</strong>
-                <span>{formatUsd(platformMargin.totalCost)}</span>
-              </div>
-              <div className="margin-row">
-                <strong>Margin</strong>
-                <span>{formatUsd(platformMargin.margin)}</span>
-                <span>
-                  {platformMargin.marginRate != null
-                    ? formatPercent(platformMargin.marginRate)
-                    : '—'}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {hasConcierge && (
-            <div className="margin-panel">
-              <div className="panel-head">
-                <h2>Concierge margin</h2>
-              </div>
-              <div className="field">
-                <label htmlFor="engineer-cost">
-                  Fully loaded engineer $/hr
-                </label>
-                <input
-                  id="engineer-cost"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={engineerCostPerHour}
-                  onChange={(e) => {
-                    const next = Number(e.target.value)
-                    setEngineerCostPerHour(
-                      Number.isFinite(next) ? Math.max(0, next) : 0,
-                    )
-                  }}
-                />
-              </div>
-              <p className="item-desc">
-                Path 1: quarterly revenue vs rate × hours/week ×{' '}
-                {PATH1_WEEKS_PER_QUARTER} weeks. Path 2: one-time revenue vs rate
-                × entered hours.
-              </p>
-
-              {concierge.path1 && (
-                <div className="margin-row">
-                  <strong>Path 1</strong>
-                  <span>
-                    {margin.path1HoursPerWeek} hrs/wk × {PATH1_WEEKS_PER_QUARTER}{' '}
-                    wks = {margin.path1HoursPerQuarter} hrs/qtr
-                  </span>
-                  <span>
-                    {margin.path1HoursPerQuarter} hrs ×{' '}
-                    {formatUsd(margin.engineerCostPerHour)}/hr ={' '}
-                    {formatUsd(margin.path1Cost)}
-                  </span>
-                  <span>Revenue {formatUsd(margin.path1Revenue)}/qtr</span>
-                  <span>Margin {formatUsd(margin.path1Margin)}</span>
-                  <span>
-                    {margin.path1MarginRate != null
-                      ? formatPercent(margin.path1MarginRate)
-                      : '—'}
-                  </span>
-                </div>
-              )}
-
-              {margin.path2.map((row) => (
-                <div className="margin-row" key={row.id}>
-                  <strong>Path 2 · {row.name}</strong>
-                  <label className="scoped-price">
-                    Hours
-                    <input
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={path2Hours[row.id] ?? ''}
-                      onChange={(e) =>
-                        setPath2DeliveryHours(row.id, e.target.value)
-                      }
-                    />
-                  </label>
-                  <span>
-                    {row.hours.toLocaleString('en-US')} hrs ×{' '}
-                    {formatUsd(margin.engineerCostPerHour)}/hr ={' '}
-                    {formatUsd(row.cost)}
-                  </span>
-                  <span>Revenue {formatUsd(row.revenue)}</span>
-                  <span>Margin {formatUsd(row.margin)}</span>
-                  <span>
-                    {row.marginRate != null
-                      ? formatPercent(row.marginRate)
-                      : '—'}
-                  </span>
-                </div>
-              ))}
-            </div>
           )}
         </aside>
       </div>
-
-      <section className="rules">
-        <div className="rule">
-          <h4>2 purchases</h4>
-          <p>15% off product total</p>
-        </div>
-        <div className="rule">
-          <h4>3 purchases</h4>
-          <p>20% off product total</p>
-        </div>
-        <div className="rule">
-          <h4>4+ purchases</h4>
-          <p>25% off product total</p>
-        </div>
-        <div className="rule">
-          <h4>Concierge + packages</h4>
-          <p>
-            15% Concierge with 1 package, 20% with 2+. Package volume still
-            applies.
-          </p>
-        </div>
-      </section>
-
-      <section className="band-table-section">
-        <div className="panel-head">
-          <h2>Headcount pricing bands</h2>
-        </div>
-        <p className="band-table-intro">
-          Annual list prices for one purchase in each product category. Growth is
-          the baseline; other bands apply the multiplier to that list.
-        </p>
-        <div className="band-table-wrap">
-          <table className="band-table">
-            <thead>
-              <tr>
-                <th>Band</th>
-                <th>Headcount</th>
-                <th>Multiplier</th>
-                <th>Deployment</th>
-                <th>Security</th>
-                <th>Agent Learning</th>
-                <th>Collaboration</th>
-                <th>All four (list)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {HEADCOUNT_BANDS.map((band) => (
-                <tr
-                  key={band.id}
-                  className={
-                    band.id === quote.companyBandId ? 'active-band' : undefined
-                  }
-                >
-                  <td>{band.name}</td>
-                  <td>{band.headcount}</td>
-                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
-                  <td>{band.deployment}</td>
-                  <td>{band.security}</td>
-                  <td>{band.agentLearning}</td>
-                  <td>{band.collaboration}</td>
-                  <td>{band.allFour}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="band-table-section">
-        <div className="panel-head">
-          <h2>Concierge Path 1 — Advisory</h2>
-        </div>
-        <p className="band-table-intro">
-          Quarterly Advisory list prices by headcount band (implied hourly in
-          parentheses). Growth is the 1.0× baseline.
-        </p>
-        <div className="band-table-wrap">
-          <table className="band-table">
-            <thead>
-              <tr>
-                <th>Band</th>
-                <th>Headcount</th>
-                <th>Multiplier</th>
-                <th>Small / qtr</th>
-                <th>Medium / qtr</th>
-                <th>Large / qtr</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CONCIERGE_PATH1_ADVISORY_BANDS.map((band) => (
-                <tr
-                  key={band.id}
-                  className={
-                    band.id === quote.companyBandId ? 'active-band' : undefined
-                  }
-                >
-                  <td>{band.name}</td>
-                  <td>{band.headcount}</td>
-                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
-                  <td>{band.small}</td>
-                  <td>{band.medium}</td>
-                  <td>{band.large}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="band-table-section">
-        <div className="panel-head">
-          <h2>Concierge Path 1 — Hands-On</h2>
-        </div>
-        <p className="band-table-intro">
-          Hands-On is 30% above Advisory. Same hours; higher quarterly rate and
-          implied hourly.
-        </p>
-        <div className="band-table-wrap">
-          <table className="band-table">
-            <thead>
-              <tr>
-                <th>Band</th>
-                <th>Headcount</th>
-                <th>Multiplier</th>
-                <th>Small / qtr</th>
-                <th>Medium / qtr</th>
-                <th>Large / qtr</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CONCIERGE_PATH1_HANDS_ON_BANDS.map((band) => (
-                <tr
-                  key={band.id}
-                  className={
-                    band.id === quote.companyBandId ? 'active-band' : undefined
-                  }
-                >
-                  <td>{band.name}</td>
-                  <td>{band.headcount}</td>
-                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
-                  <td>{band.small}</td>
-                  <td>{band.medium}</td>
-                  <td>{band.large}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="band-table-section">
-        <div className="panel-head">
-          <h2>Concierge Path 2 — Indicative floors</h2>
-        </div>
-        <p className="band-table-intro">
-          Indicative one-time floors by headcount band. Final Path 2 pricing is
-          set by the Mastra Audit.
-        </p>
-        <div className="band-table-wrap">
-          <table className="band-table">
-            <thead>
-              <tr>
-                <th>Band</th>
-                <th>Headcount</th>
-                <th>Multiplier</th>
-                <th>Evals</th>
-                <th>Integrations</th>
-                <th>Infrastructure</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CONCIERGE_PATH2_BANDS.map((band) => (
-                <tr
-                  key={band.id}
-                  className={
-                    band.id === quote.companyBandId ? 'active-band' : undefined
-                  }
-                >
-                  <td>{band.name}</td>
-                  <td>{band.headcount}</td>
-                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
-                  <td>{band.evals}</td>
-                  <td>{band.integrations}</td>
-                  <td>{band.infrastructure}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="band-table-section">
-        <div className="panel-head">
-          <h2>Mastra Audit fees</h2>
-        </div>
-        <p className="band-table-intro">
-          One-time Audit fee by headcount band.
-        </p>
-        <div className="band-table-wrap">
-          <table className="band-table">
-            <thead>
-              <tr>
-                <th>Band</th>
-                <th>Headcount</th>
-                <th>Audit fee</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CONCIERGE_AUDIT_BANDS.map((band) => (
-                <tr
-                  key={band.id}
-                  className={
-                    band.id === quote.companyBandId ? 'active-band' : undefined
-                  }
-                >
-                  <td>{band.name}</td>
-                  <td>{band.headcount}</td>
-                  <td>{band.fee}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="band-table-section">
-        <div className="panel-head">
-          <h2>DPP headcount bands</h2>
-        </div>
-        <p className="band-table-intro">
-          Design Partner Program annual fees for Startup through Mid-Market only.
-          Not offered at Enterprise (500+) or above.
-        </p>
-        <div className="band-table-wrap">
-          <table className="band-table">
-            <thead>
-              <tr>
-                <th>Band</th>
-                <th>Headcount</th>
-                <th>Multiplier</th>
-                <th>DPP annual fee</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DPP_HEADCOUNT_BANDS.map((band) => (
-                <tr
-                  key={band.id}
-                  className={
-                    band.id === quote.dppBandId ? 'active-band' : undefined
-                  }
-                >
-                  <td>{band.name}</td>
-                  <td>{band.headcount}</td>
-                  <td>{formatMultiplier(band.multiplier)}</td>
-                  <td>{formatUsd(band.annualFee)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="band-table-section">
-        <div className="panel-head">
-          <h2>Agency pass-through fees</h2>
-        </div>
-        <p className="band-table-intro">
-          Client pass-through pricing for agencies: 30% off product headcount
-          bands, rounded to the nearest $1,000.
-        </p>
-        <div className="band-table-wrap">
-          <table className="band-table">
-            <thead>
-              <tr>
-                <th>Band</th>
-                <th>Headcount</th>
-                <th>Multiplier</th>
-                <th>Deployment</th>
-                <th>Security</th>
-                <th>Agent Learning</th>
-                <th>Collaboration</th>
-                <th>All four (list)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {AGENCY_PASS_THROUGH_BANDS.map((band) => (
-                <tr
-                  key={band.id}
-                  className={
-                    band.id === quote.companyBandId ? 'active-band' : undefined
-                  }
-                >
-                  <td>{band.name}</td>
-                  <td>{band.headcount}</td>
-                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
-                  <td>{band.deployment}</td>
-                  <td>{band.security}</td>
-                  <td>{band.agentLearning}</td>
-                  <td>{band.collaboration}</td>
-                  <td>{band.allFour}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+        </>
+      )}
     </div>
   )
 }

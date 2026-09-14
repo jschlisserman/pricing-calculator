@@ -28,7 +28,6 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-self-hosted',
     name: 'Self-Hosted',
     category: 'Deployment',
-    description: 'Same pricing and scale as Helm Chart',
     basePrice: 8_000,
     billingPeriod: 'year',
     kind: 'individual',
@@ -37,8 +36,6 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-platform',
     name: 'Platform',
     category: 'Deployment',
-    description:
-      'Package usage scales from a $30k/year reference.',
     basePrice: 10_000,
     billingPeriod: 'year',
     kind: 'individual',
@@ -48,7 +45,7 @@ export const CATALOG: CatalogItem[] = [
     name: 'BYOC',
     category: 'Deployment',
     description:
-      'Startup & Growth $100k/year · scales from Mid-Market. Not offered with Agency or Design Partner unless explicit permission is given.',
+      'Not offered with Agency or Design Partner unless explicit permission is given.',
     basePrice: 100_000,
     billingPeriod: 'year',
     kind: 'individual',
@@ -87,7 +84,7 @@ export const CATALOG: CatalogItem[] = [
     name: 'Mastra Agency Program',
     category: 'Programs',
     description:
-      'Deployment-agnostic. BYOC is not offered with Agency unless explicit permission is given.',
+      'BYOC is not offered with Agency unless explicit permission is given.',
     basePrice: 10_000,
     billingPeriod: 'year',
     kind: 'program',
@@ -97,7 +94,7 @@ export const CATALOG: CatalogItem[] = [
     name: 'Mastra Design Partner Program',
     category: 'Programs',
     description:
-      'Startup–Mid-Market only · not offered Enterprise+. Deployment-agnostic; BYOC is not offered with Design Partner unless explicit permission is given.',
+      'BYOC is not offered with Design Partner unless explicit permission is given.',
     basePrice: 8_000,
     billingPeriod: 'year',
     kind: 'program',
@@ -423,7 +420,7 @@ export function isGatedBySelfHosted(itemId: string): boolean {
 
 /**
  * Programs are gated when a Deployment is selected (and vice versa).
- * Agency / DPP are otherwise deployment-agnostic; BYOC still needs permission.
+ * BYOC still needs permission to combine with Agency / DPP.
  */
 export function isProgramExclusiveGated(
   itemId: string,
@@ -487,6 +484,7 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     name: 'Data Egress (GB)',
     unitCost: 0.8,
     unitLabel: 'GB',
+    includedNote: 'First 100 GB free outside package includes',
   },
   {
     id: 'cpu-time',
@@ -703,7 +701,25 @@ export function getPlatformPackageName(packageId: PlatformPackageId): string {
 export interface PlatformUsageLine {
   metric: PlatformUsageMetric
   additionalAmount: number
+  /**
+   * Fixed list / overage unit cost (same as metric.unitCost; does not scale
+   * and is not discounted).
+   */
+  listUnitCost: number
+  /** Purchase price for additional usage: 50% of list unit cost. */
+  billedUnitCost: number
+  /** Billed amount for purchased additional usage. */
   cost: number
+}
+
+/**
+ * Purchased additional usage is billed at 50% of the fixed list unit cost.
+ * Overage / list unit cost itself stays at full unitCost (not discounted).
+ */
+export const ADDITIONAL_USAGE_DISCOUNT = 0.5
+
+export function getAdditionalUsageUnitPrice(listUnitCost: number): number {
+  return listUnitCost * (1 - ADDITIONAL_USAGE_DISCOUNT)
 }
 
 export function buildPlatformUsageLines(
@@ -711,10 +727,13 @@ export function buildPlatformUsageLines(
 ): PlatformUsageLine[] {
   return PLATFORM_USAGE_METRICS.map((metric) => {
     const additionalAmount = Math.max(0, amounts[metric.id] ?? 0)
+    const billedUnitCost = getAdditionalUsageUnitPrice(metric.unitCost)
     return {
       metric,
       additionalAmount,
-      cost: additionalAmount * metric.unitCost,
+      listUnitCost: metric.unitCost,
+      billedUnitCost,
+      cost: additionalAmount * billedUnitCost,
     }
   }).filter((line) => line.additionalAmount > 0)
 }
@@ -723,7 +742,7 @@ export function sumPlatformUsage(amounts: PlatformUsageAmounts): number {
   return buildPlatformUsageLines(amounts).reduce((sum, line) => sum + line.cost, 0)
 }
 
-/** Value (at list unit cost) of a usage quantity map. */
+/** Value at fixed list unit cost (includes / delivery cost; does not scale). */
 export function costOfUsageAmounts(amounts: PlatformUsageAmounts): number {
   return PLATFORM_USAGE_METRICS.reduce((sum, metric) => {
     const qty = Math.max(0, amounts[metric.id] ?? 0)
@@ -734,6 +753,8 @@ export function costOfUsageAmounts(amounts: PlatformUsageAmounts): number {
 export interface PlatformUsageCostLine {
   metric: PlatformUsageMetric
   amount: number
+  /** Fixed list unit cost. */
+  listUnitCost: number
   cost: number
 }
 
@@ -745,25 +766,31 @@ export function buildUsageCostLines(
     return {
       metric,
       amount,
+      listUnitCost: metric.unitCost,
       cost: amount * metric.unitCost,
     }
   }).filter((line) => line.amount > 0)
 }
 
 export interface PlatformMargin {
+  /** Platform base + billed additional (50% off). */
   revenue: number
+  platformBasePrice: number
+  additionalRevenue: number
   includeCost: number
+  /** Delivery cost of additional at full fixed unit cost. */
   additionalCost: number
   totalCost: number
   margin: number
   marginRate: number | null
   includeLines: PlatformUsageCostLine[]
-  additionalLines: PlatformUsageCostLine[]
+  additionalCostLines: PlatformUsageCostLine[]
+  additionalRevenueLines: PlatformUsageLine[]
 }
 
 /**
- * Platform margin: base list price vs unit-cost value of package includes
- * plus additional (overage) usage.
+ * Platform margin: base + purchased-additional revenue (50% of unit cost) vs
+ * delivery valued at full fixed overage/unit cost for includes and additional.
  */
 export function buildPlatformMargin(
   platformBasePrice: number,
@@ -771,23 +798,32 @@ export function buildPlatformMargin(
   additional: PlatformUsageAmounts,
 ): PlatformMargin {
   const includeLines = buildUsageCostLines(includes)
-  const additionalLines = buildUsageCostLines(additional)
+  const additionalCostLines = buildUsageCostLines(additional)
+  const additionalRevenueLines = buildPlatformUsageLines(additional)
   const includeCost = includeLines.reduce((sum, line) => sum + line.cost, 0)
-  const additionalCost = additionalLines.reduce(
+  const additionalCost = additionalCostLines.reduce(
+    (sum, line) => sum + line.cost,
+    0,
+  )
+  const additionalRevenue = additionalRevenueLines.reduce(
     (sum, line) => sum + line.cost,
     0,
   )
   const totalCost = includeCost + additionalCost
-  const margin = platformBasePrice - totalCost
+  const revenue = platformBasePrice + additionalRevenue
+  const margin = revenue - totalCost
   return {
-    revenue: platformBasePrice,
+    revenue,
+    platformBasePrice,
+    additionalRevenue,
     includeCost,
     additionalCost,
     totalCost,
     margin,
-    marginRate: platformBasePrice > 0 ? margin / platformBasePrice : null,
+    marginRate: revenue > 0 ? margin / revenue : null,
     includeLines,
-    additionalLines,
+    additionalCostLines,
+    additionalRevenueLines,
   }
 }
 
