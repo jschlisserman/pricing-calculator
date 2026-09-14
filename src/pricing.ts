@@ -790,8 +790,9 @@ export interface PlatformMargin {
 }
 
 /**
- * Platform margin: base + purchased-additional revenue (50% of unit cost) vs
- * delivery valued at full fixed overage/unit cost for includes and additional.
+ * Usage-package margin (Platform or Design Partner): base fee + purchased
+ * additional revenue (50% of unit cost) vs delivery valued at full fixed unit
+ * cost for includes and additional.
  */
 export function buildPlatformMargin(
   platformBasePrice: number,

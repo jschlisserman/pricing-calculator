@@ -200,10 +200,24 @@ export default function App() {
   ])
 
   const dppSelected = selectedIds.includes(DESIGN_PARTNER_ID)
-  const platformListPrice = getPlatformListPrice(
+  const dppAnnualFee = getDppAnnualFee(
     Number.isFinite(employees) ? employees : 0,
   )
-  const dppAnnualFee = getDppAnnualFee(
+  const dppMargin = useMemo(() => {
+    if (!dppSelected) return null
+    return buildPlatformMargin(
+      dppAnnualFee,
+      quote.dppIncludes,
+      dppUsageConfig.additional,
+    )
+  }, [
+    dppSelected,
+    dppAnnualFee,
+    quote.dppIncludes,
+    dppUsageConfig.additional,
+  ])
+
+  const platformListPrice = getPlatformListPrice(
     Number.isFinite(employees) ? employees : 0,
   )
   const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
@@ -446,12 +460,6 @@ export default function App() {
         <>
       <section className="hero animate-in delay-1">
         <h1>Build an order. Adjust as you go.</h1>
-        <p>
-          Select products against Growth-band list pricing, then scale by
-          headcount band. Package volume discounts and Concierge discounts run
-          on parallel ladders — packages keep their volume rate; Concierge
-          discounts when sold alongside packages.
-        </p>
       </section>
 
       <div className="layout animate-in delay-2">
@@ -1268,6 +1276,18 @@ export default function App() {
                       {formatUsd(platformMargin.margin)}
                       {platformMargin.marginRate != null
                         ? ` (${formatPercent(platformMargin.marginRate)})`
+                        : ''}
+                    </span>
+                  </div>
+                )}
+
+                {dppSelected && dppMargin && (
+                  <div className="total-row muted">
+                    <span>Design Partner margin</span>
+                    <span>
+                      {formatUsd(dppMargin.margin)}
+                      {dppMargin.marginRate != null
+                        ? ` (${formatPercent(dppMargin.marginRate)})`
                         : ''}
                     </span>
                   </div>
