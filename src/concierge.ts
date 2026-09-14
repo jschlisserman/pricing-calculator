@@ -202,6 +202,11 @@ export function withoutOtherPath1Tiers(
   return selectedIds.filter((id) => !isPath1Id(id) || id === keepId)
 }
 
+/** Drop all Concierge Path 1 / Path 2 / Audit selections. */
+export function withoutConciergeItems(selectedIds: string[]): string[] {
+  return selectedIds.filter((id) => !isConciergeId(id))
+}
+
 export interface ConciergePath1Line {
   tier: Path1Tier
   mode: Path1Mode

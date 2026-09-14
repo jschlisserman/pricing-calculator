@@ -420,6 +420,7 @@ export function isGatedBySelfHosted(itemId: string): boolean {
 
 /**
  * Programs are gated when a Deployment is selected (and vice versa).
+ * Concierge is also unavailable while a Program is selected (handled in UI/toggle).
  * BYOC still needs permission to combine with Agency / DPP.
  */
 export function isProgramExclusiveGated(

@@ -13,6 +13,7 @@ import {
   isConciergeId,
   isPath1Id,
   isPath2Id,
+  withoutConciergeItems,
   withoutOtherPath1Tiers,
   type Path1Mode,
   type Path2Hours,
@@ -20,12 +21,10 @@ import {
   type Path2ScopedPrices,
 } from './concierge'
 import {
-  ADDITIONAL_USAGE_DISCOUNT,
   BYOC_ID,
   CATALOG,
   CATEGORY_ORDER,
   DESIGN_PARTNER_ID,
-  DPP_USAGE_REFERENCE_ANNUAL,
   PLATFORM_ID,
   PLATFORM_PACKAGES,
   PLATFORM_USAGE_METRICS,
@@ -42,6 +41,7 @@ import {
   getCatalogListAmount,
   getDppAnnualFee,
   getPlatformListPrice,
+  hasProgramSelected,
   hasSelfHostedDeployment,
   isDeploymentExclusiveGated,
   isDeploymentId,
@@ -206,12 +206,12 @@ export default function App() {
   const dppAnnualFee = getDppAnnualFee(
     Number.isFinite(employees) ? employees : 0,
   )
-  const dppUsageScale =
-    dppAnnualFee > 0 ? dppAnnualFee / DPP_USAGE_REFERENCE_ANNUAL : 0
   const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
+  const programSelected = hasProgramSelected(selectedIds)
   const headcount = Number.isFinite(employees) ? employees : 0
   const selectedPath1Id = selectedIds.find(isPath1Id)
   const auditSelected = selectedIds.includes(AUDIT_ID)
+  const auditFee = getAuditFee(headcount)
   const hasConcierge =
     concierge.path1 != null ||
     concierge.path2.length > 0 ||
@@ -259,6 +259,10 @@ export default function App() {
       }
 
       if (isConciergeId(id)) {
+        if (hasProgramSelected(prev)) {
+          return prev
+        }
+
         if (isPath1Id(id)) {
           return withoutSelfHostedGatedItems(
             withoutOtherPath1Tiers([...prev, id], id),
@@ -276,10 +280,12 @@ export default function App() {
       }
 
       if (isProgramId(id)) {
-        return withoutSelfHostedGatedItems([
-          ...prev.filter((x) => !isProgramId(x)),
-          id,
-        ])
+        return withoutSelfHostedGatedItems(
+          withoutConciergeItems([
+            ...prev.filter((x) => !isProgramId(x)),
+            id,
+          ]),
+        )
       }
 
       if (isDeploymentId(id)) {
@@ -394,8 +400,6 @@ export default function App() {
     setPath2Hours({})
     setEngineerCostPerHour(DEFAULT_ENGINEER_COST_PER_HOUR)
   }
-
-  const auditFee = getAuditFee(headcount)
 
   return (
     <div className="app">
@@ -750,19 +754,6 @@ export default function App() {
 
                         {isDpp && selected && !unavailable && (
                           <div className="platform-usage">
-                            <p className="platform-usage-intro">
-                              Design Partner usage package is authored for a{' '}
-                              {formatUsd(DPP_USAGE_REFERENCE_ANNUAL)}
-                              /year DPP reference and scales with the DPP fee
-                              (currently {formatUsd(dppAnnualFee)}
-                              /year, {dppUsageScale.toFixed(2)}×). Enter{' '}
-                              <strong>additional</strong> volume beyond package
-                              includes. List/overage unit costs are fixed.
-                              Purchased additional usage is billed at{' '}
-                              {formatPercent(ADDITIONAL_USAGE_DISCOUNT)} of list
-                              unit cost.
-                            </p>
-
                             <div className="platform-base-row">
                               <span>DPP fee (by headcount)</span>
                               <strong>{formatUsd(dppAnnualFee)}/yr</strong>
@@ -848,12 +839,20 @@ export default function App() {
           <section className="category concierge-section">
             <div className="category-title">
               <h3>Concierge</h3>
-              <span className="category-meta">Services</span>
+              <span className="category-meta">
+                {programSelected
+                  ? 'Unavailable with Programs'
+                  : 'Services'}
+              </span>
             </div>
 
             <div className="concierge-subhead">
               <h4>Path 1 — Hours-based</h4>
-              <p>Customer owns the outcome</p>
+              <p>
+                {programSelected
+                  ? 'Unavailable while a Program is selected.'
+                  : 'Customer owns the outcome'}
+              </p>
             </div>
             <div className="items">
               {PATH1_TIERS.map((tier) => {
@@ -870,31 +869,47 @@ export default function App() {
                 return (
                   <div
                     key={tier.id}
-                    className={`item-wrap${selected ? ' open' : ''}`}
+                    className={`item-wrap${selected && !programSelected ? ' open' : ''}`}
                   >
                     <button
                       type="button"
-                      className={`item radio${selected ? ' selected' : ''}`}
+                      className={`item radio${selected ? ' selected' : ''}${programSelected ? ' unavailable' : ''}`}
                       onClick={() => {
+                        if (programSelected) return
                         toggleItem(tier.id)
                       }}
                       aria-pressed={selected}
+                      aria-disabled={programSelected}
+                      disabled={programSelected}
                     >
                       <span className="check" aria-hidden="true" />
                       <span className="item-body">
                         <span className="item-name">
                           {tier.name}
                           <span className="pill">{tier.hoursPerWeek} hrs/wk</span>
+                          {programSelected && (
+                            <span className="pill">Program selected</span>
+                          )}
                         </span>
                       </span>
                       <span className="item-price">
-                        {formatUsd(advisoryList)}
-                        <br />
-                        / qtr
+                        {programSelected ? (
+                          <>
+                            —
+                            <br />
+                            Gated
+                          </>
+                        ) : (
+                          <>
+                            {formatUsd(advisoryList)}
+                            <br />
+                            / qtr
+                          </>
+                        )}
                       </span>
                     </button>
 
-                    {selected && (
+                    {selected && !programSelected && (
                       <div className="mode-picker" role="radiogroup" aria-label="Path 1 mode">
                         <button
                           type="button"
@@ -950,7 +965,11 @@ export default function App() {
 
             <div className="concierge-subhead">
               <h4>Path 2 — Outcome-based</h4>
-              <p>Mastra owns the outcome</p>
+              <p>
+                {programSelected
+                  ? 'Unavailable while a Program is selected.'
+                  : 'Mastra owns the outcome'}
+              </p>
             </div>
             <div className="items">
               {PATH2_PACKAGES.map((pkg) => {
@@ -962,32 +981,48 @@ export default function App() {
                 return (
                   <div
                     key={pkg.id}
-                    className={`item-wrap${selected ? ' open' : ''}`}
+                    className={`item-wrap${selected && !programSelected ? ' open' : ''}`}
                   >
                     <button
                       type="button"
-                      className={`item${selected ? ' selected' : ''}`}
+                      className={`item${selected ? ' selected' : ''}${programSelected ? ' unavailable' : ''}`}
                       onClick={() => {
+                        if (programSelected) return
                         toggleItem(pkg.id)
                       }}
                       aria-pressed={selected}
+                      aria-disabled={programSelected}
+                      disabled={programSelected}
                     >
                       <span className="check" aria-hidden="true">
-                        {selected ? <CheckIcon /> : null}
+                        {selected && !programSelected ? <CheckIcon /> : null}
                       </span>
                       <span className="item-body">
                         <span className="item-name">
                           {pkg.name}
                           <span className="pill">Indicative floor</span>
+                          {programSelected && (
+                            <span className="pill">Program selected</span>
+                          )}
                         </span>
                       </span>
                       <span className="item-price">
-                        {formatUsd(floor)}
-                        <br />
-                        / one-time
+                        {programSelected ? (
+                          <>
+                            —
+                            <br />
+                            Gated
+                          </>
+                        ) : (
+                          <>
+                            {formatUsd(floor)}
+                            <br />
+                            / one-time
+                          </>
+                        )}
                       </span>
                     </button>
-                    {selected && (
+                    {selected && !programSelected && (
                       <div className="scoped-price">
                         <label htmlFor={`scoped-${pkg.id}`}>
                           Scoped price (from Mastra Audit)
@@ -1025,28 +1060,50 @@ export default function App() {
 
             <div className="concierge-subhead">
               <h4>Mastra Audit</h4>
-              <p>One-time scoping fee</p>
+              <p>
+                {programSelected
+                  ? 'Unavailable while a Program is selected.'
+                  : 'One-time scoping fee'}
+              </p>
             </div>
             <div className="items">
               <div className="item-wrap">
                 <button
                   type="button"
-                  className={`item${auditSelected ? ' selected' : ''}`}
+                  className={`item${auditSelected ? ' selected' : ''}${programSelected ? ' unavailable' : ''}`}
                   onClick={() => {
+                    if (programSelected) return
                     toggleItem(AUDIT_ID)
                   }}
                   aria-pressed={auditSelected}
+                  aria-disabled={programSelected}
+                  disabled={programSelected}
                 >
                   <span className="check" aria-hidden="true">
-                    {auditSelected ? <CheckIcon /> : null}
+                    {auditSelected && !programSelected ? <CheckIcon /> : null}
                   </span>
                   <span className="item-body">
-                    <span className="item-name">Mastra Audit</span>
+                    <span className="item-name">
+                      Mastra Audit
+                      {programSelected && (
+                        <span className="pill">Program selected</span>
+                      )}
+                    </span>
                   </span>
                   <span className="item-price">
-                    {formatUsd(auditFee)}
-                    <br />
-                    / one-time
+                    {programSelected ? (
+                      <>
+                        —
+                        <br />
+                        Gated
+                      </>
+                    ) : (
+                      <>
+                        {formatUsd(auditFee)}
+                        <br />
+                        / one-time
+                      </>
+                    )}
                   </span>
                 </button>
               </div>

@@ -21,7 +21,7 @@ npm run dev
 - Security and Controls, Agent Learning, and Collaboration require a Deployment selection first
 - Platform Growth list is $10k; usage packages (Standard / Observability / Obs+Studio) are calibrated to a $30k/year reference and scale includes with headcount × Platform list. Overage/list unit costs are fixed (do not scale). Purchased additional usage is billed at 50% of that unit cost
 - Selecting Helm Chart, Self-Hosted, or BYOC gates Agent Learning (Platform deployment keeps it available)
-- Programs are exclusive with Deployment only (Agency vs Design Partner still mutually exclusive). BYOC is not offered with Agency or Design Partner unless explicit permission is given
+- Programs are exclusive with Deployment and Concierge (Agency vs Design Partner still mutually exclusive). BYOC is not offered with Agency or Design Partner unless explicit permission is given
 - Collaboration SKUs are individual purchases
 - **Concierge** replaces Support. It uses a capped labor multiplier (Startup 0.75x · Growth 1.0x · Mid-Market+ 1.5x) distinct from package headcount multipliers
   - **Path 1 (hours):** Small / Medium / Large quarterly; Advisory base or Hands-On (×1.3). One tier at a time. Shows implied $/hr over a 13-week quarter and annualized (×4)
