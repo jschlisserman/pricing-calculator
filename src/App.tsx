@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   AUDIT_ID,
   DEFAULT_ENGINEER_COST_PER_HOUR,
+  DEFAULT_PATH2_MARGIN,
   PATH1_TIERS,
+  PATH2_MARGIN_OPTIONS,
   PATH2_PACKAGES,
   buildConciergeMargin,
   buildConciergeQuote,
   getAuditFee,
   getPath1ImpliedHourly,
   getPath1QuarterlyList,
-  getPath2Floor,
+  getPath2Cost,
+  getPath2ListPrice,
   isConciergeId,
   isPath1Id,
   isPath2Id,
@@ -17,8 +20,9 @@ import {
   withoutOtherPath1Tiers,
   type Path1Mode,
   type Path2Hours,
+  type Path2MarginRate,
+  type Path2Margins,
   type Path2PackageId,
-  type Path2ScopedPrices,
 } from './concierge'
 import {
   BYOC_ID,
@@ -126,10 +130,8 @@ export default function App() {
     defaultDppUsageConfig(50),
   )
   const [path1Mode, setPath1Mode] = useState<Path1Mode>('advisory')
-  const [path2ScopedPrices, setPath2ScopedPrices] = useState<Path2ScopedPrices>(
-    {},
-  )
   const [path2Hours, setPath2Hours] = useState<Path2Hours>({})
+  const [path2Margins, setPath2Margins] = useState<Path2Margins>({})
   const [engineerCostPerHour, setEngineerCostPerHour] = useState(
     DEFAULT_ENGINEER_COST_PER_HOUR,
   )
@@ -168,21 +170,25 @@ export default function App() {
         selectedIds,
         Number.isFinite(employees) ? employees : 0,
         path1Mode,
-        path2ScopedPrices,
+        path2Hours,
+        path2Margins,
         quote.productPurchaseCount,
+        engineerCostPerHour,
       ),
     [
       selectedIds,
       employees,
       path1Mode,
-      path2ScopedPrices,
+      path2Hours,
+      path2Margins,
       quote.productPurchaseCount,
+      engineerCostPerHour,
     ],
   )
 
   const margin = useMemo(
-    () => buildConciergeMargin(concierge, engineerCostPerHour, path2Hours),
-    [concierge, engineerCostPerHour, path2Hours],
+    () => buildConciergeMargin(concierge, engineerCostPerHour),
+    [concierge, engineerCostPerHour],
   )
 
   const platformSelected = selectedIds.includes(PLATFORM_ID)
@@ -372,23 +378,6 @@ export default function App() {
     setPlatformConfig(platformConfigFromPackage(packageId, employees))
   }
 
-  function setScopedPrice(packageId: Path2PackageId, value: string) {
-    const trimmed = value.trim()
-    if (trimmed === '') {
-      setPath2ScopedPrices((prev) => {
-        const next = { ...prev }
-        delete next[packageId]
-        return next
-      })
-      return
-    }
-    const parsed = Number(trimmed.replace(/,/g, ''))
-    setPath2ScopedPrices((prev) => ({
-      ...prev,
-      [packageId]: Number.isFinite(parsed) ? Math.max(0, parsed) : null,
-    }))
-  }
-
   function setPath2DeliveryHours(packageId: Path2PackageId, value: string) {
     const trimmed = value.trim()
     if (trimmed === '') {
@@ -406,13 +395,23 @@ export default function App() {
     }))
   }
 
+  function setPath2TargetMargin(
+    packageId: Path2PackageId,
+    marginRate: Path2MarginRate,
+  ) {
+    setPath2Margins((prev) => ({
+      ...prev,
+      [packageId]: marginRate,
+    }))
+  }
+
   function clearOrder() {
     setSelectedIds([])
     setPlatformConfig(defaultPlatformConfig(employees))
     setDppUsageConfig(defaultDppUsageConfig(employees))
     setPath1Mode('advisory')
-    setPath2ScopedPrices({})
     setPath2Hours({})
+    setPath2Margins({})
     setEngineerCostPerHour(DEFAULT_ENGINEER_COST_PER_HOUR)
   }
 
@@ -990,16 +989,21 @@ export default function App() {
               <p>
                 {programSelected
                   ? 'Unavailable while a Program is selected.'
-                  : 'Mastra owns the outcome'}
+                  : `Price = $${engineerCostPerHour}/hr × hours ÷ (1 − margin)`}
               </p>
             </div>
             <div className="items">
               {PATH2_PACKAGES.map((pkg) => {
                 const selected = selectedIds.includes(pkg.id)
-                const floor = getPath2Floor(pkg, headcount)
-                const scoped = path2ScopedPrices[pkg.id]
-                const isOverridden =
-                  scoped != null && Number.isFinite(scoped) && scoped > 0
+                const hours = path2Hours[pkg.id] ?? 0
+                const targetMargin =
+                  path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
+                const cost = getPath2Cost(hours, engineerCostPerHour)
+                const listPrice = getPath2ListPrice(
+                  hours,
+                  targetMargin,
+                  engineerCostPerHour,
+                )
                 return (
                   <div
                     key={pkg.id}
@@ -1022,7 +1026,7 @@ export default function App() {
                       <span className="item-body">
                         <span className="item-name">
                           {pkg.name}
-                          <span className="pill">Indicative floor</span>
+                          <span className="pill">Outcome</span>
                           {programSelected && (
                             <span className="pill">Program selected</span>
                           )}
@@ -1035,9 +1039,15 @@ export default function App() {
                             <br />
                             Gated
                           </>
+                        ) : listPrice > 0 ? (
+                          <>
+                            {formatUsd(Math.round(listPrice))}
+                            <br />
+                            / one-time
+                          </>
                         ) : (
                           <>
-                            {formatUsd(floor)}
+                            Set hours
                             <br />
                             / one-time
                           </>
@@ -1045,34 +1055,62 @@ export default function App() {
                       </span>
                     </button>
                     {selected && !programSelected && (
-                      <div className="scoped-price">
-                        <label htmlFor={`scoped-${pkg.id}`}>
-                          Scoped price (from Mastra Audit)
+                      <div className="path2-pricing">
+                        <label
+                          className="scoped-price"
+                          htmlFor={`hours-${pkg.id}`}
+                        >
+                          Project hours
+                          <input
+                            id={`hours-${pkg.id}`}
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder="0"
+                            value={
+                              path2Hours[pkg.id] != null
+                                ? String(path2Hours[pkg.id])
+                                : ''
+                            }
+                            onChange={(e) =>
+                              setPath2DeliveryHours(pkg.id, e.target.value)
+                            }
+                          />
                         </label>
-                        <input
-                          id={`scoped-${pkg.id}`}
-                          type="number"
-                          min={0}
-                          step={1000}
-                          placeholder={String(floor)}
-                          value={
-                            path2ScopedPrices[pkg.id] != null
-                              ? String(path2ScopedPrices[pkg.id])
-                              : ''
-                          }
-                          onChange={(e) =>
-                            setScopedPrice(pkg.id, e.target.value)
-                          }
-                        />
-                        {isOverridden ? (
-                          <span className="item-price-note">
-                            Indicative floor: {formatUsd(floor)}
+
+                        <div
+                          className="mode-picker path2-margin-picker"
+                          role="radiogroup"
+                          aria-label={`${pkg.name} target margin`}
+                        >
+                          {PATH2_MARGIN_OPTIONS.map((rate) => (
+                            <button
+                              key={rate}
+                              type="button"
+                              className={`mode-option${targetMargin === rate ? ' active' : ''}`}
+                              role="radio"
+                              aria-checked={targetMargin === rate}
+                              onClick={() => setPath2TargetMargin(pkg.id, rate)}
+                            >
+                              <strong>{formatPercent(rate)}</strong>
+                              <span>target margin</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="path2-price-breakdown">
+                          <span>
+                            Cost {formatUsd(Math.round(cost))}
+                            {hours > 0
+                              ? ` · ${hours} hrs × ${formatUsd(engineerCostPerHour)}/hr`
+                              : ''}
                           </span>
-                        ) : (
-                          <span className="item-price-note">
-                            Outcome pricing is set by the Mastra Audit.
-                          </span>
-                        )}
+                          <strong>
+                            {listPrice > 0
+                              ? formatUsd(Math.round(listPrice))
+                              : '—'}
+                          </strong>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1265,9 +1303,15 @@ export default function App() {
                           <span className="order-line-name">
                             Path 2 · {line.package.name}
                           </span>
+                          <span className="order-line-meta">
+                            {line.hours} hrs ·{' '}
+                            {formatPercent(line.targetMarginRate)} target
+                          </span>
                         </div>
                         <span className="order-line-price">
-                          {formatUsd(line.listAmount)}
+                          {line.listAmount > 0
+                            ? formatUsd(Math.round(line.listAmount))
+                            : '—'}
                           <span className="order-line-meta">/ one-time</span>
                         </span>
                         <button
@@ -1345,35 +1389,13 @@ export default function App() {
                       <div className="total-row muted" key={`margin-${row.id}`}>
                         <span>Path 2 · {row.name} margin</span>
                         <span>
-                          {formatUsd(row.margin)}
+                          {formatUsd(Math.round(row.margin))}
                           {row.marginRate != null
                             ? ` (${formatPercent(row.marginRate)})`
                             : ''}
                         </span>
                       </div>
                     ))}
-
-                    {margin.path2.length > 0 && (
-                      <div className="margin-hours">
-                        {margin.path2.map((row) => (
-                          <label
-                            key={`hours-${row.id}`}
-                            className="scoped-price"
-                          >
-                            {row.name} hours
-                            <input
-                              type="number"
-                              min={0}
-                              step={1}
-                              value={path2Hours[row.id] ?? ''}
-                              onChange={(e) =>
-                                setPath2DeliveryHours(row.id, e.target.value)
-                              }
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               )}

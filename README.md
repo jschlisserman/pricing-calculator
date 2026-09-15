@@ -26,7 +26,7 @@ npm run dev
 - Collaboration SKUs are individual purchases
 - **Concierge** replaces Support. It uses a capped labor multiplier (Startup 0.75x · Growth 1.0x · Mid-Market+ 1.5x) distinct from package headcount multipliers
   - **Path 1 (hours):** Small / Medium / Large quarterly; Advisory base or Hands-On (×1.3). One tier at a time. Shows implied $/hr over a 13-week quarter and annualized (×4)
-  - **Path 2 (outcome):** Evals / Integrations / Infrastructure indicative floors scaled by Concierge multiplier; editable scoped price override. Multiple packages allowed. Selecting Path 2 auto-selects Mastra Audit (can deselect if audit already done)
+  - **Path 2 (outcome):** Evals / Integrations / Infrastructure. Price = fixed engineer $/hr (default $110) × project hours ÷ (1 − target margin). Choose 30% / 40% / 50% / 60% / 70% margin per package. Multiple packages allowed. Selecting Path 2 auto-selects Mastra Audit (can deselect if audit already done)
   - **Mastra Audit:** one-time flat fee by band ($1k–$5k)
   - Concierge does not count toward or waive package volume discount. Parallel Concierge discount: 15% with 1 package, 20% with 2+, applied to Concierge lines only
-  - Summary keeps Path 1 quarterly totals separate from Path 2 / Audit one-time totals. Margin uses fully loaded engineer $/hr (default $110): Path 1 cost = rate × hours/week × 13; Path 2 cost = rate × manually entered hours
+  - Summary keeps Path 1 quarterly totals separate from Path 2 / Audit one-time totals. Margin uses fully loaded engineer $/hr (default $110): Path 1 cost = rate × hours/week × 13; Path 2 cost = rate × project hours (target margin sets list price)

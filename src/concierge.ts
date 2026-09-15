@@ -78,27 +78,27 @@ export const PATH1_TIERS: Path1Tier[] = [
 export interface Path2Package {
   id: Path2PackageId
   name: string
-  /** Indicative floor at Growth 1.0x (placeholder pending scoping). */
-  indicativeFloor: number
 }
 
 export const PATH2_PACKAGES: Path2Package[] = [
   {
     id: 'concierge-path2-evals',
     name: 'Evals',
-    indicativeFloor: 40_000,
   },
   {
     id: 'concierge-path2-integrations',
     name: 'Integrations',
-    indicativeFloor: 30_000,
   },
   {
     id: 'concierge-path2-infrastructure',
     name: 'Infrastructure',
-    indicativeFloor: 100_000,
   },
 ]
+
+/** Target gross margins for Path 2 outcome pricing. */
+export const PATH2_MARGIN_OPTIONS = [0.3, 0.4, 0.5, 0.6, 0.7] as const
+export type Path2MarginRate = (typeof PATH2_MARGIN_OPTIONS)[number]
+export const DEFAULT_PATH2_MARGIN: Path2MarginRate = 0.5
 
 /** Flat Mastra Audit fee by headcount band id. */
 export const AUDIT_FEES_BY_BAND: Record<string, number> = {
@@ -177,11 +177,35 @@ export function getPath1ImpliedHourly(
   return hours > 0 ? quarterlyPrice / hours : 0
 }
 
-export function getPath2Floor(
-  pkg: Path2Package,
-  employees: number,
+/** Delivery cost for a Path 2 outcome engagement. */
+export function getPath2Cost(
+  hours: number,
+  engineerCostPerHour = DEFAULT_ENGINEER_COST_PER_HOUR,
 ): number {
-  return pkg.indicativeFloor * getConciergeMultiplier(employees)
+  return Math.max(0, hours) * Math.max(0, engineerCostPerHour)
+}
+
+/**
+ * Price from fixed cost and target gross margin.
+ * price = cost / (1 − margin), so (price − cost) / price = margin.
+ */
+export function getPath2PriceFromMargin(
+  cost: number,
+  marginRate: number,
+): number {
+  if (!(cost > 0) || !(marginRate > 0) || !(marginRate < 1)) return 0
+  return cost / (1 - marginRate)
+}
+
+export function getPath2ListPrice(
+  hours: number,
+  marginRate: number,
+  engineerCostPerHour = DEFAULT_ENGINEER_COST_PER_HOUR,
+): number {
+  return getPath2PriceFromMargin(
+    getPath2Cost(hours, engineerCostPerHour),
+    marginRate,
+  )
 }
 
 export function getAuditFee(employees: number): number {
@@ -219,11 +243,12 @@ export interface ConciergePath1Line {
 
 export interface ConciergePath2Line {
   package: Path2Package
-  floor: number
-  scopedPrice: number | null
+  hours: number
+  engineerCostPerHour: number
+  cost: number
+  targetMarginRate: Path2MarginRate
   listAmount: number
   billedAmount: number
-  isOverridden: boolean
 }
 
 export interface ConciergeAuditLine {
@@ -248,19 +273,23 @@ export interface ConciergeQuote {
   multiplier: number
 }
 
-export type Path2ScopedPrices = Partial<Record<Path2PackageId, number | null>>
-/** Manual Path 2 delivery hours for margin (× engineer $/hr). */
+/** Path 2 delivery hours (× fixed engineer $/hr → cost). */
 export type Path2Hours = Partial<Record<Path2PackageId, number>>
+/** Target gross margin per Path 2 package. */
+export type Path2Margins = Partial<Record<Path2PackageId, Path2MarginRate>>
 
 export function buildConciergeQuote(
   selectedIds: string[],
   employees: number,
   path1Mode: Path1Mode,
-  path2ScopedPrices: Path2ScopedPrices = {},
+  path2Hours: Path2Hours = {},
+  path2Margins: Path2Margins = {},
   packagePurchaseCount: number,
+  engineerCostPerHour = DEFAULT_ENGINEER_COST_PER_HOUR,
 ): ConciergeQuote {
   const multiplier = getConciergeMultiplier(employees)
   const discountRate = getConciergeDiscountRate(packagePurchaseCount)
+  const rate = Math.max(0, engineerCostPerHour)
 
   const path1Id = selectedIds.find(isPath1Id)
   const path1Tier = path1Id ? getPath1Tier(path1Id) : undefined
@@ -288,18 +317,19 @@ export function buildConciergeQuote(
   const path2: ConciergePath2Line[] = PATH2_PACKAGES.filter((pkg) =>
     selectedIds.includes(pkg.id),
   ).map((pkg) => {
-    const floor = getPath2Floor(pkg, employees)
-    const scoped = path2ScopedPrices[pkg.id]
-    const isOverridden =
-      scoped != null && Number.isFinite(scoped) && scoped > 0
-    const listAmount = isOverridden ? (scoped as number) : floor
+    const hours = Math.max(0, path2Hours[pkg.id] ?? 0)
+    const targetMarginRate =
+      path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
+    const cost = getPath2Cost(hours, rate)
+    const listAmount = getPath2PriceFromMargin(cost, targetMarginRate)
     return {
       package: pkg,
-      floor,
-      scopedPrice: isOverridden ? (scoped as number) : null,
+      hours,
+      engineerCostPerHour: rate,
+      cost,
+      targetMarginRate,
       listAmount,
       billedAmount: listAmount * (1 - discountRate),
-      isOverridden,
     }
   })
 
@@ -348,6 +378,7 @@ export interface ConciergeMargin {
     revenue: number
     hours: number
     cost: number
+    targetMarginRate: Path2MarginRate
     margin: number
     marginRate: number | null
   }>
@@ -361,12 +392,11 @@ export interface ConciergeMargin {
 /**
  * Concierge margin against fully loaded engineer $/hr.
  * Path 1: quarterly revenue vs rate × hours/week × 13 weeks.
- * Path 2: one-time revenue vs rate × entered engagement hours.
+ * Path 2: one-time billed revenue vs rate × project hours (target margin sets list).
  */
 export function buildConciergeMargin(
   concierge: ConciergeQuote,
   engineerCostPerHour: number,
-  path2Hours: Path2Hours,
 ): ConciergeMargin {
   const rate = Math.max(0, engineerCostPerHour)
   const path1HoursPerWeek = concierge.path1?.tier.hoursPerWeek ?? 0
@@ -379,15 +409,15 @@ export function buildConciergeMargin(
 
   const path2 = concierge.path2.map((line) => {
     const revenue = line.billedAmount
-    const hours = Math.max(0, path2Hours[line.package.id] ?? 0)
-    const cost = hours * rate
+    const cost = line.cost
     const margin = revenue - cost
     return {
       id: line.package.id,
       name: line.package.name,
       revenue,
-      hours,
+      hours: line.hours,
       cost,
+      targetMarginRate: line.targetMarginRate,
       margin,
       marginRate: revenue > 0 ? margin / revenue : null,
     }
@@ -453,32 +483,33 @@ function buildPath1BandRows(mode: Path1Mode): ConciergePath1BandRow[] {
 export const CONCIERGE_PATH1_ADVISORY_BANDS = buildPath1BandRows('advisory')
 export const CONCIERGE_PATH1_HANDS_ON_BANDS = buildPath1BandRows('hands-on')
 
-export interface ConciergePath2BandRow {
-  id: string
-  name: string
-  headcount: string
-  multiplier: number
-  custom?: boolean
-  evals: string
-  integrations: string
-  infrastructure: string
+export interface ConciergePath2MarginExampleRow {
+  hours: number
+  cost: string
+  margins: Record<string, string>
 }
 
-export const CONCIERGE_PATH2_BANDS: ConciergePath2BandRow[] =
-  HEADCOUNT_BANDS.map((band) => {
-    const mult = getConciergeMultiplierForBand(band)
-    const custom = Boolean(band.custom)
-    return {
-      id: band.id,
-      name: band.name,
-      headcount: band.headcount,
-      multiplier: mult,
-      custom: band.custom,
-      evals: formatBandUsd(40_000 * mult, custom),
-      integrations: formatBandUsd(30_000 * mult, custom),
-      infrastructure: formatBandUsd(100_000 * mult, custom),
-    }
-  })
+/** Example Path 2 prices at the default engineer rate across margin targets. */
+export const CONCIERGE_PATH2_MARGIN_EXAMPLES: ConciergePath2MarginExampleRow[] = [
+  40, 80, 120, 200, 400,
+].map((hours) => {
+  const cost = getPath2Cost(hours)
+  const margins = Object.fromEntries(
+    PATH2_MARGIN_OPTIONS.map((rate) => [
+      formatPercentLabel(rate),
+      formatUsd(Math.round(getPath2PriceFromMargin(cost, rate))),
+    ]),
+  )
+  return {
+    hours,
+    cost: formatUsd(cost),
+    margins,
+  }
+})
+
+function formatPercentLabel(rate: number): string {
+  return `${Math.round(rate * 100)}%`
+}
 
 export interface ConciergeAuditBandRow {
   id: string

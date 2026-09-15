@@ -2,7 +2,9 @@ import {
   CONCIERGE_AUDIT_BANDS,
   CONCIERGE_PATH1_ADVISORY_BANDS,
   CONCIERGE_PATH1_HANDS_ON_BANDS,
-  CONCIERGE_PATH2_BANDS,
+  CONCIERGE_PATH2_MARGIN_EXAMPLES,
+  DEFAULT_ENGINEER_COST_PER_HOUR,
+  PATH2_MARGIN_OPTIONS,
 } from './concierge'
 import {
   AGENCY_PASS_THROUGH_BANDS,
@@ -179,38 +181,32 @@ export default function TablesPage({
 
       <section className="band-table-section">
         <div className="panel-head">
-          <h2>Concierge Path 2 — Indicative floors</h2>
+          <h2>Concierge Path 2 — Hours × margin</h2>
         </div>
         <p className="band-table-intro">
-          Indicative one-time floors by headcount band. Final Path 2 pricing is
-          set by the Mastra Audit.
+          Price = ${DEFAULT_ENGINEER_COST_PER_HOUR}/hr × hours ÷ (1 − target
+          margin). Pick 30%–70% margin per project.
         </p>
         <div className="band-table-wrap">
           <table className="band-table">
             <thead>
               <tr>
-                <th>Band</th>
-                <th>Headcount</th>
-                <th>Multiplier</th>
-                <th>Evals</th>
-                <th>Integrations</th>
-                <th>Infrastructure</th>
+                <th>Hours</th>
+                <th>Cost</th>
+                {PATH2_MARGIN_OPTIONS.map((rate) => (
+                  <th key={rate}>{Math.round(rate * 100)}% price</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {CONCIERGE_PATH2_BANDS.map((band) => (
-                <tr
-                  key={band.id}
-                  className={
-                    band.id === activeBandId ? 'active-band' : undefined
-                  }
-                >
-                  <td>{band.name}</td>
-                  <td>{band.headcount}</td>
-                  <td>{formatMultiplier(band.multiplier, band.custom)}</td>
-                  <td>{band.evals}</td>
-                  <td>{band.integrations}</td>
-                  <td>{band.infrastructure}</td>
+              {CONCIERGE_PATH2_MARGIN_EXAMPLES.map((row) => (
+                <tr key={row.hours}>
+                  <td>{row.hours}</td>
+                  <td>{row.cost}</td>
+                  {PATH2_MARGIN_OPTIONS.map((rate) => {
+                    const label = `${Math.round(rate * 100)}%`
+                    return <td key={rate}>{row.margins[label]}</td>
+                  })}
                 </tr>
               ))}
             </tbody>
