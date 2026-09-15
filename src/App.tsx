@@ -1182,17 +1182,26 @@ export default function App() {
                 <div className="summary-group">
                   <h3 className="summary-group-title">Products</h3>
                   <ul className="order-lines">
-                    {quote.lineItems.map(({ item, billedAmount }) => {
+                    {quote.lineItems.map(({ item, listAmount, billedAmount }) => {
                       const isPlatform = item.id === PLATFORM_ID
                       const isSelfHosted = item.id === SELF_HOSTED_ID
                       const isDpp = item.id === DESIGN_PARTNER_ID
+                      const listPrice = isPlatform
+                        ? quote.platformBasePrice + quote.platformOverageTotal
+                        : isDpp
+                          ? listAmount + quote.dppOverageTotal
+                          : listAmount
                       const price = isPlatform
-                        ? quote.platformUsageTotal
+                        ? billedAmount + quote.platformOverageTotal
                         : isDpp
                           ? billedAmount + quote.dppOverageTotal
                           : billedAmount
                       const noBaseFee =
                         (isPlatform || isSelfHosted) && price === 0
+                      const showDiscount =
+                        !noBaseFee &&
+                        listPrice > price &&
+                        quote.discountRate > 0
                       return (
                         <li className="order-line" key={item.id}>
                           <div>
@@ -1202,12 +1211,22 @@ export default function App() {
                                 No base subscription
                               </span>
                             )}
+                            {showDiscount && (
+                              <span className="order-line-meta">
+                                {formatPercent(quote.discountRate)} off
+                              </span>
+                            )}
                           </div>
                           <span className="order-line-price">
                             {noBaseFee ? (
                               <span className="order-line-meta">—</span>
                             ) : (
                               <>
+                                {showDiscount && (
+                                  <span className="strike">
+                                    {formatUsd(listPrice)}
+                                  </span>
+                                )}
                                 {formatUsd(price)}
                                 <span className="order-line-meta">/ yr</span>
                               </>
@@ -1227,7 +1246,7 @@ export default function App() {
                   </ul>
 
                   <div className="totals">
-                    {quote.discountRate > 0 && (
+                    {quote.discountRate > 0 && quote.discountAmount > 0 && (
                       <div className="total-row discount">
                         <span>
                           Volume discount ({formatPercent(quote.discountRate)})
@@ -1280,10 +1299,18 @@ export default function App() {
                           </span>
                           <span className="order-line-meta">
                             {path1ModeLabel(concierge.path1.mode)}
+                            {concierge.discountRate > 0
+                              ? ` · ${formatPercent(concierge.discountRate)} off`
+                              : ''}
                           </span>
                         </div>
                         <span className="order-line-price">
-                          {formatUsd(concierge.path1.listAmount)}
+                          {concierge.discountRate > 0 && (
+                            <span className="strike">
+                              {formatUsd(concierge.path1.listAmount)}
+                            </span>
+                          )}
+                          {formatUsd(concierge.path1.billedAmount)}
                           <span className="order-line-meta">/ qtr</span>
                         </span>
                         <button
@@ -1306,12 +1333,24 @@ export default function App() {
                           <span className="order-line-meta">
                             {line.hours} hrs ·{' '}
                             {formatPercent(line.targetMarginRate)} target
+                            {concierge.discountRate > 0
+                              ? ` · ${formatPercent(concierge.discountRate)} off`
+                              : ''}
                           </span>
                         </div>
                         <span className="order-line-price">
-                          {line.listAmount > 0
-                            ? formatUsd(Math.round(line.listAmount))
-                            : '—'}
+                          {line.listAmount > 0 ? (
+                            <>
+                              {concierge.discountRate > 0 && (
+                                <span className="strike">
+                                  {formatUsd(Math.round(line.listAmount))}
+                                </span>
+                              )}
+                              {formatUsd(line.billedAmount)}
+                            </>
+                          ) : (
+                            '—'
+                          )}
                           <span className="order-line-meta">/ one-time</span>
                         </span>
                         <button
@@ -1329,9 +1368,19 @@ export default function App() {
                       <li className="order-line">
                         <div>
                           <span className="order-line-name">Mastra Audit</span>
+                          {concierge.discountRate > 0 && (
+                            <span className="order-line-meta">
+                              {formatPercent(concierge.discountRate)} off
+                            </span>
+                          )}
                         </div>
                         <span className="order-line-price">
-                          {formatUsd(concierge.audit.listAmount)}
+                          {concierge.discountRate > 0 && (
+                            <span className="strike">
+                              {formatUsd(concierge.audit.listAmount)}
+                            </span>
+                          )}
+                          {formatUsd(concierge.audit.billedAmount)}
                           <span className="order-line-meta">/ one-time</span>
                         </span>
                         <button
@@ -1347,7 +1396,8 @@ export default function App() {
                   </ul>
 
                   <div className="totals">
-                    {concierge.discountRate > 0 && (
+                    {concierge.discountRate > 0 &&
+                      concierge.discountAmount > 0 && (
                       <div className="total-row discount">
                         <span>
                           Concierge discount (

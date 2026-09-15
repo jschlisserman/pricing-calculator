@@ -1,5 +1,6 @@
 import {
   HEADCOUNT_BANDS,
+  applyLineDiscount,
   formatUsd,
   getHeadcountBand,
   type HeadcountBand,
@@ -301,7 +302,7 @@ export function buildConciergeQuote(
             path1Mode,
             employees,
           )
-          const billedAmount = listAmount * (1 - discountRate)
+          const billedAmount = applyLineDiscount(listAmount, discountRate)
           return {
             tier: path1Tier,
             mode: path1Mode,
@@ -329,7 +330,7 @@ export function buildConciergeQuote(
       cost,
       targetMarginRate,
       listAmount,
-      billedAmount: listAmount * (1 - discountRate),
+      billedAmount: applyLineDiscount(listAmount, discountRate),
     }
   })
 
@@ -338,7 +339,7 @@ export function buildConciergeQuote(
   const audit: ConciergeAuditLine | null = auditSelected
     ? {
         listAmount: auditList,
-        billedAmount: auditList * (1 - discountRate),
+        billedAmount: applyLineDiscount(auditList, discountRate),
       }
     : null
 
@@ -346,7 +347,11 @@ export function buildConciergeQuote(
   const path2List = path2.reduce((sum, line) => sum + line.listAmount, 0)
   const auditListTotal = audit?.listAmount ?? 0
   const conciergeListTotal = path1List + path2List + auditListTotal
-  const discountAmount = conciergeListTotal * discountRate
+  const path1Billed = path1?.billedAmount ?? 0
+  const path2Billed = path2.reduce((sum, line) => sum + line.billedAmount, 0)
+  const auditBilled = audit?.billedAmount ?? 0
+  const conciergeBilledTotal = path1Billed + path2Billed + auditBilled
+  const discountAmount = conciergeListTotal - conciergeBilledTotal
 
   return {
     path1,
@@ -354,13 +359,11 @@ export function buildConciergeQuote(
     audit,
     discountRate,
     discountAmount,
-    path1TotalQuarterly: path1?.billedAmount ?? 0,
-    path2Total: path2.reduce((sum, line) => sum + line.billedAmount, 0),
-    auditTotal: audit?.billedAmount ?? 0,
-    oneTimeTotal:
-      path2.reduce((sum, line) => sum + line.billedAmount, 0) +
-      (audit?.billedAmount ?? 0),
-    path1Annualized: (path1?.billedAmount ?? 0) * 4,
+    path1TotalQuarterly: path1Billed,
+    path2Total: path2Billed,
+    auditTotal: auditBilled,
+    oneTimeTotal: path2Billed + auditBilled,
+    path1Annualized: path1Billed * 4,
     multiplier,
   }
 }

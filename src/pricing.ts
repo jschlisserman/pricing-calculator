@@ -966,11 +966,27 @@ export function getVolumeDiscount(purchaseCount: number): number {
   return 0
 }
 
+/** Round discounted line prices to the nearest whole dollar. */
+export function roundDiscountedAmount(amount: number): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0
+  return Math.round(amount)
+}
+
+/** Apply a discount % evenly to a list price, rounded to a whole dollar. */
+export function applyLineDiscount(
+  listAmount: number,
+  discountRate: number,
+): number {
+  if (!(listAmount > 0)) return 0
+  if (!(discountRate > 0)) return roundDiscountedAmount(listAmount)
+  return roundDiscountedAmount(listAmount * (1 - discountRate))
+}
+
 export interface LineItem {
   item: CatalogItem
   /** Sized list price in the item's native billing period. */
   listAmount: number
-  /** Billed amount (same as list for packages; Concierge handled separately). */
+  /** List after volume discount %, rounded to a whole dollar. */
   billedAmount: number
 }
 
@@ -1067,27 +1083,34 @@ export function buildQuote(
     (item) => item.id === DESIGN_PARTNER_ID,
   )
 
-  const productLineItems: LineItem[] = productItems.map((item) => {
-    const listAmount = getCatalogListAmount(item, employees)
-    return { item, listAmount, billedAmount: listAmount }
-  })
-
   // $0 deployment options (Self-Hosted / Platform) do not count toward volume.
-  const productPurchaseCount = productLineItems.filter(
-    (li) => li.listAmount > 0,
-  ).length
-  const lineItems = [...productLineItems]
+  const productPurchaseCount = productItems
+    .map((item) => getCatalogListAmount(item, employees))
+    .filter((listAmount) => listAmount > 0).length
 
   // Concierge never participates in or suppresses the package volume ladder.
   // Platform / DPP usage overage is metered separately and not volume-discounted.
   const discountRate = getVolumeDiscount(productPurchaseCount)
 
+  const productLineItems: LineItem[] = productItems.map((item) => {
+    const listAmount = getCatalogListAmount(item, employees)
+    return {
+      item,
+      listAmount,
+      billedAmount: applyLineDiscount(listAmount, discountRate),
+    }
+  })
+  const lineItems = [...productLineItems]
+
   const productSubtotal = productLineItems.reduce(
     (sum, li) => sum + li.listAmount,
     0,
   )
-  const discountAmount = productSubtotal * discountRate
-  const productTotal = productSubtotal - discountAmount
+  const productTotal = productLineItems.reduce(
+    (sum, li) => sum + li.billedAmount,
+    0,
+  )
+  const discountAmount = productSubtotal - productTotal
 
   const platformBasePrice = platformSelected
     ? getPlatformListPrice(employees)
