@@ -28,7 +28,9 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-self-hosted',
     name: 'Self-Hosted',
     category: 'Deployment',
-    basePrice: 8_000,
+    description:
+      'No base subscription — select products or bundles for pricing.',
+    basePrice: 0,
     billingPeriod: 'year',
     kind: 'individual',
   },
@@ -36,7 +38,9 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-platform',
     name: 'Platform',
     category: 'Deployment',
-    basePrice: 10_000,
+    description:
+      'No base subscription — select products or bundles for pricing. Usage packages meter additional volume.',
+    basePrice: 0,
     billingPeriod: 'year',
     kind: 'individual',
   },
@@ -531,6 +535,12 @@ export interface PlatformPackagePreset {
 /** Package include tables are authored against this annual Platform reference. */
 export const PLATFORM_USAGE_REFERENCE_ANNUAL = 30_000
 
+/**
+ * Growth-band reference used only to scale Platform usage includes.
+ * Platform itself has no billed base subscription.
+ */
+export const PLATFORM_USAGE_SCALE_GROWTH_BASE = 10_000
+
 export function emptyPlatformUsage(): PlatformUsageAmounts {
   return Object.fromEntries(
     PLATFORM_USAGE_METRICS.map((metric) => [metric.id, 0]),
@@ -668,10 +678,16 @@ export interface PlatformConfig {
   additional: PlatformUsageAmounts
 }
 
-export function getPlatformListPrice(employees: number): number {
-  const platform = CATALOG.find((item) => item.id === PLATFORM_ID)
-  if (!platform) return 0
-  return platform.basePrice * getHeadcountBand(employees).multiplier
+/** Billed Platform base subscription — always $0 (no base fee). */
+export function getPlatformListPrice(_employees: number): number {
+  return 0
+}
+
+/** Headcount-scaled annual used to size Platform usage package includes. */
+export function getPlatformUsageScaleAnnual(employees: number): number {
+  return (
+    PLATFORM_USAGE_SCALE_GROWTH_BASE * getHeadcountBand(employees).multiplier
+  )
 }
 
 export function platformConfigFromPackage(
@@ -680,10 +696,10 @@ export function platformConfigFromPackage(
 ): PlatformConfig {
   const preset =
     PLATFORM_PACKAGES.find((pkg) => pkg.id === packageId) ?? PLATFORM_PACKAGES[0]
-  const platformAnnual = getPlatformListPrice(employees)
+  const scaleAnnual = getPlatformUsageScaleAnnual(employees)
   return {
     packageId: preset.id,
-    includes: scalePlatformIncludes(preset.includes, platformAnnual),
+    includes: scalePlatformIncludes(preset.includes, scaleAnnual),
     additional: emptyPlatformUsage(),
   }
 }
@@ -774,9 +790,8 @@ export function buildUsageCostLines(
 }
 
 export interface PlatformMargin {
-  /** Platform base + billed additional (50% off). */
+  /** Product total / year (billed), used as margin revenue. */
   revenue: number
-  platformBasePrice: number
   additionalRevenue: number
   includeCost: number
   /** Delivery cost of additional at full fixed unit cost. */
@@ -790,12 +805,11 @@ export interface PlatformMargin {
 }
 
 /**
- * Usage-package margin (Platform or Design Partner): base fee + purchased
- * additional revenue (50% of unit cost) vs delivery valued at full fixed unit
- * cost for includes and additional.
+ * Platform / DPP margin: product total / year vs delivery cost of included
+ * usage + additional usage (both at full fixed unit cost).
  */
 export function buildPlatformMargin(
-  platformBasePrice: number,
+  productAnnualTotal: number,
   includes: PlatformUsageAmounts,
   additional: PlatformUsageAmounts,
 ): PlatformMargin {
@@ -812,11 +826,10 @@ export function buildPlatformMargin(
     0,
   )
   const totalCost = includeCost + additionalCost
-  const revenue = platformBasePrice + additionalRevenue
+  const revenue = productAnnualTotal
   const margin = revenue - totalCost
   return {
     revenue,
-    platformBasePrice,
     additionalRevenue,
     includeCost,
     additionalCost,
@@ -1059,7 +1072,10 @@ export function buildQuote(
     return { item, listAmount, billedAmount: listAmount }
   })
 
-  const productPurchaseCount = productLineItems.length
+  // $0 deployment options (Self-Hosted / Platform) do not count toward volume.
+  const productPurchaseCount = productLineItems.filter(
+    (li) => li.listAmount > 0,
+  ).length
   const lineItems = [...productLineItems]
 
   // Concierge never participates in or suppresses the package volume ladder.

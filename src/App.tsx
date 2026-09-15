@@ -28,6 +28,7 @@ import {
   PLATFORM_ID,
   PLATFORM_PACKAGES,
   PLATFORM_USAGE_METRICS,
+  SELF_HOSTED_ID,
   buildPlatformMargin,
   buildQuote,
   defaultDppUsageConfig,
@@ -40,7 +41,7 @@ import {
   getAdditionalUsageUnitPrice,
   getCatalogListAmount,
   getDppAnnualFee,
-  getPlatformListPrice,
+  getPlatformUsageScaleAnnual,
   hasProgramSelected,
   hasSelfHostedDeployment,
   isDeploymentExclusiveGated,
@@ -188,13 +189,13 @@ export default function App() {
   const platformMargin = useMemo(() => {
     if (!platformSelected) return null
     return buildPlatformMargin(
-      quote.platformBasePrice,
+      quote.annualTotal,
       quote.platformIncludes,
       platformConfig.additional,
     )
   }, [
     platformSelected,
-    quote.platformBasePrice,
+    quote.annualTotal,
     quote.platformIncludes,
     platformConfig.additional,
   ])
@@ -206,18 +207,18 @@ export default function App() {
   const dppMargin = useMemo(() => {
     if (!dppSelected) return null
     return buildPlatformMargin(
-      dppAnnualFee,
+      quote.annualTotal,
       quote.dppIncludes,
       dppUsageConfig.additional,
     )
   }, [
     dppSelected,
-    dppAnnualFee,
+    quote.annualTotal,
     quote.dppIncludes,
     dppUsageConfig.additional,
   ])
 
-  const platformListPrice = getPlatformListPrice(
+  const platformListPrice = getPlatformUsageScaleAnnual(
     Number.isFinite(employees) ? employees : 0,
   )
   const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
@@ -637,6 +638,13 @@ export default function App() {
                           <span className="item-price">
                             {unavailable ? (
                               '—'
+                            ) : item.id === PLATFORM_ID ||
+                              item.id === SELF_HOSTED_ID ? (
+                              <>
+                                No base fee
+                                <br />
+                                {periodLabel(item)}
+                              </>
                             ) : (
                               <>
                                 {formatUsd(
@@ -684,8 +692,14 @@ export default function App() {
                             </div>
 
                             <div className="platform-base-row">
-                              <span>Platform base (by headcount)</span>
-                              <strong>{formatUsd(platformListPrice)}/yr</strong>
+                              <span>Base subscription</span>
+                              <strong>None — add products/bundles</strong>
+                            </div>
+                            <div className="platform-base-row">
+                              <span>Usage include scale (by headcount)</span>
+                              <strong>
+                                {formatUsd(platformListPrice)}/yr ref
+                              </strong>
                             </div>
 
                             <div className="platform-usage-table package-table">
@@ -1132,20 +1146,34 @@ export default function App() {
                   <ul className="order-lines">
                     {quote.lineItems.map(({ item, billedAmount }) => {
                       const isPlatform = item.id === PLATFORM_ID
+                      const isSelfHosted = item.id === SELF_HOSTED_ID
                       const isDpp = item.id === DESIGN_PARTNER_ID
                       const price = isPlatform
                         ? quote.platformUsageTotal
                         : isDpp
                           ? billedAmount + quote.dppOverageTotal
                           : billedAmount
+                      const noBaseFee =
+                        (isPlatform || isSelfHosted) && price === 0
                       return (
                         <li className="order-line" key={item.id}>
                           <div>
                             <span className="order-line-name">{item.name}</span>
+                            {noBaseFee && (
+                              <span className="order-line-meta">
+                                No base subscription
+                              </span>
+                            )}
                           </div>
                           <span className="order-line-price">
-                            {formatUsd(price)}
-                            <span className="order-line-meta">/ yr</span>
+                            {noBaseFee ? (
+                              <span className="order-line-meta">—</span>
+                            ) : (
+                              <>
+                                {formatUsd(price)}
+                                <span className="order-line-meta">/ yr</span>
+                              </>
+                            )}
                           </span>
                           <button
                             type="button"
