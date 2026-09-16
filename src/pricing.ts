@@ -45,6 +45,14 @@ export const CATALOG: CatalogItem[] = [
     kind: 'individual',
   },
   {
+    id: 'deploy-private-cloud',
+    name: 'Private Cloud',
+    category: 'Deployment',
+    basePrice: 20_000,
+    billingPeriod: 'year',
+    kind: 'individual',
+  },
+  {
     id: 'deploy-byoc',
     name: 'BYOC',
     category: 'Deployment',
@@ -123,6 +131,7 @@ export interface HeadcountBand {
   multiplier: number
   custom?: boolean
   deployment: string
+  privateCloud: string
   security: string
   agentLearning: string
   collaboration: string
@@ -133,6 +142,7 @@ export interface HeadcountBand {
  * Growth (25–99) is the 1.0x list-price baseline.
  * Product category prices assume one Deployment / Security / Agent Learning /
  * Collaboration purchase at list (Helm Chart, Security bundle, etc.).
+ * Private Cloud is a separate Deployment SKU ($20k at Growth).
  */
 export const HEADCOUNT_BANDS: HeadcountBand[] = [
   {
@@ -143,6 +153,7 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     maxEmployees: 24,
     multiplier: 0.5,
     deployment: '$6,000',
+    privateCloud: '$10,000',
     security: '$5,000',
     agentLearning: '$7,000',
     collaboration: '$6,000',
@@ -156,6 +167,7 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     maxEmployees: 99,
     multiplier: 1,
     deployment: '$12,000',
+    privateCloud: '$20,000',
     security: '$10,000',
     agentLearning: '$14,000',
     collaboration: '$12,000',
@@ -169,6 +181,7 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     maxEmployees: 499,
     multiplier: 2,
     deployment: '$24,000',
+    privateCloud: '$40,000',
     security: '$20,000',
     agentLearning: '$28,000',
     collaboration: '$24,000',
@@ -182,6 +195,7 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     maxEmployees: 1_999,
     multiplier: 2.5,
     deployment: '$30,000',
+    privateCloud: '$50,000',
     security: '$25,000',
     agentLearning: '$35,000',
     collaboration: '$30,000',
@@ -195,6 +209,7 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     maxEmployees: 4_999,
     multiplier: 4,
     deployment: '$48,000',
+    privateCloud: '$80,000',
     security: '$40,000',
     agentLearning: '$56,000',
     collaboration: '$48,000',
@@ -208,6 +223,7 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     maxEmployees: 9_999,
     multiplier: 6,
     deployment: '$72,000',
+    privateCloud: '$120,000',
     security: '$60,000',
     agentLearning: '$84,000',
     collaboration: '$72,000',
@@ -222,6 +238,7 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     multiplier: 8,
     custom: true,
     deployment: '$96,000+',
+    privateCloud: '$160,000+',
     security: '$80,000+',
     agentLearning: '$112,000+',
     collaboration: '$96,000+',
@@ -309,6 +326,7 @@ export function getDppHeadcountBand(
 
 export const DESIGN_PARTNER_ID = 'program-design-partner'
 export const PLATFORM_ID = 'deploy-platform'
+export const PRIVATE_CLOUD_ID = 'deploy-private-cloud'
 export const HELM_ID = 'deploy-helm'
 export const SELF_HOSTED_ID = 'deploy-self-hosted'
 export const BYOC_ID = 'deploy-byoc'
@@ -879,6 +897,7 @@ export function formatMultiplier(multiplier: number, custom = false): string {
 /** Growth-band category list prices used to derive band tables. */
 export const PRODUCT_CATEGORY_BASES = {
   deployment: 12_000,
+  privateCloud: 20_000,
   security: 10_000,
   agentLearning: 14_000,
   collaboration: 12_000,
@@ -910,6 +929,7 @@ export interface AgencyPassThroughBand {
   multiplier: number
   custom?: boolean
   deployment: string
+  privateCloud: string
   security: string
   agentLearning: string
   collaboration: string
@@ -924,6 +944,10 @@ export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
   HEADCOUNT_BANDS.map((band) => {
     const deployment = agencyPassThroughFee(
       PRODUCT_CATEGORY_BASES.deployment,
+      band.multiplier,
+    )
+    const privateCloud = agencyPassThroughFee(
+      PRODUCT_CATEGORY_BASES.privateCloud,
       band.multiplier,
     )
     const security = agencyPassThroughFee(
@@ -951,6 +975,7 @@ export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
       multiplier: band.multiplier,
       custom: band.custom,
       deployment: formatBandUsd(deployment, custom),
+      privateCloud: formatBandUsd(privateCloud, custom),
       security: formatBandUsd(security, custom),
       agentLearning: formatBandUsd(agentLearning, custom),
       collaboration: formatBandUsd(collaboration, custom),

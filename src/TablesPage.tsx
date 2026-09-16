@@ -68,6 +68,7 @@ export default function TablesPage({
                 <th>Headcount</th>
                 <th>Multiplier</th>
                 <th>Deployment</th>
+                <th>Private Cloud</th>
                 <th>Security</th>
                 <th>Agent Learning</th>
                 <th>Collaboration</th>
@@ -86,6 +87,7 @@ export default function TablesPage({
                   <td>{band.headcount}</td>
                   <td>{formatMultiplier(band.multiplier, band.custom)}</td>
                   <td>{band.deployment}</td>
+                  <td>{band.privateCloud}</td>
                   <td>{band.security}</td>
                   <td>{band.agentLearning}</td>
                   <td>{band.collaboration}</td>
@@ -301,6 +303,7 @@ export default function TablesPage({
                 <th>Headcount</th>
                 <th>Multiplier</th>
                 <th>Deployment</th>
+                <th>Private Cloud</th>
                 <th>Security</th>
                 <th>Agent Learning</th>
                 <th>Collaboration</th>
@@ -319,6 +322,7 @@ export default function TablesPage({
                   <td>{band.headcount}</td>
                   <td>{formatMultiplier(band.multiplier, band.custom)}</td>
                   <td>{band.deployment}</td>
+                  <td>{band.privateCloud}</td>
                   <td>{band.security}</td>
                   <td>{band.agentLearning}</td>
                   <td>{band.collaboration}</td>

@@ -64,6 +64,8 @@ import {
   type PlatformPackageId,
 } from './pricing'
 import TablesPage from './TablesPage'
+import ReviewPage from './ReviewPage'
+import type { OrderLineSnapshot, OrderSnapshot } from './orderSnapshot'
 
 const FUTURE_FEATURES: Record<string, string[]> = {
   'security-controls': ['FGC'],
@@ -117,10 +119,13 @@ function path1ModeLabel(mode: Path1Mode): string {
   return mode === 'hands-on' ? 'Hands-On' : 'Advisory'
 }
 
-type AppPage = 'order' | 'tables'
+type AppPage = 'order' | 'tables' | 'review'
 
 export default function App() {
   const [page, setPage] = useState<AppPage>('order')
+  const [reviewSnapshot, setReviewSnapshot] = useState<OrderSnapshot | null>(
+    null,
+  )
   const [employees, setEmployees] = useState(50)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(() =>
@@ -239,6 +244,106 @@ export default function App() {
     concierge.audit != null
   const hasProducts = quote.productLineItems.length > 0
   const hasOrder = quote.lineItems.length > 0 || hasConcierge
+
+  const orderSnapshot = useMemo((): OrderSnapshot | null => {
+    if (!hasOrder) return null
+
+    const productLines: OrderLineSnapshot[] = quote.lineItems.map(
+      ({ item, listAmount, billedAmount }) => {
+        const isPlatform = item.id === PLATFORM_ID
+        const isSelfHosted = item.id === SELF_HOSTED_ID
+        const isDpp = item.id === DESIGN_PARTNER_ID
+        const listPrice = isPlatform
+          ? quote.platformBasePrice + quote.platformOverageTotal
+          : isDpp
+            ? listAmount + quote.dppOverageTotal
+            : listAmount
+        const price = isPlatform
+          ? billedAmount + quote.platformOverageTotal
+          : isDpp
+            ? billedAmount + quote.dppOverageTotal
+            : billedAmount
+        const noBaseFee = (isPlatform || isSelfHosted) && price === 0
+        return {
+          name: item.name,
+          meta: noBaseFee
+            ? 'No base subscription'
+            : quote.discountRate > 0 && listPrice > price
+              ? `${formatPercent(quote.discountRate)} off`
+              : undefined,
+          listAmount: noBaseFee ? null : listPrice,
+          billedAmount: noBaseFee ? null : price,
+          period: '/ yr',
+          noBaseFee,
+        }
+      },
+    )
+
+    const conciergeLines: OrderLineSnapshot[] = []
+    if (concierge.path1) {
+      conciergeLines.push({
+        name: `Path 1 · ${concierge.path1.tier.name}`,
+        meta: [
+          path1ModeLabel(concierge.path1.mode),
+          concierge.discountRate > 0
+            ? `${formatPercent(concierge.discountRate)} off`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        listAmount: concierge.path1.listAmount,
+        billedAmount: concierge.path1.billedAmount,
+        period: '/ qtr',
+      })
+    }
+    for (const line of concierge.path2) {
+      conciergeLines.push({
+        name: `Path 2 · ${line.package.name}`,
+        meta: [
+          `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
+          concierge.discountRate > 0
+            ? `${formatPercent(concierge.discountRate)} off`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        listAmount: line.listAmount > 0 ? line.listAmount : null,
+        billedAmount: line.listAmount > 0 ? line.billedAmount : null,
+        period: '/ one-time',
+      })
+    }
+    if (concierge.audit) {
+      conciergeLines.push({
+        name: 'Mastra Audit',
+        meta:
+          concierge.discountRate > 0
+            ? `${formatPercent(concierge.discountRate)} off`
+            : undefined,
+        listAmount: concierge.audit.listAmount,
+        billedAmount: concierge.audit.billedAmount,
+        period: '/ one-time',
+      })
+    }
+
+    return {
+      employees: headcount,
+      companyBandLabel: quote.companySizeLabel,
+      productLines,
+      productDiscountRate: quote.discountRate,
+      productDiscountAmount: quote.discountAmount,
+      productTotal: quote.annualTotal,
+      conciergeLines,
+      conciergeDiscountRate: concierge.discountRate,
+      conciergeDiscountAmount: concierge.discountAmount,
+      conciergeQuarterlyTotal: concierge.path1
+        ? concierge.path1TotalQuarterly
+        : null,
+      conciergeOneTimeTotal:
+        concierge.path2.length > 0 || concierge.audit
+          ? concierge.oneTimeTotal
+          : null,
+    }
+  }, [hasOrder, quote, concierge, headcount])
 
   const byCategory = useMemo(() => {
     const map = new Map<string, CatalogItem[]>()
@@ -455,6 +560,15 @@ export default function App() {
         <TablesPage
           activeBandId={quote.companyBandId}
           dppBandId={quote.dppBandId}
+        />
+      ) : page === 'review' && reviewSnapshot ? (
+        <ReviewPage
+          order={reviewSnapshot}
+          onBack={() => {
+            setReviewSnapshot(null)
+            setPage('order')
+          }}
+          onSubmitted={clearOrder}
         />
       ) : (
         <>
@@ -1452,10 +1566,14 @@ export default function App() {
 
               <button
                 type="button"
-                className="clear-btn"
-                onClick={clearOrder}
+                className="clear-btn confirm-btn"
+                onClick={() => {
+                  if (!orderSnapshot) return
+                  setReviewSnapshot(orderSnapshot)
+                  setPage('review')
+                }}
               >
-                Clear order
+                Submit order
               </button>
             </>
           ) : (

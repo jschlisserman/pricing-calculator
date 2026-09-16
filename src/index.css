@@ -142,11 +142,116 @@ button {
   border-color: var(--border-strong);
 }
 
-.margin-hours {
-  display: grid;
-  gap: 0.55rem;
-  margin-top: 0.75rem;
+.review-page {
+  max-width: 720px;
+  margin: 0 auto 3rem;
 }
+
+.review-panel {
+  padding: 1.25rem 1.35rem 1.5rem;
+}
+
+.review-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.review-subhead {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.review-line {
+  grid-template-columns: 1fr auto;
+}
+
+.review-form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--border-strong);
+}
+
+.review-field {
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.review-field input,
+.review-field textarea {
+  width: 100%;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+}
+
+.review-field textarea {
+  resize: vertical;
+  min-height: 6rem;
+}
+
+.review-field .required {
+  color: var(--orange);
+  font-size: 0.75rem;
+  margin-left: 0.35rem;
+}
+
+.review-field .optional {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  margin-left: 0.35rem;
+}
+
+.review-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 0.9rem;
+}
+
+.review-success {
+  margin: 0 0 1rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.confirm-btn {
+  background: color-mix(in srgb, var(--green) 18%, var(--surface-3));
+  border-color: color-mix(in srgb, var(--green) 35%, var(--border-strong));
+  color: var(--green);
+  font-weight: 650;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--green) 28%, var(--surface-3));
+}
+
+.confirm-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.text-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 0.25rem 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.text-btn:hover {
+  color: var(--text);
+}
+
 
 .path2-pricing {
   display: grid;
