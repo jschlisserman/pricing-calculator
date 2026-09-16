@@ -818,10 +818,10 @@ export default function App() {
                             <div className="platform-usage-table package-table">
                               <div className="platform-usage-head package-head">
                                 <span>Meter</span>
-                                <span>Package include</span>
-                                <span>Additional</span>
+                                <span>Package include (mo)</span>
+                                <span>Additional (mo)</span>
                                 <span>Unit / overage</span>
-                                <span>Additional @ 50%</span>
+                                <span>Additional @ 50% / mo</span>
                               </div>
                               {PLATFORM_USAGE_METRICS.map((metric) => {
                                 const included =
@@ -831,7 +831,7 @@ export default function App() {
                                 const billedUnit = getAdditionalUsageUnitPrice(
                                   metric.unitCost,
                                 )
-                                const lineCost = additional * billedUnit
+                                const monthlyCost = additional * billedUnit
                                 return (
                                   <div
                                     className="platform-usage-row package-row"
@@ -875,9 +875,10 @@ export default function App() {
                                       </span>
                                     </span>
                                     <span className="platform-usage-cost">
-                                      {formatUsd(lineCost)}
+                                      {formatUsd(monthlyCost)}
                                       <span className="platform-usage-note">
-                                        @ {formatUnitCost(billedUnit)}
+                                        @ {formatUnitCost(billedUnit)} ·{' '}
+                                        {formatUsd(monthlyCost * 12)}/yr
                                       </span>
                                     </span>
                                   </div>
@@ -897,10 +898,10 @@ export default function App() {
                             <div className="platform-usage-table package-table">
                               <div className="platform-usage-head package-head">
                                 <span>Meter</span>
-                                <span>Package include</span>
-                                <span>Additional</span>
+                                <span>Package include (mo)</span>
+                                <span>Additional (mo)</span>
                                 <span>Unit / overage</span>
-                                <span>Additional @ 50%</span>
+                                <span>Additional @ 50% / mo</span>
                               </div>
                               {PLATFORM_USAGE_METRICS.map((metric) => {
                                 const included =
@@ -910,7 +911,7 @@ export default function App() {
                                 const billedUnit = getAdditionalUsageUnitPrice(
                                   metric.unitCost,
                                 )
-                                const lineCost = additional * billedUnit
+                                const monthlyCost = additional * billedUnit
                                 return (
                                   <div
                                     className="platform-usage-row package-row"
@@ -952,9 +953,10 @@ export default function App() {
                                       </span>
                                     </span>
                                     <span className="platform-usage-cost">
-                                      {formatUsd(lineCost)}
+                                      {formatUsd(monthlyCost)}
                                       <span className="platform-usage-note">
-                                        @ {formatUnitCost(billedUnit)}
+                                        @ {formatUnitCost(billedUnit)} ·{' '}
+                                        {formatUsd(monthlyCost * 12)}/yr
                                       </span>
                                     </span>
                                   </div>

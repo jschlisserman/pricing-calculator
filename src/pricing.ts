@@ -487,7 +487,10 @@ export function withoutIncompatibleProgramMix(selectedIds: string[]): string[] {
 export interface PlatformUsageMetric {
   id: string
   name: string
+  /** Customer list / overage unit price. */
   unitCost: number
+  /** Our delivery COGS per unit (used for include + additional margin cost). */
+  deliveryUnitCost: number
   /** Shown next to the unit cost, e.g. "event", "GB", "hour". */
   unitLabel: string
   /** Baseline free tier note (applies when package include is 0). */
@@ -499,6 +502,7 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     id: 'observability-events',
     name: 'Observability Events',
     unitCost: 0.00008,
+    deliveryUnitCost: 0.0000023,
     unitLabel: 'event',
     includedNote: 'First 1,000,000 events free outside package includes',
   },
@@ -506,6 +510,7 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     id: 'data-egress',
     name: 'Data Egress (GB)',
     unitCost: 0.8,
+    deliveryUnitCost: 0.05,
     unitLabel: 'GB',
     includedNote: 'First 100 GB free outside package includes',
   },
@@ -513,6 +518,7 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     id: 'cpu-time',
     name: 'CPU Time (Hour)',
     unitCost: 0.25,
+    deliveryUnitCost: 0.027792,
     unitLabel: 'hour',
     includedNote: 'First 250 hours free outside package includes',
   },
@@ -520,18 +526,21 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     id: 'rows-written',
     name: 'Rows Written (LibSQL)',
     unitCost: 0.000002,
+    deliveryUnitCost: 0.000001,
     unitLabel: 'row',
   },
   {
     id: 'compute-hours',
     name: 'Compute Hours (Postgres)',
     unitCost: 0.4,
+    deliveryUnitCost: 0.22,
     unitLabel: 'hour',
   },
   {
     id: 'data-storage',
     name: 'Data Storage GB',
     unitCost: 0.75,
+    deliveryUnitCost: 0.35,
     unitLabel: 'GB',
   },
 ]
@@ -556,6 +565,7 @@ export const PLATFORM_USAGE_REFERENCE_ANNUAL = 30_000
 /**
  * Growth-band reference used only to scale Platform usage includes.
  * Platform itself has no billed base subscription.
+ * Scaled include amounts are monthly volumes (annualized ×12 for margin cost).
  */
 export const PLATFORM_USAGE_SCALE_GROWTH_BASE = 10_000
 
@@ -692,7 +702,7 @@ export function defaultDppUsageConfig(employees = 50): DppUsageConfig {
 export interface PlatformConfig {
   packageId: PlatformPackageId
   includes: PlatformUsageAmounts
-  /** Additional volume beyond package includes, billed at unit cost. */
+  /** Additional volume beyond package includes (monthly), billed at 50% unit cost × 12. */
   additional: PlatformUsageAmounts
 }
 
@@ -743,7 +753,9 @@ export interface PlatformUsageLine {
   listUnitCost: number
   /** Purchase price for additional usage: 50% of list unit cost. */
   billedUnitCost: number
-  /** Billed amount for purchased additional usage. */
+  /** Monthly billed amount for purchased additional usage. */
+  monthlyCost: number
+  /** Annual billed amount (monthly × 12) used in product totals. */
   cost: number
 }
 
@@ -752,6 +764,9 @@ export interface PlatformUsageLine {
  * Overage / list unit cost itself stays at full unitCost (not discounted).
  */
 export const ADDITIONAL_USAGE_DISCOUNT = 0.5
+
+/** Usage quantities (package includes + additional) are entered as monthly volume. */
+export const USAGE_MONTHS_PER_YEAR = 12
 
 export function getAdditionalUsageUnitPrice(listUnitCost: number): number {
   return listUnitCost * (1 - ADDITIONAL_USAGE_DISCOUNT)
@@ -763,12 +778,14 @@ export function buildPlatformUsageLines(
   return PLATFORM_USAGE_METRICS.map((metric) => {
     const additionalAmount = Math.max(0, amounts[metric.id] ?? 0)
     const billedUnitCost = getAdditionalUsageUnitPrice(metric.unitCost)
+    const monthlyCost = additionalAmount * billedUnitCost
     return {
       metric,
       additionalAmount,
       listUnitCost: metric.unitCost,
       billedUnitCost,
-      cost: additionalAmount * billedUnitCost,
+      monthlyCost,
+      cost: monthlyCost * USAGE_MONTHS_PER_YEAR,
     }
   }).filter((line) => line.additionalAmount > 0)
 }
@@ -777,19 +794,19 @@ export function sumPlatformUsage(amounts: PlatformUsageAmounts): number {
   return buildPlatformUsageLines(amounts).reduce((sum, line) => sum + line.cost, 0)
 }
 
-/** Value at fixed list unit cost (includes / delivery cost; does not scale). */
+/** Value at our delivery unit cost (includes / additional COGS). */
 export function costOfUsageAmounts(amounts: PlatformUsageAmounts): number {
   return PLATFORM_USAGE_METRICS.reduce((sum, metric) => {
     const qty = Math.max(0, amounts[metric.id] ?? 0)
-    return sum + qty * metric.unitCost
+    return sum + qty * metric.deliveryUnitCost
   }, 0)
 }
 
 export interface PlatformUsageCostLine {
   metric: PlatformUsageMetric
   amount: number
-  /** Fixed list unit cost. */
-  listUnitCost: number
+  /** Our delivery COGS per unit. */
+  deliveryUnitCost: number
   cost: number
 }
 
@@ -801,8 +818,8 @@ export function buildUsageCostLines(
     return {
       metric,
       amount,
-      listUnitCost: metric.unitCost,
-      cost: amount * metric.unitCost,
+      deliveryUnitCost: metric.deliveryUnitCost,
+      cost: amount * metric.deliveryUnitCost,
     }
   }).filter((line) => line.amount > 0)
 }
@@ -812,7 +829,7 @@ export interface PlatformMargin {
   revenue: number
   additionalRevenue: number
   includeCost: number
-  /** Delivery cost of additional at full fixed unit cost. */
+  /** Delivery COGS of additional usage (monthly × 12). */
   additionalCost: number
   totalCost: number
   margin: number
@@ -823,16 +840,22 @@ export interface PlatformMargin {
 }
 
 /**
- * Platform / DPP margin: product total / year vs delivery cost of included
- * usage + additional usage (both at full fixed unit cost).
+ * Platform / DPP margin: product total / year vs delivery COGS of included
+ * usage + additional usage (both monthly × 12, at our delivery unit cost).
  */
 export function buildPlatformMargin(
   productAnnualTotal: number,
   includes: PlatformUsageAmounts,
   additional: PlatformUsageAmounts,
 ): PlatformMargin {
-  const includeLines = buildUsageCostLines(includes)
-  const additionalCostLines = buildUsageCostLines(additional)
+  const includeLines = buildUsageCostLines(includes).map((line) => ({
+    ...line,
+    cost: line.cost * USAGE_MONTHS_PER_YEAR,
+  }))
+  const additionalCostLines = buildUsageCostLines(additional).map((line) => ({
+    ...line,
+    cost: line.cost * USAGE_MONTHS_PER_YEAR,
+  }))
   const additionalRevenueLines = buildPlatformUsageLines(additional)
   const includeCost = includeLines.reduce((sum, line) => sum + line.cost, 0)
   const additionalCost = additionalCostLines.reduce(
