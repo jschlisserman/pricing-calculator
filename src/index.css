@@ -176,6 +176,19 @@ button {
   border-top: 1px solid var(--border-strong);
 }
 
+.review-form-standalone {
+  margin-top: 0.35rem;
+  padding-top: 0;
+  border-top: none;
+}
+
+.review-actions {
+  display: grid;
+  margin-top: 1.25rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--border-strong);
+}
+
 .review-field {
   display: grid;
   gap: 0.45rem;

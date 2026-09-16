@@ -36,7 +36,7 @@ export async function sendOrderEmail({
   from = process.env.RESEND_FROM || 'Mastra Pricing <onboarding@resend.dev>',
 }: SendOrderEmailInput): Promise<{ id: string }> {
   const contact: OrderContactDetails = {
-    accountOwner: optionalField(accountOwner),
+    accountOwner: requireField('Account owner', accountOwner),
     leadCompanyName: requireField('Lead company name', leadCompanyName),
     pointOfContactName: optionalField(pointOfContactName),
     pointOfContactEmail: optionalField(pointOfContactEmail),
@@ -48,7 +48,7 @@ export async function sendOrderEmail({
   }
 
   const resend = new Resend(apiKey)
-  const subject = `Pricing order · ${contact.leadCompanyName}`
+  const subject = `Pricing order · ${contact.leadCompanyName} · ${contact.accountOwner}`
   const { data, error } = await resend.emails.send({
     from,
     to: [...ORDER_EMAIL_RECIPIENTS],

@@ -8,6 +8,8 @@ interface ReviewPageProps {
   onSubmitted: () => void
 }
 
+type ReviewStep = 'order' | 'details'
+
 function OrderLines({ order }: { order: OrderSnapshot }) {
   return (
     <>
@@ -76,7 +78,10 @@ function OrderLines({ order }: { order: OrderSnapshot }) {
                 line.billedAmount != null &&
                 line.listAmount > line.billedAmount
               return (
-                <li className="order-line review-line" key={line.name + (line.meta ?? '')}>
+                <li
+                  className="order-line review-line"
+                  key={line.name + (line.meta ?? '')}
+                >
                   <div>
                     <span className="order-line-name">{line.name}</span>
                     {line.meta && (
@@ -140,6 +145,7 @@ export default function ReviewPage({
   onSubmitted,
 }: ReviewPageProps) {
   const [snapshot] = useState(order)
+  const [step, setStep] = useState<ReviewStep>('order')
   const [accountOwner, setAccountOwner] = useState('')
   const [leadCompanyName, setLeadCompanyName] = useState('')
   const [pointOfContactName, setPointOfContactName] = useState('')
@@ -149,12 +155,14 @@ export default function ReviewPage({
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
-  const formReady = leadCompanyName.trim().length > 0
+  const formReady =
+    accountOwner.trim().length > 0 && leadCompanyName.trim().length > 0
 
   async function confirmOrder() {
+    const owner = accountOwner.trim()
     const company = leadCompanyName.trim()
-    if (!company) {
-      setError('Lead company name is required.')
+    if (!owner || !company) {
+      setError('Account owner and lead company name are required.')
       return
     }
 
@@ -163,7 +171,7 @@ export default function ReviewPage({
     try {
       const body: SubmitOrderRequest = {
         order: snapshot,
-        accountOwner: accountOwner.trim(),
+        accountOwner: owner,
         leadCompanyName: company,
         pointOfContactName: pointOfContactName.trim(),
         pointOfContactEmail: pointOfContactEmail.trim(),
@@ -208,6 +216,107 @@ export default function ReviewPage({
     )
   }
 
+  if (step === 'details') {
+    return (
+      <section className="review-page animate-in delay-1">
+        <div className="panel review-panel">
+          <div className="panel-head review-head">
+            <div>
+              <h2>Account details</h2>
+            </div>
+            <button
+              type="button"
+              className="text-btn"
+              onClick={() => {
+                setError(null)
+                setStep('order')
+              }}
+            >
+              ← Back
+            </button>
+          </div>
+
+          <div className="review-form review-form-standalone">
+            <label className="review-field" htmlFor="account-owner">
+              Account owner <span className="required">Required</span>
+              <input
+                id="account-owner"
+                type="text"
+                autoComplete="name"
+                placeholder="Name or email"
+                value={accountOwner}
+                onChange={(e) => setAccountOwner(e.target.value)}
+                required
+              />
+            </label>
+
+            <label className="review-field" htmlFor="lead-company-name">
+              Lead company name <span className="required">Required</span>
+              <input
+                id="lead-company-name"
+                type="text"
+                autoComplete="organization"
+                placeholder="Company name"
+                value={leadCompanyName}
+                onChange={(e) => setLeadCompanyName(e.target.value)}
+                required
+              />
+            </label>
+
+            <label className="review-field" htmlFor="poc-name">
+              Point of contact name <span className="optional">Optional</span>
+              <input
+                id="poc-name"
+                type="text"
+                autoComplete="name"
+                placeholder="Contact name"
+                value={pointOfContactName}
+                onChange={(e) => setPointOfContactName(e.target.value)}
+              />
+            </label>
+
+            <label className="review-field" htmlFor="poc-email">
+              Point of contact email address{' '}
+              <span className="optional">Optional</span>
+              <input
+                id="poc-email"
+                type="email"
+                autoComplete="email"
+                placeholder="name@company.com"
+                value={pointOfContactEmail}
+                onChange={(e) => setPointOfContactEmail(e.target.value)}
+              />
+            </label>
+
+            <label className="review-field" htmlFor="order-notes">
+              Notes <span className="optional">Optional</span>
+              <textarea
+                id="order-notes"
+                rows={4}
+                placeholder="Context for the deal, timeline, exceptions…"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </label>
+
+            {error && <p className="review-error">{error}</p>}
+
+            <button
+              type="button"
+              className="clear-btn confirm-btn"
+              onClick={() => {
+                void confirmOrder()
+              }}
+              disabled={submitting || !formReady}
+            >
+              {submitting ? 'Sending…' : 'Confirm'}
+            </button>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="review-page animate-in delay-1">
       <div className="panel review-panel">
@@ -222,79 +331,13 @@ export default function ReviewPage({
 
         <OrderLines order={snapshot} />
 
-        <div className="review-form">
-          <label className="review-field" htmlFor="account-owner">
-            Account owner <span className="optional">Optional</span>
-            <input
-              id="account-owner"
-              type="text"
-              autoComplete="name"
-              placeholder="Name or email"
-              value={accountOwner}
-              onChange={(e) => setAccountOwner(e.target.value)}
-            />
-          </label>
-
-          <label className="review-field" htmlFor="lead-company-name">
-            Lead company name <span className="required">Required</span>
-            <input
-              id="lead-company-name"
-              type="text"
-              autoComplete="organization"
-              placeholder="Company name"
-              value={leadCompanyName}
-              onChange={(e) => setLeadCompanyName(e.target.value)}
-              required
-            />
-          </label>
-
-          <label className="review-field" htmlFor="poc-name">
-            Point of contact name <span className="optional">Optional</span>
-            <input
-              id="poc-name"
-              type="text"
-              autoComplete="name"
-              placeholder="Contact name"
-              value={pointOfContactName}
-              onChange={(e) => setPointOfContactName(e.target.value)}
-            />
-          </label>
-
-          <label className="review-field" htmlFor="poc-email">
-            Point of contact email address{' '}
-            <span className="optional">Optional</span>
-            <input
-              id="poc-email"
-              type="email"
-              autoComplete="email"
-              placeholder="name@company.com"
-              value={pointOfContactEmail}
-              onChange={(e) => setPointOfContactEmail(e.target.value)}
-            />
-          </label>
-
-          <label className="review-field" htmlFor="order-notes">
-            Notes <span className="optional">Optional</span>
-            <textarea
-              id="order-notes"
-              rows={4}
-              placeholder="Context for the deal, timeline, exceptions…"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </label>
-
-          {error && <p className="review-error">{error}</p>}
-
+        <div className="review-actions">
           <button
             type="button"
             className="clear-btn confirm-btn"
-            onClick={() => {
-              void confirmOrder()
-            }}
-            disabled={submitting || !formReady}
+            onClick={() => setStep('details')}
           >
-            {submitting ? 'Sending…' : 'Confirm'}
+            Next
           </button>
         </div>
       </div>

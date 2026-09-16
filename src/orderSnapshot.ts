@@ -68,12 +68,14 @@ export function formatOrderEmailText(
   const sections: string[] = [
     'New pricing calculator order',
     '',
+    'Account details',
     `Account owner: ${displayOrNone(contact.accountOwner)}`,
     `Lead company: ${contact.leadCompanyName}`,
     `Point of contact: ${displayOrNone(contact.pointOfContactName)}`,
     `Point of contact email: ${displayOrNone(contact.pointOfContactEmail)}`,
     notes ? `Notes: ${notes}` : 'Notes: (none)',
     '',
+    'Order details',
     `Company size: ${order.employees} employees · ${order.companyBandLabel}`,
     '',
   ]
@@ -193,11 +195,13 @@ export function formatOrderEmailHtml(
 <html>
   <body style="font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;color:#111;line-height:1.45;max-width:640px;margin:0 auto;padding:24px">
     <h1 style="font-size:22px;margin:0 0 16px">New pricing calculator order</h1>
+    <h2 style="font-size:16px;margin:0 0 8px">Account details</h2>
     <p><strong>Account owner:</strong> ${contact.accountOwner.trim() ? esc(contact.accountOwner.trim()) : '<span style="color:#888">(none)</span>'}</p>
     <p><strong>Lead company:</strong> ${esc(contact.leadCompanyName)}</p>
     <p><strong>Point of contact:</strong> ${contact.pointOfContactName.trim() ? esc(contact.pointOfContactName.trim()) : '<span style="color:#888">(none)</span>'}</p>
     <p><strong>Point of contact email:</strong> ${contact.pointOfContactEmail.trim() ? esc(contact.pointOfContactEmail.trim()) : '<span style="color:#888">(none)</span>'}</p>
     <p><strong>Notes:</strong> ${notes ? esc(notes) : '<span style="color:#888">(none)</span>'}</p>
+    <h2 style="font-size:16px;margin:24px 0 8px">Order details</h2>
     <p><strong>Company size:</strong> ${order.employees} employees · ${esc(order.companyBandLabel)}</p>
     ${productBlock}
     ${conciergeBlock}
