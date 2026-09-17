@@ -4,7 +4,7 @@ Internal quote tool for Mastra product packaging.
 
 ## Order submission
 
-Submit order opens a review page (line items + discounts). Confirm emails the order to `josh@mastra.ai`, `aron@mastra.ai`, and `jake@mastra.ai` via Resend.
+Submit order opens a review page (line items + discounts). Confirm emails the order to the submitted Account email via Resend, and BCCs `josh@mastra.ai`, `aron@mastra.ai`, and `jake@mastra.ai`.
 
 ```bash
 cp .env.example .env

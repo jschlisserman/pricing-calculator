@@ -49,6 +49,7 @@ export function submitOrderApiPlugin(): Plugin {
           const result = await sendOrderEmail({
             order: body.order,
             accountOwner: body.accountOwner,
+            accountEmail: body.accountEmail,
             leadCompanyName: body.leadCompanyName,
             pointOfContactName: body.pointOfContactName,
             pointOfContactEmail: body.pointOfContactEmail,
