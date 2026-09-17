@@ -4,7 +4,7 @@ Internal quote tool for Mastra product packaging.
 
 ## Order submission
 
-Submit order opens a review page (line items + discounts). Confirm emails the order to the submitted Account email via Resend, and BCCs `josh@mastra.ai`, `aron@mastra.ai`, and `jake@mastra.ai`.
+Submit order opens a review page (line items + discounts). Confirm emails the order to `josh@mastra.ai` and `jake@mastra.ai` via Resend.
 
 ```bash
 cp .env.example .env
@@ -12,7 +12,7 @@ cp .env.example .env
 npm run dev
 ```
 
-For Netlify, set `RESEND_API_KEY` (and optional `RESEND_FROM`) in site env vars.
+For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastrapricing.ai>` in site env vars (verified root domain).
 
 ## Pricing logic
 

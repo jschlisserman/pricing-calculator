@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
 import {
-  ORDER_EMAIL_BCC,
+  ORDER_EMAIL_RECIPIENTS,
   formatOrderEmailHtml,
   formatOrderEmailText,
   type OrderContactDetails,
@@ -28,7 +28,6 @@ function requireField(label: string, value: string | undefined): string {
 export async function sendOrderEmail({
   order,
   accountOwner,
-  accountEmail,
   leadCompanyName,
   pointOfContactName,
   pointOfContactEmail,
@@ -38,7 +37,6 @@ export async function sendOrderEmail({
 }: SendOrderEmailInput): Promise<{ id: string }> {
   const contact: OrderContactDetails = {
     accountOwner: requireField('Account owner', accountOwner),
-    accountEmail: requireField('Account email', accountEmail),
     leadCompanyName: requireField('Lead company name', leadCompanyName),
     pointOfContactName: optionalField(pointOfContactName),
     pointOfContactEmail: optionalField(pointOfContactEmail),
@@ -49,15 +47,11 @@ export async function sendOrderEmail({
     throw new Error('RESEND_API_KEY is not configured.')
   }
 
-  const to = contact.accountEmail.toLowerCase()
-  const bcc = ORDER_EMAIL_BCC.filter((email) => email.toLowerCase() !== to)
-
   const resend = new Resend(apiKey)
   const subject = `Pricing order · ${contact.leadCompanyName} · ${contact.accountOwner}`
   const { data, error } = await resend.emails.send({
     from,
-    to: [contact.accountEmail],
-    ...(bcc.length > 0 ? { bcc: [...bcc] } : {}),
+    to: [...ORDER_EMAIL_RECIPIENTS],
     subject,
     text: formatOrderEmailText(order, contact),
     html: formatOrderEmailHtml(order, contact),

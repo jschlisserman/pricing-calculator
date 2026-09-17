@@ -147,7 +147,6 @@ export default function ReviewPage({
   const [snapshot] = useState(order)
   const [step, setStep] = useState<ReviewStep>('order')
   const [accountOwner, setAccountOwner] = useState('')
-  const [accountEmail, setAccountEmail] = useState('')
   const [leadCompanyName, setLeadCompanyName] = useState('')
   const [pointOfContactName, setPointOfContactName] = useState('')
   const [pointOfContactEmail, setPointOfContactEmail] = useState('')
@@ -157,16 +156,13 @@ export default function ReviewPage({
   const [done, setDone] = useState(false)
 
   const formReady =
-    accountOwner.trim().length > 0 &&
-    accountEmail.trim().length > 0 &&
-    leadCompanyName.trim().length > 0
+    accountOwner.trim().length > 0 && leadCompanyName.trim().length > 0
 
   async function confirmOrder() {
     const owner = accountOwner.trim()
-    const email = accountEmail.trim()
     const company = leadCompanyName.trim()
-    if (!owner || !email || !company) {
-      setError('Account owner, account email, and lead company name are required.')
+    if (!owner || !company) {
+      setError('Account owner and lead company name are required.')
       return
     }
 
@@ -176,7 +172,6 @@ export default function ReviewPage({
       const body: SubmitOrderRequest = {
         order: snapshot,
         accountOwner: owner,
-        accountEmail: email,
         leadCompanyName: company,
         pointOfContactName: pointOfContactName.trim(),
         pointOfContactEmail: pointOfContactEmail.trim(),
@@ -210,7 +205,7 @@ export default function ReviewPage({
             <h2>Order submitted</h2>
           </div>
           <p className="review-success">
-            Confirmation emailed to {accountEmail.trim()}.
+            Confirmation emailed to josh@mastra.ai and jake@mastra.ai.
           </p>
           <button type="button" className="clear-btn" onClick={onBack}>
             Back to order builder
@@ -250,19 +245,6 @@ export default function ReviewPage({
                 placeholder="Name"
                 value={accountOwner}
                 onChange={(e) => setAccountOwner(e.target.value)}
-                required
-              />
-            </label>
-
-            <label className="review-field" htmlFor="account-email">
-              Account email <span className="required">Required</span>
-              <input
-                id="account-email"
-                type="email"
-                autoComplete="email"
-                placeholder="name@company.com"
-                value={accountEmail}
-                onChange={(e) => setAccountEmail(e.target.value)}
                 required
               />
             </label>
