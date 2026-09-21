@@ -51,6 +51,7 @@ export const CATALOG: CatalogItem[] = [
     basePrice: 20_000,
     billingPeriod: 'year',
     kind: 'individual',
+    future: true,
   },
   {
     id: 'deploy-byovpc',
@@ -59,6 +60,7 @@ export const CATALOG: CatalogItem[] = [
     basePrice: 40_000,
     billingPeriod: 'year',
     kind: 'individual',
+    future: true,
   },
   {
     id: 'deploy-byoc',
