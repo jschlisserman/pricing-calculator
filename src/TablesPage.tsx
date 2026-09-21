@@ -69,6 +69,7 @@ export default function TablesPage({
                 <th>Multiplier</th>
                 <th>Deployment</th>
                 <th>Private Cloud</th>
+                <th>BYOVPC</th>
                 <th>Security</th>
                 <th>Agent Learning</th>
                 <th>Collaboration</th>
@@ -88,6 +89,7 @@ export default function TablesPage({
                   <td>{formatMultiplier(band.multiplier, band.custom)}</td>
                   <td>{band.deployment}</td>
                   <td>{band.privateCloud}</td>
+                  <td>{band.byovpc}</td>
                   <td>{band.security}</td>
                   <td>{band.agentLearning}</td>
                   <td>{band.collaboration}</td>
@@ -304,6 +306,7 @@ export default function TablesPage({
                 <th>Multiplier</th>
                 <th>Deployment</th>
                 <th>Private Cloud</th>
+                <th>BYOVPC</th>
                 <th>Security</th>
                 <th>Agent Learning</th>
                 <th>Collaboration</th>
@@ -323,6 +326,7 @@ export default function TablesPage({
                   <td>{formatMultiplier(band.multiplier, band.custom)}</td>
                   <td>{band.deployment}</td>
                   <td>{band.privateCloud}</td>
+                  <td>{band.byovpc}</td>
                   <td>{band.security}</td>
                   <td>{band.agentLearning}</td>
                   <td>{band.collaboration}</td>
