@@ -56,7 +56,6 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-byovpc',
     name: 'BYOVPC',
     category: 'Deployment',
-    description: '40% of BYOC list ($40k at Growth).',
     basePrice: 40_000,
     billingPeriod: 'year',
     kind: 'individual',
