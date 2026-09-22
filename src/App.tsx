@@ -37,15 +37,13 @@ import {
   buildQuote,
   defaultDppUsageConfig,
   defaultPlatformConfig,
-  dppUsageConfigFromEmployees,
+  dppUsageConfigFromProductTotal,
   formatMultiplier,
   formatPercent,
   formatUnitCost,
   formatUsd,
   getAdditionalUsageUnitPrice,
   getCatalogListAmount,
-  getDppAnnualFee,
-  getPlatformUsageScaleAnnual,
   hasProgramSelected,
   hasSelfHostedDeployment,
   isDeploymentExclusiveGated,
@@ -129,10 +127,10 @@ export default function App() {
   const [employees, setEmployees] = useState(50)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(() =>
-    defaultPlatformConfig(50),
+    defaultPlatformConfig(0),
   )
   const [dppUsageConfig, setDppUsageConfig] = useState<DppUsageConfig>(() =>
-    defaultDppUsageConfig(50),
+    defaultDppUsageConfig(0),
   )
   const [path1Mode, setPath1Mode] = useState<Path1Mode>('advisory')
   const [path2Hours, setPath2Hours] = useState<Path2Hours>({})
@@ -147,16 +145,26 @@ export default function App() {
     }
   }, [employees])
 
+  /** Product total only — excludes usage overage so include scaling is not circular. */
+  const usageScaleAnnual = useMemo(
+    () =>
+      buildQuote(
+        selectedIds,
+        Number.isFinite(employees) ? employees : 0,
+      ).productTotal,
+    [selectedIds, employees],
+  )
+
   useEffect(() => {
     setPlatformConfig((prev) => {
-      const scaled = platformConfigFromPackage(prev.packageId, employees)
+      const scaled = platformConfigFromPackage(prev.packageId, usageScaleAnnual)
       return { ...scaled, additional: prev.additional }
     })
     setDppUsageConfig((prev) => {
-      const scaled = dppUsageConfigFromEmployees(employees)
+      const scaled = dppUsageConfigFromProductTotal(usageScaleAnnual)
       return { ...scaled, additional: prev.additional }
     })
-  }, [employees])
+  }, [usageScaleAnnual])
 
   const quote = useMemo(
     () =>
@@ -212,9 +220,6 @@ export default function App() {
   ])
 
   const dppSelected = selectedIds.includes(DESIGN_PARTNER_ID)
-  const dppAnnualFee = getDppAnnualFee(
-    Number.isFinite(employees) ? employees : 0,
-  )
   const dppMargin = useMemo(() => {
     if (!dppSelected) return null
     return buildPlatformMargin(
@@ -229,9 +234,6 @@ export default function App() {
     dppUsageConfig.additional,
   ])
 
-  const platformListPrice = getPlatformUsageScaleAnnual(
-    Number.isFinite(employees) ? employees : 0,
-  )
   const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
   const programSelected = hasProgramSelected(selectedIds)
   const headcount = Number.isFinite(employees) ? employees : 0
@@ -480,7 +482,7 @@ export default function App() {
   }
 
   function selectPlatformPackage(packageId: PlatformPackageId) {
-    setPlatformConfig(platformConfigFromPackage(packageId, employees))
+    setPlatformConfig(platformConfigFromPackage(packageId, usageScaleAnnual))
   }
 
   function setPath2DeliveryHours(packageId: Path2PackageId, value: string) {
@@ -512,8 +514,8 @@ export default function App() {
 
   function clearOrder() {
     setSelectedIds([])
-    setPlatformConfig(defaultPlatformConfig(employees))
-    setDppUsageConfig(defaultDppUsageConfig(employees))
+    setPlatformConfig(defaultPlatformConfig(0))
+    setDppUsageConfig(defaultDppUsageConfig(0))
     setPath1Mode('advisory')
     setPath2Hours({})
     setPath2Margins({})
@@ -809,9 +811,9 @@ export default function App() {
                               <strong>None — add products/bundles</strong>
                             </div>
                             <div className="platform-base-row">
-                              <span>Usage include scale (by headcount)</span>
+                              <span>Usage include scale (product total)</span>
                               <strong>
-                                {formatUsd(platformListPrice)}/yr ref
+                                {formatUsd(usageScaleAnnual)}/yr
                               </strong>
                             </div>
 
@@ -891,8 +893,10 @@ export default function App() {
                         {isDpp && selected && !unavailable && (
                           <div className="platform-usage">
                             <div className="platform-base-row">
-                              <span>DPP fee (by headcount)</span>
-                              <strong>{formatUsd(dppAnnualFee)}/yr</strong>
+                              <span>Usage include scale (product total)</span>
+                              <strong>
+                                {formatUsd(usageScaleAnnual)}/yr
+                              </strong>
                             </div>
 
                             <div className="platform-usage-table package-table">

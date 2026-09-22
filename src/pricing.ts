@@ -583,9 +583,8 @@ export interface PlatformPackagePreset {
 export const PLATFORM_USAGE_REFERENCE_ANNUAL = 30_000
 
 /**
- * Growth-band reference used only to scale Platform usage includes.
- * Platform itself has no billed base subscription.
- * Scaled include amounts are monthly volumes (annualized ×12 for margin cost).
+ * Growth-band reference formerly used to scale Platform usage includes by
+ * headcount. Includes now scale from selected product total instead.
  */
 export const PLATFORM_USAGE_SCALE_GROWTH_BASE = 10_000
 
@@ -635,26 +634,21 @@ export const PLATFORM_PACKAGES: PlatformPackagePreset[] = [
 ]
 
 /**
- * Round to the nearest 1 / 2 / 2.5 / 5 × 10^n quantity.
- * Keeps scaled package grants from jumping back up to the full reference
- * (e.g. 5.83M → 5M, 2.67M → 2.5M).
+ * Round up to the next 1 / 2 / 2.5 / 3 / 4 / 5 / 7.5 × 10^n quantity.
+ * Exact hits on a candidate stay put (e.g. 5M → 5M).
  */
 export function roundUpUsageQuantity(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0
   const exp = Math.floor(Math.log10(value))
   const magnitude = 10 ** exp
   const fraction = value / magnitude
-  const candidates = [1, 2, 2.5, 5, 10]
-  let best = candidates[0]
-  let bestDist = Number.POSITIVE_INFINITY
+  const candidates = [1, 2, 2.5, 3, 4, 5, 7.5, 10]
   for (const candidate of candidates) {
-    const dist = Math.abs(fraction - candidate)
-    if (dist < bestDist) {
-      bestDist = dist
-      best = candidate
+    if (fraction <= candidate + 1e-12) {
+      return candidate * magnitude
     }
   }
-  return best * magnitude
+  return 10 * magnitude
 }
 
 export function scaleUsageIncludes(
@@ -703,20 +697,27 @@ export function getDppAnnualFee(employees: number): number {
   return getDppHeadcountBand(employees)?.annualFee ?? 0
 }
 
-export function dppUsageConfigFromEmployees(employees: number): DppUsageConfig {
-  const fee = getDppAnnualFee(employees)
+/** Scale DPP usage includes from selected product total / year. */
+export function dppUsageConfigFromProductTotal(
+  productTotalAnnual: number,
+): DppUsageConfig {
   return {
     includes: scaleUsageIncludes(
       DPP_USAGE_REFERENCE_INCLUDES,
-      fee > 0 ? fee : DPP_USAGE_REFERENCE_ANNUAL,
+      Math.max(0, productTotalAnnual),
       DPP_USAGE_REFERENCE_ANNUAL,
     ),
     additional: emptyPlatformUsage(),
   }
 }
 
-export function defaultDppUsageConfig(employees = 50): DppUsageConfig {
-  return dppUsageConfigFromEmployees(employees)
+/** @deprecated Prefer dppUsageConfigFromProductTotal with product total. */
+export function dppUsageConfigFromEmployees(employees: number): DppUsageConfig {
+  return dppUsageConfigFromProductTotal(getDppAnnualFee(employees))
+}
+
+export function defaultDppUsageConfig(productTotalAnnual = 0): DppUsageConfig {
+  return dppUsageConfigFromProductTotal(productTotalAnnual)
 }
 
 export interface PlatformConfig {
@@ -731,7 +732,10 @@ export function getPlatformListPrice(_employees: number): number {
   return 0
 }
 
-/** Headcount-scaled annual used to size Platform usage package includes. */
+/**
+ * @deprecated Platform usage includes now scale from selected product total.
+ * Kept for reference / legacy call sites.
+ */
 export function getPlatformUsageScaleAnnual(employees: number): number {
   return (
     PLATFORM_USAGE_SCALE_GROWTH_BASE * getHeadcountBand(employees).multiplier
@@ -740,20 +744,22 @@ export function getPlatformUsageScaleAnnual(employees: number): number {
 
 export function platformConfigFromPackage(
   packageId: PlatformPackageId,
-  employees: number,
+  productTotalAnnual: number,
 ): PlatformConfig {
   const preset =
     PLATFORM_PACKAGES.find((pkg) => pkg.id === packageId) ?? PLATFORM_PACKAGES[0]
-  const scaleAnnual = getPlatformUsageScaleAnnual(employees)
   return {
     packageId: preset.id,
-    includes: scalePlatformIncludes(preset.includes, scaleAnnual),
+    includes: scalePlatformIncludes(
+      preset.includes,
+      Math.max(0, productTotalAnnual),
+    ),
     additional: emptyPlatformUsage(),
   }
 }
 
-export function defaultPlatformConfig(employees = 50): PlatformConfig {
-  return platformConfigFromPackage('enterprise-standard', employees)
+export function defaultPlatformConfig(productTotalAnnual = 0): PlatformConfig {
+  return platformConfigFromPackage('enterprise-standard', productTotalAnnual)
 }
 
 export function getPlatformPackageName(packageId: PlatformPackageId): string {
