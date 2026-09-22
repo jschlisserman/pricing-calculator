@@ -26,6 +26,7 @@ import {
 } from './concierge'
 import {
   BYOC_ID,
+  BYOVPC_ID,
   CATALOG,
   CATEGORY_ORDER,
   DESIGN_PARTNER_ID,
@@ -46,6 +47,8 @@ import {
   getCatalogListAmount,
   hasProgramSelected,
   hasSelfHostedDeployment,
+  isByocEligible,
+  isByovpcEligible,
   isDeploymentExclusiveGated,
   isDeploymentId,
   isDeploymentRequiredGated,
@@ -142,6 +145,12 @@ export default function App() {
   useEffect(() => {
     if (!isDppEligible(employees)) {
       setSelectedIds((prev) => prev.filter((id) => id !== DESIGN_PARTNER_ID))
+    }
+    if (!isByovpcEligible(employees)) {
+      setSelectedIds((prev) => prev.filter((id) => id !== BYOVPC_ID))
+    }
+    if (!isByocEligible(employees)) {
+      setSelectedIds((prev) => prev.filter((id) => id !== BYOC_ID))
     }
   }, [employees])
 
@@ -628,7 +637,12 @@ export default function App() {
                     const selected = selectedIds.includes(item.id)
                     const isDpp = item.id === DESIGN_PARTNER_ID
                     const isPlatform = item.id === PLATFORM_ID
+                    const isByovpc = item.id === BYOVPC_ID
+                    const isByoc = item.id === BYOC_ID
                     const dppUnavailable = isDpp && !quote.dppEligible
+                    const byovpcUnavailable =
+                      isByovpc && !quote.byovpcEligible
+                    const byocUnavailable = isByoc && !quote.byocEligible
                     const selfHostedGated =
                       isGatedBySelfHosted(item.id) && selfHostedSelected
                     const programGated =
@@ -640,6 +654,8 @@ export default function App() {
                       isDeploymentRequiredGated(item.id, selectedIds)
                     const unavailable =
                       dppUnavailable ||
+                      byovpcUnavailable ||
+                      byocUnavailable ||
                       selfHostedGated ||
                       programGated ||
                       deploymentGated ||
@@ -647,7 +663,9 @@ export default function App() {
                     const futureFeatures = FUTURE_FEATURES[item.id] ?? []
                     const gateMessage = dppUnavailable
                       ? null
-                      : selfHostedGated
+                      : byovpcUnavailable || byocUnavailable
+                        ? 'Available for Mid-Market and above (100+ employees).'
+                        : selfHostedGated
                         ? 'Unavailable with Helm Chart, Self-Hosted, or BYOC. Use Platform deployment instead.'
                         : needsDeploymentGated
                           ? 'Select a Deployment option first.'
@@ -704,6 +722,12 @@ export default function App() {
                               )}
                               {dppUnavailable && (
                                 <span className="pill">Not offered</span>
+                              )}
+                              {byovpcUnavailable && (
+                                <span className="pill">Mid-Market+</span>
+                              )}
+                              {byocUnavailable && (
+                                <span className="pill">Mid-Market+</span>
                               )}
                               {selfHostedGated && (
                                 <span className="pill">

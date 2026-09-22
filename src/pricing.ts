@@ -66,9 +66,8 @@ export const CATALOG: CatalogItem[] = [
     id: 'deploy-byoc',
     name: 'BYOC',
     category: 'Deployment',
-    description:
-      'Not offered with Agency or Design Partner unless explicit permission is given.',
-    basePrice: 100_000,
+    /** Mid-Market list; Startup/Growth are not eligible. */
+    basePrice: 120_000,
     billingPeriod: 'year',
     kind: 'individual',
     future: true,
@@ -154,7 +153,8 @@ export interface HeadcountBand {
  * Product category prices assume one Deployment / Security / Agent Learning /
  * Collaboration purchase at list (Helm Chart, Security bundle, etc.).
  * Private Cloud is a separate Deployment SKU ($20k at Growth).
- * BYOVPC is 40% of BYOC Growth list ($40k at Growth).
+ * BYOVPC is $40k at Growth list (40% of the former Growth BYOC). Sold Mid-Market+ only.
+ * BYOC is Mid-Market+ only and lists at $120k/year at Mid-Market.
  */
 export const HEADCOUNT_BANDS: HeadcountBand[] = [
   {
@@ -166,7 +166,7 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     multiplier: 0.5,
     deployment: '$6,000',
     privateCloud: '$10,000',
-    byovpc: '$20,000',
+    byovpc: '—',
     security: '$5,000',
     agentLearning: '$7,000',
     collaboration: '$6,000',
@@ -181,7 +181,7 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     multiplier: 1,
     deployment: '$12,000',
     privateCloud: '$20,000',
-    byovpc: '$40,000',
+    byovpc: '—',
     security: '$10,000',
     agentLearning: '$14,000',
     collaboration: '$12,000',
@@ -326,6 +326,19 @@ export const DPP_HEADCOUNT_BANDS: DppHeadcountBand[] = [
 export function isDppEligible(employees: number): boolean {
   return employees >= 1 && employees <= 499
 }
+
+/** BYOVPC is Mid-Market and above (100+ employees). */
+export function isByovpcEligible(employees: number): boolean {
+  return employees >= 100
+}
+
+/** BYOC is Mid-Market and above (100+ employees). */
+export function isByocEligible(employees: number): boolean {
+  return employees >= 100
+}
+
+/** Mid-Market band multiplier — BYOC list is calibrated to this band. */
+export const BYOC_MID_MARKET_MULTIPLIER = 2
 
 export function getDppHeadcountBand(
   employees: number,
@@ -918,10 +931,11 @@ export function getCatalogListAmount(
     const band = getDppHeadcountBand(employees)
     return band?.annualFee ?? 0
   }
-  // BYOC: Startup and Growth share the $100k Growth list; scale from Mid-Market up.
+  // BYOC: Mid-Market+ only; $120k/year at Mid-Market, then scales with band multiplier.
   if (item.id === BYOC_ID) {
-    const multiplier = Math.max(1, getHeadcountBand(employees).multiplier)
-    return item.basePrice * multiplier
+    if (!isByocEligible(employees)) return 0
+    const multiplier = getHeadcountBand(employees).multiplier
+    return item.basePrice * (multiplier / BYOC_MID_MARKET_MULTIPLIER)
   }
   return item.basePrice * getHeadcountBand(employees).multiplier
 }
@@ -993,6 +1007,7 @@ function formatBandUsd(amount: number, custom = false): string {
 
 export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
   HEADCOUNT_BANDS.map((band) => {
+    const custom = Boolean(band.custom)
     const deployment = agencyPassThroughFee(
       PRODUCT_CATEGORY_BASES.deployment,
       band.multiplier,
@@ -1001,10 +1016,15 @@ export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
       PRODUCT_CATEGORY_BASES.privateCloud,
       band.multiplier,
     )
-    const byovpc = agencyPassThroughFee(
-      PRODUCT_CATEGORY_BASES.byovpc,
-      band.multiplier,
-    )
+    const byovpc = isByovpcEligible(band.minEmployees)
+      ? formatBandUsd(
+          agencyPassThroughFee(
+            PRODUCT_CATEGORY_BASES.byovpc,
+            band.multiplier,
+          ),
+          custom,
+        )
+      : '—'
     const security = agencyPassThroughFee(
       PRODUCT_CATEGORY_BASES.security,
       band.multiplier,
@@ -1021,7 +1041,6 @@ export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
       deployment + security + agentLearning + collaboration,
       AGENCY_PASS_THROUGH_MINIMUM,
     )
-    const custom = Boolean(band.custom)
 
     return {
       id: band.id,
@@ -1031,7 +1050,7 @@ export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
       custom: band.custom,
       deployment: formatBandUsd(deployment, custom),
       privateCloud: formatBandUsd(privateCloud, custom),
-      byovpc: formatBandUsd(byovpc, custom),
+      byovpc,
       security: formatBandUsd(security, custom),
       agentLearning: formatBandUsd(agentLearning, custom),
       collaboration: formatBandUsd(collaboration, custom),
@@ -1083,6 +1102,8 @@ export interface Quote {
   dppEligible: boolean
   dppBandId: string | null
   dppMultiplier: number | null
+  byovpcEligible: boolean
+  byocEligible: boolean
   /** Volume % off package products. Concierge does not waive this. */
   discountRate: number
   discountAmount: number
@@ -1109,12 +1130,16 @@ export function buildQuote(
   dppUsageConfig: DppUsageConfig = defaultDppUsageConfig(),
 ): Quote {
   const dppEligible = isDppEligible(employees)
+  const byovpcEligible = isByovpcEligible(employees)
+  const byocEligible = isByocEligible(employees)
   const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
   const programSelected = hasProgramSelected(selectedIds)
   const deploymentSelected = hasDeploymentSelected(selectedIds)
   const selected = CATALOG.filter((item) => {
     if (!selectedIds.includes(item.id)) return false
     if (item.id === DESIGN_PARTNER_ID && !dppEligible) return false
+    if (item.id === BYOVPC_ID && !byovpcEligible) return false
+    if (item.id === BYOC_ID && !byocEligible) return false
     if (selfHostedSelected && isGatedBySelfHosted(item.id)) return false
     if (requiresDeployment(item.id) && !deploymentSelected) return false
     if (programSelected && deploymentSelected) {
@@ -1234,6 +1259,8 @@ export function buildQuote(
     dppEligible,
     dppBandId: dppBand?.id ?? null,
     dppMultiplier: dppBand?.multiplier ?? null,
+    byovpcEligible,
+    byocEligible,
     discountRate,
     discountAmount,
     productSubtotal,
