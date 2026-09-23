@@ -253,6 +253,7 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
     headcount: '10,000+',
     minEmployees: 10_000,
     maxEmployees: null,
+    /** Floor at 10,000; +0.25× per additional 1,000 employees. */
     multiplier: 8,
     custom: true,
     deployment: '$96,000+',
@@ -265,18 +266,42 @@ export const HEADCOUNT_BANDS: HeadcountBand[] = [
   },
 ]
 
+/** Global+ floor multiplier at 10,000 employees. */
+export const GLOBAL_PLUS_BASE_MULTIPLIER = 8
+/** Each full 1,000 employees above 10,000 adds this much to the multiplier. */
+export const GLOBAL_PLUS_STEP_EMPLOYEES = 1_000
+export const GLOBAL_PLUS_STEP_MULTIPLIER = 0.25
+
+/** Stepped Global+ multiplier: 8.0x at 10k, +0.25x per additional 1k headcount. */
+export function getGlobalPlusMultiplier(employees: number): number {
+  const extra = Math.max(0, employees - 10_000)
+  const steps = Math.floor(extra / GLOBAL_PLUS_STEP_EMPLOYEES)
+  return GLOBAL_PLUS_BASE_MULTIPLIER + steps * GLOBAL_PLUS_STEP_MULTIPLIER
+}
+
 export function getHeadcountBand(employees: number): HeadcountBand {
   const normalized = Math.max(0, employees)
   if (normalized < 1) return HEADCOUNT_BANDS[0]
 
+  let matched = HEADCOUNT_BANDS[HEADCOUNT_BANDS.length - 1]
   for (const band of HEADCOUNT_BANDS) {
     const withinMin = normalized >= band.minEmployees
     const withinMax =
       band.maxEmployees === null || normalized <= band.maxEmployees
-    if (withinMin && withinMax) return band
+    if (withinMin && withinMax) {
+      matched = band
+      break
+    }
   }
 
-  return HEADCOUNT_BANDS[HEADCOUNT_BANDS.length - 1]
+  if (matched.id === 'global-plus') {
+    return {
+      ...matched,
+      multiplier: getGlobalPlusMultiplier(normalized),
+    }
+  }
+
+  return matched
 }
 
 export interface DppHeadcountBand {
@@ -954,7 +979,11 @@ export function formatMultiplier(multiplier: number, custom = false): string {
   const value = Number.isInteger(rounded)
     ? `${rounded}.0`
     : String(rounded)
-  return custom ? `Custom, ${value}x floor` : `${value}x`
+  if (!custom) return `${value}x`
+  if (rounded === GLOBAL_PLUS_BASE_MULTIPLIER) {
+    return `${value}x +0.25× per 1k`
+  }
+  return `${value}x`
 }
 
 /** Growth-band category list prices used to derive band tables. */
