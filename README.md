@@ -14,65 +14,60 @@ npm run dev
 
 ## Order submission
 
-Submit order opens a review page (line items + discounts), then account details. Confirm emails the order to `josh@mastra.ai` and `jake@mastra.ai` via Resend.
+Submit order opens a review page (line items), then account details. Confirm emails the order to `josh@mastra.ai` and `jake@mastra.ai` via Resend.
 
 For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastrapricing.ai>` in site env vars (verified root domain).
 
-## Pricing logic
+## Pricing logic (v5 — seat-based)
 
-### Catalog (Growth 1.0× list)
+### Plans
 
-- Helm Chart $8k/year
-- Self-Hosted / Platform — no base subscription (add products/bundles for pricing)
-- Private Cloud $20k/year (**Future**)
-- BYOVPC $40k at Growth list (**Future**; Mid-Market+ only)
-- BYOC $120k/year at Mid-Market (**Future**; Mid-Market+ only; scales with band multiplier above Mid-Market)
-- Security and Controls $10k · Agent Learning $14k · Agent Builder $12k
-- Agency Program $10k · Design Partner Program $8k (DPP uses its own Startup–Mid-Market fee table)
-
-### Headcount bands
-
-| Band | Headcount | Multiplier |
+| Plan | Price | Seats |
 | --- | --- | --- |
-| Startup | 1–24 | 0.5× |
-| Growth | 25–99 | 1.0× |
-| Mid-Market | 100–499 | 2.0× |
-| Enterprise | 500–1,999 | 3.0× |
-| Enterprise+ | 2,000–4,999 | 4.0× |
-| Global | 5,000–9,999 | 6.0× |
-| Global+ | 10,000+ | 8.0× floor; **+0.25× per additional 1,000** employees |
+| Free | $0 | 1 developer |
+| Teams | $250/month flat | Up to 5 developer · unlimited viewers · builders separate |
+| Enterprise (Platform) | $10,000/yr minimum | 10 developer included, then volume-tier $/seat/mo |
+| Enterprise Self-Hosted | $12,000/yr minimum | 10 included, then $125-lane tiers |
+| BYO VPC | $25,000/yr minimum | 10 included, then $150-lane tiers |
+| Private Cloud | $25,000/yr minimum | Priced as BYO VPC |
+| BYOC | $100,000/yr minimum | 25 included, then $150-lane tiers |
 
-### Eligibility & gating
+Enterprise billed amount is `max(annual minimum, seats × rate × 12)` plus builder seats. Included seats are priced at the same rate as marginal seats.
 
-- **BYOC / BYOVPC:** Mid-Market and above (100+ employees) only
-- **Design Partner Program:** Startup–Mid-Market only (1–499): Startup $8k · Growth $15k · Mid-Market $22k
-- Deployment options are mutually exclusive: Helm · Self-Hosted · Platform · Private Cloud · BYOVPC · BYOC
-- Security and Controls, Agent Learning, and Collaboration require a Deployment selection first
-- Selecting Helm, Self-Hosted, or BYOC gates Agent Learning (Platform keeps it available)
-- Programs are exclusive with Deployment and Concierge (Agency vs Design Partner still mutually exclusive). BYOC with Agency / DPP still needs explicit permission in the UI gates
+### Seat types
 
-### Volume discount
+- **Developer** — plan rate (volume tiers on Enterprise)
+- **Builder** — $50/mo flat (Agent Builder only; no CLI/deploy/admin)
+- **Viewer** — $0 (read-only)
 
-By distinct product purchase count (\$0 deployment lines do not count): **2 → 15% · 3 → 20% · 4+ → 25%**. Applied evenly per product line; discounted prices round to the nearest whole dollar.
+### Developer volume tiers ($/seat/mo)
 
-### Platform & DPP usage
+| Seats | Platform | Self-Hosted | Isolated |
+| --- | --- | --- | --- |
+| 1–50 | $100 | $125 | $150 |
+| 51–150 | $90 | $100 | $125 |
+| 151–400 | $80 | $90 | $100 |
+| 401+ | $70 | $80 | $90 |
 
-- Platform has no base fee. Usage packages (Standard / Observability / Obs+Studio) are calibrated to a **\$30k/year** reference include table.
-- DPP usage includes are calibrated to a **\$15k/year** reference.
-- Include volumes for both **scale from Total (selected products)** (product total after volume discount), not headcount.
-- Scaled quantities **round up** to the next **1 / 2 / 2.5 / 3 / 4 / 5 / 7.5 × 10ⁿ** figure.
-- Package include amounts are monthly; margin annualizes ×12. Overage/list unit costs are fixed. Additional usage bills at **50%** of unit cost.
+### Add-ons
 
-### Agency pass-through
+- **Agent Learning** — 30% of seat contract, $7.5k/yr minimum (Teams + Enterprise)
+- **Compliance** — 25% of seat contract, $5k/yr minimum (Enterprise only)
+- **Premium on-call** — 20% of seat contract, $5k/yr minimum (Enterprise only)
 
-Client pass-through fees are **30% off** product headcount bands, rounded to the nearest \$1,000, with a **\$7.5k** minimum on the all-four total. BYOVPC shows as unavailable below Mid-Market.
+### Platform usage
 
-### Concierge
+Enterprise Platform only. Usage packages scale includes from seat contract. Additional volume bills at 50% of list unit cost.
 
-Replaces Support. Uses a capped labor multiplier (Startup 0.75× · Growth 1.0× · Mid-Market+ 1.5×), distinct from package headcount multipliers.
+### Programs
 
-- **Path 1 (hours):** Small / Medium / Large quarterly; Advisory base or Hands-On (×1.3). One tier at a time. Implied \$/hr over a 13-week quarter; annualized ×4.
-- **Path 2 (outcome):** Evals / Integrations / Infrastructure. Price = engineer \$/hr (default \$110) × project hours ÷ (1 − target margin). Margins 30% / 40% / 50% / 60% / 70% per package. Selecting Path 2 auto-selects Mastra Audit (can deselect).
-- **Mastra Audit:** one-time flat fee by band (\$1k–\$5k).
-- Concierge does not count toward or waive package volume discount. Parallel Concierge discount: **15%** with 1 package, **20%** with 2+, applied evenly and rounded to whole dollars.
-- Summary keeps Path 1 quarterly totals separate from Path 2 / Audit one-time totals.
+- **Agency Partner** — $10,000/yr program fee (client pass-through unpublished)
+- **Design Partner** — $12,000/yr; Platform or Self-Hosted only; up to 25 developer + 25 builder; $250/mo Agent Learning credit; one quarter Small support
+
+### Support
+
+- **Path 1** — Small / Medium / Large; choose quarterly ($9k / $24k / $70k) or annual package ($32k / $86k / $250k, ~10% off)
+- **Path 2** — Evals / Integrations / Infrastructure / Custom; price = engineer $/hr × hours ÷ (1 − margin)
+- **Mastra Audit** — $2,000 one-time
+
+No purchase-count or support package discounts.

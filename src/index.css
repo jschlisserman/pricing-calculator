@@ -384,6 +384,24 @@ button {
   align-items: end;
 }
 
+.size-row.seats-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+@media (max-width: 720px) {
+  .size-row.seats-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .field label {
   display: block;
   font-size: 0.8rem;
@@ -391,7 +409,8 @@ button {
   margin-bottom: 0.4rem;
 }
 
-.field input[type='number'] {
+.field input[type='number'],
+.field input[type='text'] {
   width: 100%;
   background: var(--surface-1);
   border: 1px solid var(--border-strong);
@@ -401,7 +420,8 @@ button {
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
-.field input[type='number']:focus {
+.field input[type='number']:focus,
+.field input[type='text']:focus {
   border-color: color-mix(in srgb, var(--green) 55%, var(--border-strong));
   box-shadow: 0 0 0 3px var(--green-dim);
 }
@@ -475,6 +495,25 @@ button {
   gap: 0.55rem;
 }
 
+.plan-seats {
+  margin: 0 0 0.25rem 0.35rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--green) 28%, var(--border));
+  background: color-mix(in srgb, var(--green) 5%, var(--surface-2));
+}
+
+.plan-seats .field-hint.seat-rate-hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.plan-seats .field-hint.seat-rate-hint strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .platform-usage {
   margin: 0 0 0.25rem 0.35rem;
   padding: 0.85rem 0.9rem;
@@ -484,10 +523,20 @@ button {
 }
 
 .platform-usage-intro {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
   margin: 0 0 0.75rem;
   font-size: 0.8rem;
   color: var(--text-muted);
   line-height: 1.45;
+}
+
+.platform-usage-intro strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .platform-package-toggles {
@@ -1112,6 +1161,15 @@ button {
   grid-template-columns: 1fr 1fr;
   gap: 0.55rem;
   padding: 0.65rem 0.75rem 0.85rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.path1-billing-picker {
+  margin: 0 0 0.85rem;
+  padding: 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   border-top: 1px solid var(--border);
   background: var(--surface-2);
 }

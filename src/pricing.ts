@@ -1,557 +1,417 @@
-export type BillingPeriod = 'year' | 'quarter'
+/** Mastra Pricing v5 — seat-based plans (primary table). */
 
-export type ProductKind = 'individual' | 'bundle' | 'program'
+export type PlanId =
+  | 'free'
+  | 'teams'
+  | 'enterprise-platform'
+  | 'enterprise-self-hosted'
+  | 'byovpc'
+  | 'private-cloud'
+  | 'byoc'
 
-export interface CatalogItem {
-  id: string
+export type SeatRateColumn = 'platform' | 'selfHosted' | 'isolation'
+
+export interface Plan {
+  id: PlanId
   name: string
-  category: string
-  description?: string
-  features?: string[]
-  basePrice: number
-  billingPeriod: BillingPeriod
-  kind: ProductKind
+  description: string
+  features: string[]
+  /** Annual floor for Enterprise plans; 0 for Free / Teams. */
+  annualMinimum: number
+  /** Included developer seats in the plan commitment. */
+  includedDeveloperSeats: number
+  /** Max developer seats (Teams = 5). null = unlimited. */
+  maxDeveloperSeats: number | null
+  /** Monthly per-developer rate column for volume tiers. null = flat/free. */
+  seatRateColumn: SeatRateColumn | null
+  /** Flat monthly price (Teams). */
+  flatMonthly: number | null
+  /** Hosted Platform — usage packages apply. */
+  hasUsage: boolean
+  isEnterprise: boolean
   future?: boolean
 }
 
-/** Growth-band (25–99) list prices. Headcount-band multipliers apply on top. */
-export const CATALOG: CatalogItem[] = [
+export const PLANS: Plan[] = [
   {
-    id: 'deploy-helm',
-    name: 'Helm Chart',
-    category: 'Deployment',
-    basePrice: 8_000,
-    billingPeriod: 'year',
-    kind: 'individual',
+    id: 'free',
+    name: 'Free',
+    description: 'Reduced usage grants',
+    features: ['1 developer seat included'],
+    annualMinimum: 0,
+    includedDeveloperSeats: 1,
+    maxDeveloperSeats: 1,
+    seatRateColumn: null,
+    flatMonthly: 0,
+    hasUsage: false,
+    isEnterprise: false,
   },
   {
-    id: 'deploy-self-hosted',
-    name: 'Self-Hosted',
-    category: 'Deployment',
+    id: 'teams',
+    name: 'Teams',
     description:
-      'No base subscription — select products or bundles for pricing.',
-    basePrice: 0,
-    billingPeriod: 'year',
-    kind: 'individual',
+      'SOC 2, data residency, reduced usage grants. Self-serve, monthly.',
+    features: [
+      '5 developer seats included',
+      'Unlimited viewer seats',
+      'Builder seats purchased separately',
+    ],
+    annualMinimum: 0,
+    includedDeveloperSeats: 5,
+    maxDeveloperSeats: 5,
+    seatRateColumn: null,
+    flatMonthly: 250,
+    hasUsage: false,
+    isEnterprise: false,
   },
   {
-    id: 'deploy-platform',
-    name: 'Platform',
-    category: 'Deployment',
+    id: 'enterprise-platform',
+    name: 'Enterprise (Platform)',
     description:
-      'No base subscription — select products or bundles for pricing. Usage packages meter additional volume.',
-    basePrice: 0,
-    billingPeriod: 'year',
-    kind: 'individual',
+      'Auth, SSO, RBAC, FGA, SLA, SOC 2 report, data residency. Annual invoice, usage drawn from a commit.',
+    features: [
+      '10 developer seats included',
+      'Then $100/seat/mo (volume tiers apply)',
+    ],
+    annualMinimum: 10_000,
+    includedDeveloperSeats: 10,
+    maxDeveloperSeats: null,
+    seatRateColumn: 'platform',
+    flatMonthly: null,
+    hasUsage: true,
+    isEnterprise: true,
   },
   {
-    id: 'deploy-private-cloud',
+    id: 'enterprise-self-hosted',
+    name: 'Enterprise Self-Hosted (Helm Chart)',
+    description:
+      'Same as Enterprise. The uplift covers usage that cannot be metered.',
+    features: [
+      '10 developer seats included',
+      'Then $125/seat/mo (volume tiers apply)',
+    ],
+    annualMinimum: 12_000,
+    includedDeveloperSeats: 10,
+    maxDeveloperSeats: null,
+    seatRateColumn: 'selfHosted',
+    flatMonthly: null,
+    hasUsage: false,
+    isEnterprise: true,
+  },
+  {
+    id: 'byovpc',
+    name: 'BYO VPC',
+    description:
+      "Enterprise, with the data plane running inside the customer's own VPC. Mastra operates the control plane, so usage is still metered.",
+    features: [
+      '10 developer seats included',
+      'Then $150/seat/mo (volume tiers apply)',
+    ],
+    annualMinimum: 25_000,
+    includedDeveloperSeats: 10,
+    maxDeveloperSeats: null,
+    seatRateColumn: 'isolation',
+    flatMonthly: null,
+    hasUsage: false,
+    isEnterprise: true,
+  },
+  {
+    id: 'private-cloud',
     name: 'Private Cloud',
-    category: 'Deployment',
-    basePrice: 20_000,
-    billingPeriod: 'year',
-    kind: 'individual',
-    future: true,
+    description:
+      'Enterprise, deployed into a dedicated single-tenant environment Mastra operates. Priced as BYO VPC.',
+    features: [
+      '10 developer seats included',
+      'Then $150/seat/mo (volume tiers apply)',
+    ],
+    annualMinimum: 25_000,
+    includedDeveloperSeats: 10,
+    maxDeveloperSeats: null,
+    seatRateColumn: 'isolation',
+    flatMonthly: null,
+    hasUsage: false,
+    isEnterprise: true,
   },
   {
-    id: 'deploy-byovpc',
-    name: 'BYOVPC',
-    category: 'Deployment',
-    basePrice: 40_000,
-    billingPeriod: 'year',
-    kind: 'individual',
-    future: true,
-  },
-  {
-    id: 'deploy-byoc',
+    id: 'byoc',
     name: 'BYOC',
-    category: 'Deployment',
-    /** Mid-Market list; Startup/Growth are not eligible. */
-    basePrice: 120_000,
-    billingPeriod: 'year',
-    kind: 'individual',
-    future: true,
+    description: "Mastra-operated inside the customer's own cloud account",
+    features: [
+      '25 developer seats included',
+      'Then $150/seat/mo (volume tiers apply)',
+    ],
+    annualMinimum: 100_000,
+    includedDeveloperSeats: 25,
+    maxDeveloperSeats: null,
+    seatRateColumn: 'isolation',
+    flatMonthly: null,
+    hasUsage: false,
+    isEnterprise: true,
+  },
+]
+
+export function getPlan(planId: PlanId): Plan {
+  return PLANS.find((p) => p.id === planId) ?? PLANS[0]
+}
+
+/** Builder seats stay flat at $50/mo. Viewers are free. */
+export const BUILDER_SEAT_MONTHLY = 50
+export const VIEWER_SEAT_MONTHLY = 0
+
+export interface VolumeTier {
+  minSeats: number
+  /** Inclusive upper bound; null = no upper bound. */
+  maxSeats: number | null
+  platform: number
+  selfHosted: number
+  isolation: number
+}
+
+/** Developer seat volume tiers ($/seat/mo). All seats bill at the matching tier. */
+export const VOLUME_TIERS: VolumeTier[] = [
+  {
+    minSeats: 1,
+    maxSeats: 50,
+    platform: 100,
+    selfHosted: 125,
+    isolation: 150,
   },
   {
-    id: 'security-controls',
-    name: 'Security and Controls',
-    category: 'Security and Controls',
-    description: 'Sold as a bundle of features',
-    features: ['FGA', 'RBAC', 'Auth', 'HIPAA', 'SOC II', 'FGC'],
-    basePrice: 10_000,
-    billingPeriod: 'year',
-    kind: 'bundle',
+    minSeats: 51,
+    maxSeats: 150,
+    platform: 90,
+    selfHosted: 100,
+    isolation: 125,
   },
+  {
+    minSeats: 151,
+    maxSeats: 400,
+    platform: 80,
+    selfHosted: 90,
+    isolation: 100,
+  },
+  {
+    minSeats: 401,
+    maxSeats: null,
+    platform: 70,
+    selfHosted: 80,
+    isolation: 90,
+  },
+]
+
+export function getVolumeTier(developerSeats: number): VolumeTier {
+  const seats = Math.max(1, developerSeats)
+  for (const tier of VOLUME_TIERS) {
+    const withinMax = tier.maxSeats === null || seats <= tier.maxSeats
+    if (seats >= tier.minSeats && withinMax) return tier
+  }
+  return VOLUME_TIERS[VOLUME_TIERS.length - 1]
+}
+
+export function getDeveloperSeatMonthlyRate(
+  plan: Plan,
+  developerSeats: number,
+): number {
+  if (plan.seatRateColumn == null) return 0
+  const tier = getVolumeTier(developerSeats)
+  return tier[plan.seatRateColumn]
+}
+
+export type AddonId = 'agent-learning' | 'compliance' | 'premium-on-call'
+
+export interface Addon {
+  id: AddonId
+  name: string
+  description: string
+  /** Fraction of seat contract. */
+  rate: number
+  /** Annual floor; 0 = no floor. */
+  annualMinimum: number
+  /** Teams + Enterprise, or Enterprise only. */
+  enterpriseOnly: boolean
+}
+
+export const ADDONS: Addon[] = [
   {
     id: 'agent-learning',
     name: 'Agent Learning',
-    category: 'Agent Learning',
-    description: 'Sold as a bundle of features',
-    features: ['Trace Intelligence', 'Custom Signals', 'Agent Learning'],
-    basePrice: 14_000,
-    billingPeriod: 'year',
-    kind: 'bundle',
+    description: 'Trace Intelligence, Custom Signals',
+    rate: 0.3,
+    annualMinimum: 7_500,
+    enterpriseOnly: false,
   },
   {
-    id: 'collab-agent-builder',
-    name: 'Agent Builder',
-    category: 'Collaboration',
-    basePrice: 12_000,
-    billingPeriod: 'year',
-    kind: 'individual',
+    id: 'compliance',
+    name: 'Compliance',
+    description: 'BAA, HIPAA, audit logging. Enterprise only.',
+    rate: 0.25,
+    annualMinimum: 5_000,
+    enterpriseOnly: true,
   },
   {
-    id: 'program-agency',
-    name: 'Mastra Agency Program',
-    category: 'Programs',
+    id: 'premium-on-call',
+    name: 'Premium on-call support',
     description:
-      'BYOC is not offered with Agency unless explicit permission is given.',
-    basePrice: 10_000,
-    billingPeriod: 'year',
-    kind: 'program',
-  },
-  {
-    id: 'program-design-partner',
-    name: 'Mastra Design Partner Program',
-    category: 'Programs',
-    description:
-      'BYOC is not offered with Design Partner unless explicit permission is given.',
-    basePrice: 8_000,
-    billingPeriod: 'year',
-    kind: 'program',
+      'Named on-call rotation, escalation path via Slack, response commitments beyond the standard SLA. Enterprise only.',
+    rate: 0.2,
+    annualMinimum: 5_000,
+    enterpriseOnly: true,
   },
 ]
 
-export const CATEGORY_ORDER = [
-  'Deployment',
-  'Security and Controls',
-  'Agent Learning',
-  'Collaboration',
-  'Programs',
-] as const
-
-export interface HeadcountBand {
-  id: string
-  name: string
-  headcount: string
-  minEmployees: number
-  /** Exclusive upper bound; null means no upper bound. */
-  maxEmployees: number | null
-  multiplier: number
-  custom?: boolean
-  deployment: string
-  privateCloud: string
-  byovpc: string
-  security: string
-  agentLearning: string
-  collaboration: string
-  allFour: string
-}
-
-/**
- * Growth (25–99) is the 1.0x list-price baseline.
- * Product category prices assume one Deployment / Security / Agent Learning /
- * Collaboration purchase at list (Helm Chart, Security bundle, etc.).
- * Private Cloud is a separate Deployment SKU ($20k at Growth).
- * BYOVPC is $40k at Growth list (40% of the former Growth BYOC). Sold Mid-Market+ only.
- * BYOC is Mid-Market+ only and lists at $120k/year at Mid-Market.
- */
-export const HEADCOUNT_BANDS: HeadcountBand[] = [
-  {
-    id: 'startup',
-    name: 'Startup',
-    headcount: '1–24',
-    minEmployees: 1,
-    maxEmployees: 24,
-    multiplier: 0.5,
-    deployment: '$6,000',
-    privateCloud: '$10,000',
-    byovpc: '—',
-    security: '$5,000',
-    agentLearning: '$7,000',
-    collaboration: '$6,000',
-    allFour: '$24,000',
-  },
-  {
-    id: 'growth',
-    name: 'Growth',
-    headcount: '25–99',
-    minEmployees: 25,
-    maxEmployees: 99,
-    multiplier: 1,
-    deployment: '$12,000',
-    privateCloud: '$20,000',
-    byovpc: '—',
-    security: '$10,000',
-    agentLearning: '$14,000',
-    collaboration: '$12,000',
-    allFour: '$48,000',
-  },
-  {
-    id: 'mid-market',
-    name: 'Mid-Market',
-    headcount: '100–499',
-    minEmployees: 100,
-    maxEmployees: 499,
-    multiplier: 2,
-    deployment: '$24,000',
-    privateCloud: '$40,000',
-    byovpc: '$80,000',
-    security: '$20,000',
-    agentLearning: '$28,000',
-    collaboration: '$24,000',
-    allFour: '$96,000',
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    headcount: '500–1,999',
-    minEmployees: 500,
-    maxEmployees: 1_999,
-    multiplier: 3,
-    deployment: '$36,000',
-    privateCloud: '$60,000',
-    byovpc: '$120,000',
-    security: '$30,000',
-    agentLearning: '$42,000',
-    collaboration: '$36,000',
-    allFour: '$144,000',
-  },
-  {
-    id: 'enterprise-plus',
-    name: 'Enterprise+',
-    headcount: '2,000–4,999',
-    minEmployees: 2_000,
-    maxEmployees: 4_999,
-    multiplier: 4,
-    deployment: '$48,000',
-    privateCloud: '$80,000',
-    byovpc: '$160,000',
-    security: '$40,000',
-    agentLearning: '$56,000',
-    collaboration: '$48,000',
-    allFour: '$192,000',
-  },
-  {
-    id: 'global',
-    name: 'Global',
-    headcount: '5,000–9,999',
-    minEmployees: 5_000,
-    maxEmployees: 9_999,
-    multiplier: 6,
-    deployment: '$72,000',
-    privateCloud: '$120,000',
-    byovpc: '$240,000',
-    security: '$60,000',
-    agentLearning: '$84,000',
-    collaboration: '$72,000',
-    allFour: '$288,000',
-  },
-  {
-    id: 'global-plus',
-    name: 'Global+',
-    headcount: '10,000+',
-    minEmployees: 10_000,
-    maxEmployees: null,
-    /** Floor at 10,000; +0.25× per additional 1,000 employees. */
-    multiplier: 8,
-    custom: true,
-    deployment: '$96,000+',
-    privateCloud: '$160,000+',
-    byovpc: '$320,000+',
-    security: '$80,000+',
-    agentLearning: '$112,000+',
-    collaboration: '$96,000+',
-    allFour: '$384,000+',
-  },
-]
-
-/** Global+ floor multiplier at 10,000 employees. */
-export const GLOBAL_PLUS_BASE_MULTIPLIER = 8
-/** Each full 1,000 employees above 10,000 adds this much to the multiplier. */
-export const GLOBAL_PLUS_STEP_EMPLOYEES = 1_000
-export const GLOBAL_PLUS_STEP_MULTIPLIER = 0.25
-
-/** Stepped Global+ multiplier: 8.0x at 10k, +0.25x per additional 1k headcount. */
-export function getGlobalPlusMultiplier(employees: number): number {
-  const extra = Math.max(0, employees - 10_000)
-  const steps = Math.floor(extra / GLOBAL_PLUS_STEP_EMPLOYEES)
-  return GLOBAL_PLUS_BASE_MULTIPLIER + steps * GLOBAL_PLUS_STEP_MULTIPLIER
-}
-
-export function getHeadcountBand(employees: number): HeadcountBand {
-  const normalized = Math.max(0, employees)
-  if (normalized < 1) return HEADCOUNT_BANDS[0]
-
-  let matched = HEADCOUNT_BANDS[HEADCOUNT_BANDS.length - 1]
-  for (const band of HEADCOUNT_BANDS) {
-    const withinMin = normalized >= band.minEmployees
-    const withinMax =
-      band.maxEmployees === null || normalized <= band.maxEmployees
-    if (withinMin && withinMax) {
-      matched = band
-      break
-    }
-  }
-
-  if (matched.id === 'global-plus') {
-    return {
-      ...matched,
-      multiplier: getGlobalPlusMultiplier(normalized),
-    }
-  }
-
-  return matched
-}
-
-export interface DppHeadcountBand {
-  id: string
-  name: string
-  headcount: string
-  minEmployees: number
-  maxEmployees: number | null
-  multiplier: number
-  annualFee: number
-}
-
-/** Design Partner Program — Startup–Mid-Market only. Startup ($8k) is 1.0x. */
-export const DESIGN_PARTNER_BASE = 8_000
-
-export const DPP_HEADCOUNT_BANDS: DppHeadcountBand[] = [
-  {
-    id: 'startup',
-    name: 'Startup',
-    headcount: '1–24',
-    minEmployees: 1,
-    maxEmployees: 24,
-    multiplier: 1,
-    annualFee: 8_000,
-  },
-  {
-    id: 'growth',
-    name: 'Growth',
-    headcount: '25–99',
-    minEmployees: 25,
-    maxEmployees: 99,
-    multiplier: 15_000 / DESIGN_PARTNER_BASE,
-    annualFee: 15_000,
-  },
-  {
-    id: 'mid-market',
-    name: 'Mid-Market',
-    headcount: '100–499',
-    minEmployees: 100,
-    maxEmployees: 499,
-    multiplier: 22_000 / DESIGN_PARTNER_BASE,
-    annualFee: 22_000,
-  },
-]
-
-/** DPP is not offered at Enterprise (500+) or above. */
-export function isDppEligible(employees: number): boolean {
-  return employees >= 1 && employees <= 499
-}
-
-/** BYOVPC is Mid-Market and above (100+ employees). */
-export function isByovpcEligible(employees: number): boolean {
-  return employees >= 100
-}
-
-/** BYOC is Mid-Market and above (100+ employees). */
-export function isByocEligible(employees: number): boolean {
-  return employees >= 100
-}
-
-/** Mid-Market band multiplier — BYOC list is calibrated to this band. */
-export const BYOC_MID_MARKET_MULTIPLIER = 2
-
-export function getDppHeadcountBand(
-  employees: number,
-): DppHeadcountBand | null {
-  if (!isDppEligible(employees)) return null
-
-  const normalized = Math.max(1, employees)
-  for (const band of DPP_HEADCOUNT_BANDS) {
-    const withinMin = normalized >= band.minEmployees
-    const withinMax =
-      band.maxEmployees === null || normalized <= band.maxEmployees
-    if (withinMin && withinMax) return band
-  }
-
-  return DPP_HEADCOUNT_BANDS[DPP_HEADCOUNT_BANDS.length - 1]
-}
-
+export const AGENCY_PROGRAM_ID = 'program-agency'
 export const DESIGN_PARTNER_ID = 'program-design-partner'
-export const PLATFORM_ID = 'deploy-platform'
-export const PRIVATE_CLOUD_ID = 'deploy-private-cloud'
-export const BYOVPC_ID = 'deploy-byovpc'
-export const HELM_ID = 'deploy-helm'
-export const SELF_HOSTED_ID = 'deploy-self-hosted'
-export const BYOC_ID = 'deploy-byoc'
-export const AGENT_LEARNING_ID = 'agent-learning'
-export const SECURITY_ID = 'security-controls'
-export const AGENT_BUILDER_ID = 'collab-agent-builder'
 
-export const PROGRAM_IDS = CATALOG.filter((item) => item.kind === 'program').map(
-  (item) => item.id,
-)
+export const AGENCY_ANNUAL_FEE = 10_000
+export const DESIGN_PARTNER_ANNUAL_FEE = 12_000
+export const DESIGN_PARTNER_MAX_DEVELOPER_SEATS = 25
+export const DESIGN_PARTNER_MAX_BUILDER_SEATS = 25
+/** Monthly credit toward Agent Learning under DPP. */
+export const DESIGN_PARTNER_AGENT_LEARNING_CREDIT_MONTHLY = 250
 
-export const DEPLOYMENT_IDS = CATALOG.filter(
-  (item) => item.category === 'Deployment',
-).map((item) => item.id)
+/** DPP may choose Enterprise Platform or Self-Hosted only. */
+export const DPP_ALLOWED_PLANS: PlanId[] = [
+  'enterprise-platform',
+  'enterprise-self-hosted',
+]
 
-/**
- * Self-managed deployment options that gate Agent Learning.
- * (Platform keeps Agent Learning available.)
- */
-export const SELF_HOSTED_DEPLOYMENT_IDS = [
-  HELM_ID,
-  SELF_HOSTED_ID,
-  BYOC_ID,
-] as const
-
-/** Catalog IDs unavailable when Helm / Self-Hosted / BYOC is selected. */
-export const GATED_BY_SELF_HOSTED_IDS = [AGENT_LEARNING_ID] as const
-
-/** Must pick a Deployment before these can be selected. */
-export const REQUIRES_DEPLOYMENT_IDS = [
-  SECURITY_ID,
-  AGENT_LEARNING_ID,
-  AGENT_BUILDER_ID,
-] as const
-
-export function isProgramId(itemId: string): boolean {
-  return PROGRAM_IDS.includes(itemId)
+export function isAddonAvailable(addon: Addon, plan: Plan): boolean {
+  if (plan.id === 'free') return false
+  if (addon.enterpriseOnly) return plan.isEnterprise
+  return plan.id === 'teams' || plan.isEnterprise
 }
 
-export function isDeploymentId(itemId: string): boolean {
-  return DEPLOYMENT_IDS.includes(itemId)
+export interface SeatCounts {
+  developer: number
+  builder: number
+  viewer: number
 }
 
-export function hasDeploymentSelected(selectedIds: string[]): boolean {
-  return selectedIds.some((id) => isDeploymentId(id))
+export function clampSeats(plan: Plan, seats: SeatCounts): SeatCounts {
+  const maxDev = plan.maxDeveloperSeats
+  let developer = Math.max(0, Math.floor(seats.developer))
+  if (plan.id === 'free') {
+    developer = Math.min(1, Math.max(0, developer))
+  } else if (maxDev != null) {
+    developer = Math.min(maxDev, developer)
+  } else {
+    developer = Math.max(plan.includedDeveloperSeats, developer)
+  }
+
+  let builder = Math.max(0, Math.floor(seats.builder))
+  if (plan.id === 'free') builder = 0
+
+  const viewer = Math.max(0, Math.floor(seats.viewer))
+  return { developer, builder, viewer }
 }
 
-export function requiresDeployment(itemId: string): boolean {
-  return (REQUIRES_DEPLOYMENT_IDS as readonly string[]).includes(itemId)
+export interface SeatPricing {
+  developerMonthlyRate: number
+  developerAnnual: number
+  builderAnnual: number
+  viewerAnnual: number
+  /** Developer + builder annual before plan minimum floor. */
+  seatContractRaw: number
+  /** Billed plan/seat annual (max of minimum and seat math). */
+  planAnnual: number
+  /** Seat contract used for add-on % — billed plan annual. */
+  seatContract: number
+  minimumApplied: boolean
 }
 
-/** Security / Agent Learning / Collaboration need a Deployment first. */
-export function isDeploymentRequiredGated(
-  itemId: string,
-  selectedIds: string[],
-): boolean {
-  if (!requiresDeployment(itemId) || selectedIds.includes(itemId)) return false
-  return !hasDeploymentSelected(selectedIds)
+export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
+  const clamped = clampSeats(plan, seats)
+
+  if (plan.id === 'free') {
+    return {
+      developerMonthlyRate: 0,
+      developerAnnual: 0,
+      builderAnnual: 0,
+      viewerAnnual: 0,
+      seatContractRaw: 0,
+      planAnnual: 0,
+      seatContract: 0,
+      minimumApplied: false,
+    }
+  }
+
+  if (plan.flatMonthly != null) {
+    const developerAnnual = plan.flatMonthly * 12
+    const builderAnnual = clamped.builder * BUILDER_SEAT_MONTHLY * 12
+    const seatContractRaw = developerAnnual + builderAnnual
+    return {
+      developerMonthlyRate: 0,
+      developerAnnual,
+      builderAnnual,
+      viewerAnnual: 0,
+      seatContractRaw,
+      planAnnual: seatContractRaw,
+      seatContract: seatContractRaw,
+      minimumApplied: false,
+    }
+  }
+
+  const rate = getDeveloperSeatMonthlyRate(plan, clamped.developer)
+  const developerAnnual = clamped.developer * rate * 12
+  const builderAnnual = clamped.builder * BUILDER_SEAT_MONTHLY * 12
+  const seatContractRaw = developerAnnual + builderAnnual
+  const planAnnual = Math.max(plan.annualMinimum, seatContractRaw)
+  return {
+    developerMonthlyRate: rate,
+    developerAnnual,
+    builderAnnual,
+    viewerAnnual: 0,
+    seatContractRaw,
+    planAnnual,
+    seatContract: planAnnual,
+    minimumApplied: planAnnual > seatContractRaw,
+  }
 }
 
-/** Drop packages that require Deployment when none is selected. */
-export function withoutDeploymentRequiredItems(
-  selectedIds: string[],
-): string[] {
-  if (hasDeploymentSelected(selectedIds)) return selectedIds
-  return selectedIds.filter((id) => !requiresDeployment(id))
+export interface AddonLine {
+  addon: Addon
+  listAmount: number
+  billedAmount: number
 }
 
-/** Another Deployment SKU is already selected — deselect it first. */
-export function isDeploymentExclusiveGated(
-  itemId: string,
-  selectedIds: string[],
-): boolean {
-  if (!isDeploymentId(itemId) || selectedIds.includes(itemId)) return false
-  return selectedIds.some((id) => isDeploymentId(id))
+export interface AddonPricing {
+  lines: AddonLine[]
+  total: number
 }
 
-/** Keep at most one Deployment option. */
-export function withoutOtherDeployments(
-  selectedIds: string[],
-  keepDeploymentId: string,
-): string[] {
-  return selectedIds.filter(
-    (id) => !isDeploymentId(id) || id === keepDeploymentId,
+/** Each add-on bills independently: max(rate × seat contract, annual minimum). */
+export function priceAddons(
+  plan: Plan,
+  seatContract: number,
+  selectedAddonIds: AddonId[],
+): AddonPricing {
+  const available = ADDONS.filter(
+    (addon) =>
+      selectedAddonIds.includes(addon.id) && isAddonAvailable(addon, plan),
   )
+
+  const lines: AddonLine[] = available.map((addon) => {
+    const fromRate = seatContract * addon.rate
+    const listAmount = Math.max(addon.annualMinimum, fromRate)
+    return {
+      addon,
+      listAmount,
+      billedAmount: listAmount,
+    }
+  })
+
+  const total = lines.reduce((sum, line) => sum + line.billedAmount, 0)
+  return { lines, total }
 }
 
-export function hasProgramSelected(selectedIds: string[]): boolean {
-  return selectedIds.some((id) => isProgramId(id))
-}
-
-export function hasNonProgramSelected(selectedIds: string[]): boolean {
-  return selectedIds.some((id) => !isProgramId(id))
-}
-
-/** Keep at most one program (Agency vs Design Partner are mutually exclusive). */
-export function withoutOtherPrograms(
-  selectedIds: string[],
-  keepProgramId: string,
-): string[] {
-  return selectedIds.filter(
-    (id) => !isProgramId(id) || id === keepProgramId,
-  )
-}
-
-export function hasSelfHostedDeployment(selectedIds: string[]): boolean {
-  return SELF_HOSTED_DEPLOYMENT_IDS.some((id) => selectedIds.includes(id))
-}
-
-export function isGatedBySelfHosted(itemId: string): boolean {
-  return (GATED_BY_SELF_HOSTED_IDS as readonly string[]).includes(itemId)
-}
-
-/**
- * Programs are gated when a Deployment is selected (and vice versa).
- * Concierge is also unavailable while a Program is selected (handled in UI/toggle).
- * BYOC still needs permission to combine with Agency / DPP.
- */
-export function isProgramExclusiveGated(
-  itemId: string,
-  selectedIds: string[],
-): boolean {
-  if (isProgramId(itemId)) {
-    return hasDeploymentSelected(selectedIds)
-  }
-  if (isDeploymentId(itemId)) {
-    return hasProgramSelected(selectedIds)
-  }
-  return false
-}
-
-export function withoutSelfHostedGatedItems(selectedIds: string[]): string[] {
-  if (!hasSelfHostedDeployment(selectedIds)) return selectedIds
-  return selectedIds.filter((id) => !isGatedBySelfHosted(id))
-}
-
-export function withoutIncompatibleProgramMix(selectedIds: string[]): string[] {
-  const programs = selectedIds.filter((id) => isProgramId(id))
-  // Agency and Design Partner cannot both be selected — keep the latest.
-  let next =
-    programs.length > 1
-      ? withoutOtherPrograms(selectedIds, programs[programs.length - 1])
-      : selectedIds
-
-  const hasProgram = hasProgramSelected(next)
-  const hasDeployment = hasDeploymentSelected(next)
-  if (!(hasProgram && hasDeployment)) return next
-  // Prefer keeping the side that matches the latest id in the list.
-  const lastId = next[next.length - 1]
-  if (isProgramId(lastId)) {
-    return withoutDeploymentRequiredItems(
-      next.filter((id) => !isDeploymentId(id)),
-    )
-  }
-  return next.filter((id) => !isProgramId(id))
-}
+// —— Platform usage (Enterprise Platform only) ——
 
 export interface PlatformUsageMetric {
   id: string
   name: string
-  /** Customer list / overage unit price. */
   unitCost: number
-  /** Our delivery COGS per unit (used for include + additional margin cost). */
   deliveryUnitCost: number
-  /** Shown next to the unit cost, e.g. "event", "GB", "hour". */
   unitLabel: string
-  /** Baseline free tier note (applies when package include is 0). */
   includedNote?: string
 }
 
@@ -613,18 +473,10 @@ export type PlatformPackageId =
 export interface PlatformPackagePreset {
   id: PlatformPackageId
   name: string
-  /** Include amounts calibrated for PLATFORM_USAGE_REFERENCE_ANNUAL. */
   includes: PlatformUsageAmounts
 }
 
-/** Package include tables are authored against this annual Platform reference. */
 export const PLATFORM_USAGE_REFERENCE_ANNUAL = 30_000
-
-/**
- * Growth-band reference formerly used to scale Platform usage includes by
- * headcount. Includes now scale from selected product total instead.
- */
-export const PLATFORM_USAGE_SCALE_GROWTH_BASE = 10_000
 
 export function emptyPlatformUsage(): PlatformUsageAmounts {
   return Object.fromEntries(
@@ -671,10 +523,6 @@ export const PLATFORM_PACKAGES: PlatformPackagePreset[] = [
   },
 ]
 
-/**
- * Round up to the next 1 / 2 / 2.5 / 3 / 4 / 5 / 7.5 × 10^n quantity.
- * Exact hits on a candidate stay put (e.g. 5M → 5M).
- */
 export function roundUpUsageQuantity(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0
   const exp = Math.floor(Math.log10(value))
@@ -714,70 +562,10 @@ export function scalePlatformIncludes(
   )
 }
 
-/** DPP usage package authored against Growth DPP fee ($15k/year). */
-export const DPP_USAGE_REFERENCE_ANNUAL = 15_000
-
-export const DPP_USAGE_REFERENCE_INCLUDES: PlatformUsageAmounts = {
-  'observability-events': 5_000_000,
-  'data-egress': 500,
-  'cpu-time': 1_250,
-  'rows-written': 50_000_000,
-  'compute-hours': 250,
-  'data-storage': 50,
-}
-
-export interface DppUsageConfig {
-  includes: PlatformUsageAmounts
-  additional: PlatformUsageAmounts
-}
-
-export function getDppAnnualFee(employees: number): number {
-  return getDppHeadcountBand(employees)?.annualFee ?? 0
-}
-
-/** Scale DPP usage includes from selected product total / year. */
-export function dppUsageConfigFromProductTotal(
-  productTotalAnnual: number,
-): DppUsageConfig {
-  return {
-    includes: scaleUsageIncludes(
-      DPP_USAGE_REFERENCE_INCLUDES,
-      Math.max(0, productTotalAnnual),
-      DPP_USAGE_REFERENCE_ANNUAL,
-    ),
-    additional: emptyPlatformUsage(),
-  }
-}
-
-/** @deprecated Prefer dppUsageConfigFromProductTotal with product total. */
-export function dppUsageConfigFromEmployees(employees: number): DppUsageConfig {
-  return dppUsageConfigFromProductTotal(getDppAnnualFee(employees))
-}
-
-export function defaultDppUsageConfig(productTotalAnnual = 0): DppUsageConfig {
-  return dppUsageConfigFromProductTotal(productTotalAnnual)
-}
-
 export interface PlatformConfig {
   packageId: PlatformPackageId
   includes: PlatformUsageAmounts
-  /** Additional volume beyond package includes (monthly), billed at 50% unit cost × 12. */
   additional: PlatformUsageAmounts
-}
-
-/** Billed Platform base subscription — always $0 (no base fee). */
-export function getPlatformListPrice(_employees: number): number {
-  return 0
-}
-
-/**
- * @deprecated Platform usage includes now scale from selected product total.
- * Kept for reference / legacy call sites.
- */
-export function getPlatformUsageScaleAnnual(employees: number): number {
-  return (
-    PLATFORM_USAGE_SCALE_GROWTH_BASE * getHeadcountBand(employees).multiplier
-  )
 }
 
 export function platformConfigFromPackage(
@@ -810,26 +598,13 @@ export function getPlatformPackageName(packageId: PlatformPackageId): string {
 export interface PlatformUsageLine {
   metric: PlatformUsageMetric
   additionalAmount: number
-  /**
-   * Fixed list / overage unit cost (same as metric.unitCost; does not scale
-   * and is not discounted).
-   */
   listUnitCost: number
-  /** Purchase price for additional usage: 50% of list unit cost. */
   billedUnitCost: number
-  /** Monthly billed amount for purchased additional usage. */
   monthlyCost: number
-  /** Annual billed amount (monthly × 12) used in product totals. */
   cost: number
 }
 
-/**
- * Purchased additional usage is billed at 50% of the fixed list unit cost.
- * Overage / list unit cost itself stays at full unitCost (not discounted).
- */
 export const ADDITIONAL_USAGE_DISCOUNT = 0.5
-
-/** Usage quantities (package includes + additional) are entered as monthly volume. */
 export const USAGE_MONTHS_PER_YEAR = 12
 
 export function getAdditionalUsageUnitPrice(listUnitCost: number): number {
@@ -854,11 +629,6 @@ export function buildPlatformUsageLines(
   }).filter((line) => line.additionalAmount > 0)
 }
 
-export function sumPlatformUsage(amounts: PlatformUsageAmounts): number {
-  return buildPlatformUsageLines(amounts).reduce((sum, line) => sum + line.cost, 0)
-}
-
-/** Value at our delivery unit cost (includes / additional COGS). */
 export function costOfUsageAmounts(amounts: PlatformUsageAmounts): number {
   return PLATFORM_USAGE_METRICS.reduce((sum, metric) => {
     const qty = Math.max(0, amounts[metric.id] ?? 0)
@@ -869,7 +639,6 @@ export function costOfUsageAmounts(amounts: PlatformUsageAmounts): number {
 export interface PlatformUsageCostLine {
   metric: PlatformUsageMetric
   amount: number
-  /** Our delivery COGS per unit. */
   deliveryUnitCost: number
   cost: number
 }
@@ -889,11 +658,9 @@ export function buildUsageCostLines(
 }
 
 export interface PlatformMargin {
-  /** Product total / year (billed), used as margin revenue. */
   revenue: number
   additionalRevenue: number
   includeCost: number
-  /** Delivery COGS of additional usage (monthly × 12). */
   additionalCost: number
   totalCost: number
   margin: number
@@ -903,10 +670,6 @@ export interface PlatformMargin {
   additionalRevenueLines: PlatformUsageLine[]
 }
 
-/**
- * Platform / DPP margin: product total / year vs delivery COGS of included
- * usage + additional usage (both monthly × 12, at our delivery unit cost).
- */
 export function buildPlatformMargin(
   productAnnualTotal: number,
   includes: PlatformUsageAmounts,
@@ -947,312 +710,113 @@ export function buildPlatformMargin(
   }
 }
 
-/** Sized list amount for a catalog item at a given headcount. */
-export function getCatalogListAmount(
-  item: CatalogItem,
-  employees: number,
-): number {
-  if (item.id === DESIGN_PARTNER_ID) {
-    const band = getDppHeadcountBand(employees)
-    return band?.annualFee ?? 0
-  }
-  // BYOC: Mid-Market+ only; $120k/year at Mid-Market, then scales with band multiplier.
-  if (item.id === BYOC_ID) {
-    if (!isByocEligible(employees)) return 0
-    const multiplier = getHeadcountBand(employees).multiplier
-    return item.basePrice * (multiplier / BYOC_MID_MARKET_MULTIPLIER)
-  }
-  return item.basePrice * getHeadcountBand(employees).multiplier
-}
+// —— Quote ——
 
-export function getCompanySizeMultiplier(employees: number): number {
-  return getHeadcountBand(employees).multiplier
-}
-
-export function getCompanySizeLabel(employees: number): string {
-  const band = getHeadcountBand(employees)
-  return `${band.name} (${band.headcount})`
-}
-
-export function formatMultiplier(multiplier: number, custom = false): string {
-  const rounded = Math.round(multiplier * 1000) / 1000
-  const value = Number.isInteger(rounded)
-    ? `${rounded}.0`
-    : String(rounded)
-  if (!custom) return `${value}x`
-  if (rounded === GLOBAL_PLUS_BASE_MULTIPLIER) {
-    return `${value}x +0.25× per 1k`
-  }
-  return `${value}x`
-}
-
-/** Growth-band category list prices used to derive band tables. */
-export const PRODUCT_CATEGORY_BASES = {
-  deployment: 12_000,
-  privateCloud: 20_000,
-  byovpc: 40_000,
-  security: 10_000,
-  agentLearning: 14_000,
-  collaboration: 12_000,
-} as const
-
-/** Agency client pass-through: 30% off product bands; $7.5k minimum on total. */
-export const AGENCY_PASS_THROUGH_DISCOUNT = 0.3
-export const AGENCY_PASS_THROUGH_MINIMUM = 7_500
-
-/** Round dollars to the nearest significant whole amount (nearest $1,000). */
-export function roundAgencyPassThroughFee(amount: number): number {
-  if (!Number.isFinite(amount) || amount <= 0) return 0
-  return Math.round(amount / 1_000) * 1_000
-}
-
-export function agencyPassThroughFee(
-  growthBase: number,
-  multiplier: number,
-): number {
-  return roundAgencyPassThroughFee(
-    growthBase * multiplier * (1 - AGENCY_PASS_THROUGH_DISCOUNT),
-  )
-}
-
-export interface AgencyPassThroughBand {
+export interface QuoteLine {
   id: string
   name: string
-  headcount: string
-  multiplier: number
-  custom?: boolean
-  deployment: string
-  privateCloud: string
-  byovpc: string
-  security: string
-  agentLearning: string
-  collaboration: string
-  allFour: string
-}
-
-function formatBandUsd(amount: number, custom = false): string {
-  return `${formatUsd(amount)}${custom ? '+' : ''}`
-}
-
-export const AGENCY_PASS_THROUGH_BANDS: AgencyPassThroughBand[] =
-  HEADCOUNT_BANDS.map((band) => {
-    const custom = Boolean(band.custom)
-    const deployment = agencyPassThroughFee(
-      PRODUCT_CATEGORY_BASES.deployment,
-      band.multiplier,
-    )
-    const privateCloud = agencyPassThroughFee(
-      PRODUCT_CATEGORY_BASES.privateCloud,
-      band.multiplier,
-    )
-    const byovpc = isByovpcEligible(band.minEmployees)
-      ? formatBandUsd(
-          agencyPassThroughFee(
-            PRODUCT_CATEGORY_BASES.byovpc,
-            band.multiplier,
-          ),
-          custom,
-        )
-      : '—'
-    const security = agencyPassThroughFee(
-      PRODUCT_CATEGORY_BASES.security,
-      band.multiplier,
-    )
-    const agentLearning = agencyPassThroughFee(
-      PRODUCT_CATEGORY_BASES.agentLearning,
-      band.multiplier,
-    )
-    const collaboration = agencyPassThroughFee(
-      PRODUCT_CATEGORY_BASES.collaboration,
-      band.multiplier,
-    )
-    const allFour = Math.max(
-      deployment + security + agentLearning + collaboration,
-      AGENCY_PASS_THROUGH_MINIMUM,
-    )
-
-    return {
-      id: band.id,
-      name: band.name,
-      headcount: band.headcount,
-      multiplier: band.multiplier,
-      custom: band.custom,
-      deployment: formatBandUsd(deployment, custom),
-      privateCloud: formatBandUsd(privateCloud, custom),
-      byovpc,
-      security: formatBandUsd(security, custom),
-      agentLearning: formatBandUsd(agentLearning, custom),
-      collaboration: formatBandUsd(collaboration, custom),
-      allFour: formatBandUsd(allFour, custom),
-    }
-  })
-
-/** Multi-purchase discount from count of distinct package purchases. */
-export function getVolumeDiscount(purchaseCount: number): number {
-  if (purchaseCount >= 4) return 0.25
-  if (purchaseCount === 3) return 0.2
-  if (purchaseCount === 2) return 0.15
-  return 0
-}
-
-/** Round discounted line prices to the nearest whole dollar. */
-export function roundDiscountedAmount(amount: number): number {
-  if (!Number.isFinite(amount) || amount <= 0) return 0
-  return Math.round(amount)
-}
-
-/** Apply a discount % evenly to a list price, rounded to a whole dollar. */
-export function applyLineDiscount(
-  listAmount: number,
-  discountRate: number,
-): number {
-  if (!(listAmount > 0)) return 0
-  if (!(discountRate > 0)) return roundDiscountedAmount(listAmount)
-  return roundDiscountedAmount(listAmount * (1 - discountRate))
-}
-
-export interface LineItem {
-  item: CatalogItem
-  /** Sized list price in the item's native billing period. */
-  listAmount: number
-  /** List after volume discount %, rounded to a whole dollar. */
-  billedAmount: number
+  meta?: string
+  annualAmount: number
+  period: '/ yr' | '/ mo'
 }
 
 export interface Quote {
-  lineItems: LineItem[]
-  productLineItems: LineItem[]
-  purchaseCount: number
-  productPurchaseCount: number
-  companyMultiplier: number
-  companySizeLabel: string
-  companyBandId: string
-  companyCustom: boolean
-  dppEligible: boolean
-  dppBandId: string | null
-  dppMultiplier: number | null
-  byovpcEligible: boolean
-  byocEligible: boolean
-  /** Volume % off package products. Concierge does not waive this. */
-  discountRate: number
-  discountAmount: number
-  productSubtotal: number
-  productTotal: number
+  plan: Plan
+  seats: SeatCounts
+  seatPricing: SeatPricing
+  addonPricing: AddonPricing
+  designPartner: boolean
+  agency: boolean
+  programAnnual: number
+  dppAgentLearningCredit: number
   platformPackageId: PlatformPackageId | null
   platformPackageName: string | null
-  platformBasePrice: number
   platformIncludes: PlatformUsageAmounts
   platformUsageLines: PlatformUsageLine[]
   platformOverageTotal: number
-  platformUsageTotal: number
-  dppIncludes: PlatformUsageAmounts
-  dppUsageLines: PlatformUsageLine[]
-  dppOverageTotal: number
-  /** Products after discount + platform/DPP overage (excludes Concierge). */
+  productLines: QuoteLine[]
   annualTotal: number
 }
 
-export function buildQuote(
-  selectedIds: string[],
-  employees: number,
-  platformConfig: PlatformConfig = defaultPlatformConfig(),
-  dppUsageConfig: DppUsageConfig = defaultDppUsageConfig(),
-): Quote {
-  const dppEligible = isDppEligible(employees)
-  const byovpcEligible = isByovpcEligible(employees)
-  const byocEligible = isByocEligible(employees)
-  const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
-  const programSelected = hasProgramSelected(selectedIds)
-  const deploymentSelected = hasDeploymentSelected(selectedIds)
-  const selected = CATALOG.filter((item) => {
-    if (!selectedIds.includes(item.id)) return false
-    if (item.id === DESIGN_PARTNER_ID && !dppEligible) return false
-    if (item.id === BYOVPC_ID && !byovpcEligible) return false
-    if (item.id === BYOC_ID && !byocEligible) return false
-    if (selfHostedSelected && isGatedBySelfHosted(item.id)) return false
-    if (requiresDeployment(item.id) && !deploymentSelected) return false
-    if (programSelected && deploymentSelected) {
-      // Prefer deployment side if both somehow present; UI prevents this mix.
-      if (item.kind === 'program') return false
+export interface BuildQuoteInput {
+  planId: PlanId
+  seats: SeatCounts
+  selectedAddonIds: AddonId[]
+  designPartner?: boolean
+  agency?: boolean
+  platformConfig?: PlatformConfig
+}
+
+export function buildQuote(input: BuildQuoteInput): Quote {
+  const plan = getPlan(input.planId)
+  const designPartner = Boolean(input.designPartner)
+  const agency = Boolean(input.agency) && !designPartner
+
+  let effectivePlan = plan
+  if (designPartner && !DPP_ALLOWED_PLANS.includes(plan.id)) {
+    effectivePlan = getPlan('enterprise-platform')
+  }
+
+  let seats = clampSeats(effectivePlan, input.seats)
+  if (designPartner) {
+    seats = {
+      developer: Math.min(
+        DESIGN_PARTNER_MAX_DEVELOPER_SEATS,
+        Math.max(effectivePlan.includedDeveloperSeats, seats.developer),
+      ),
+      builder: Math.min(DESIGN_PARTNER_MAX_BUILDER_SEATS, seats.builder),
+      viewer: seats.viewer,
     }
-    return true
+  }
+
+  let seatPricing: SeatPricing
+  let programAnnual = 0
+  let dppAgentLearningCredit = 0
+
+  if (designPartner) {
+    programAnnual = DESIGN_PARTNER_ANNUAL_FEE
+    seatPricing = {
+      developerMonthlyRate: 0,
+      developerAnnual: 0,
+      builderAnnual: 0,
+      viewerAnnual: 0,
+      seatContractRaw: DESIGN_PARTNER_ANNUAL_FEE,
+      planAnnual: DESIGN_PARTNER_ANNUAL_FEE,
+      seatContract: DESIGN_PARTNER_ANNUAL_FEE,
+      minimumApplied: false,
+    }
+  } else {
+    seatPricing = priceSeats(effectivePlan, seats)
+    if (agency) programAnnual = AGENCY_ANNUAL_FEE
+  }
+
+  const addonIds = input.selectedAddonIds.filter((id) => {
+    const addon = ADDONS.find((a) => a.id === id)
+    return addon != null && isAddonAvailable(addon, effectivePlan)
   })
-  // Agency and Design Partner are mutually exclusive — keep the last selected.
-  const programIdsInOrder = selectedIds.filter((id) => isProgramId(id))
-  const keepProgramId =
-    programIdsInOrder.length > 0
-      ? programIdsInOrder[programIdsInOrder.length - 1]
-      : null
-  // Deployment options are mutually exclusive — keep the last selected.
-  const deploymentIdsInOrder = selectedIds.filter((id) => isDeploymentId(id))
-  const keepDeploymentId =
-    deploymentIdsInOrder.length > 0
-      ? deploymentIdsInOrder[deploymentIdsInOrder.length - 1]
-      : null
-  const selectedExclusive = selected.filter((item) => {
-    if (
-      keepProgramId !== null &&
-      item.kind === 'program' &&
-      item.id !== keepProgramId
-    ) {
-      return false
+
+  let addonPricing = priceAddons(
+    effectivePlan,
+    seatPricing.seatContract,
+    addonIds,
+  )
+
+  if (designPartner && addonIds.includes('agent-learning')) {
+    dppAgentLearningCredit =
+      DESIGN_PARTNER_AGENT_LEARNING_CREDIT_MONTHLY * 12
+    const lines = addonPricing.lines.map((line) => {
+      if (line.addon.id !== 'agent-learning') return line
+      const billed = Math.max(0, line.billedAmount - dppAgentLearningCredit)
+      return { ...line, billedAmount: billed }
+    })
+    addonPricing = {
+      lines,
+      total: lines.reduce((sum, line) => sum + line.billedAmount, 0),
     }
-    if (
-      keepDeploymentId !== null &&
-      isDeploymentId(item.id) &&
-      item.id !== keepDeploymentId
-    ) {
-      return false
-    }
-    return true
-  })
-  const band = getHeadcountBand(employees)
-  const dppBand = getDppHeadcountBand(employees)
-  const multiplier = band.multiplier
+  }
 
-  const productItems = selectedExclusive
-  const platformSelected = selectedExclusive.some(
-    (item) => item.id === PLATFORM_ID,
-  )
-  const dppSelected = selectedExclusive.some(
-    (item) => item.id === DESIGN_PARTNER_ID,
-  )
-
-  // $0 deployment options (Self-Hosted / Platform) do not count toward volume.
-  const productPurchaseCount = productItems
-    .map((item) => getCatalogListAmount(item, employees))
-    .filter((listAmount) => listAmount > 0).length
-
-  // Concierge never participates in or suppresses the package volume ladder.
-  // Platform / DPP usage overage is metered separately and not volume-discounted.
-  const discountRate = getVolumeDiscount(productPurchaseCount)
-
-  const productLineItems: LineItem[] = productItems.map((item) => {
-    const listAmount = getCatalogListAmount(item, employees)
-    return {
-      item,
-      listAmount,
-      billedAmount: applyLineDiscount(listAmount, discountRate),
-    }
-  })
-  const lineItems = [...productLineItems]
-
-  const productSubtotal = productLineItems.reduce(
-    (sum, li) => sum + li.listAmount,
-    0,
-  )
-  const productTotal = productLineItems.reduce(
-    (sum, li) => sum + li.billedAmount,
-    0,
-  )
-  const discountAmount = productSubtotal - productTotal
-
-  const platformBasePrice = platformSelected
-    ? getPlatformListPrice(employees)
-    : 0
-  const platformIncludes = platformSelected
-    ? platformConfig.includes
-    : emptyPlatformUsage()
+  const platformSelected = effectivePlan.hasUsage && !designPartner
+  const platformConfig = input.platformConfig ?? defaultPlatformConfig(0)
   const platformUsageLines = platformSelected
     ? buildPlatformUsageLines(platformConfig.additional)
     : []
@@ -1260,52 +824,154 @@ export function buildQuote(
     (sum, line) => sum + line.cost,
     0,
   )
-  // Base is already in productTotal via the Platform catalog line.
-  const platformUsageTotal = platformBasePrice + platformOverageTotal
-
-  const dppIncludes = dppSelected
-    ? dppUsageConfig.includes
+  const platformIncludes = platformSelected
+    ? platformConfig.includes
     : emptyPlatformUsage()
-  const dppUsageLines = dppSelected
-    ? buildPlatformUsageLines(dppUsageConfig.additional)
-    : []
-  const dppOverageTotal = dppUsageLines.reduce(
-    (sum, line) => sum + line.cost,
-    0,
-  )
 
-  const annualTotal = productTotal + platformOverageTotal + dppOverageTotal
+  const productLines: QuoteLine[] = []
+
+  if (designPartner) {
+    productLines.push({
+      id: DESIGN_PARTNER_ID,
+      name: 'Mastra Design Partner Program',
+      meta: `${effectivePlan.name} · up to ${seats.developer} developer / ${seats.builder} builder seats`,
+      annualAmount: DESIGN_PARTNER_ANNUAL_FEE,
+      period: '/ yr',
+    })
+  } else if (effectivePlan.id === 'free') {
+    productLines.push({
+      id: 'plan',
+      name: 'Free',
+      meta: '1 developer seat',
+      annualAmount: 0,
+      period: '/ yr',
+    })
+  } else if (effectivePlan.id === 'teams') {
+    productLines.push({
+      id: 'plan',
+      name: 'Teams',
+      meta: `${seats.developer} developer seat${seats.developer === 1 ? '' : 's'} (up to 5)`,
+      annualAmount: seatPricing.developerAnnual,
+      period: '/ yr',
+    })
+    if (seats.builder > 0) {
+      productLines.push({
+        id: 'builder-seats',
+        name: 'Builder seats',
+        meta: `${seats.builder} × ${formatUsd(BUILDER_SEAT_MONTHLY)}/mo`,
+        annualAmount: seatPricing.builderAnnual,
+        period: '/ yr',
+      })
+    }
+  } else {
+    const rateLabel =
+      seatPricing.developerMonthlyRate > 0
+        ? `${formatUsd(seatPricing.developerMonthlyRate)}/seat/mo`
+        : null
+    productLines.push({
+      id: 'plan',
+      name: effectivePlan.name,
+      meta: [
+        `${seats.developer} developer seats`,
+        rateLabel,
+        seatPricing.minimumApplied
+          ? `${formatUsd(effectivePlan.annualMinimum)} minimum applied`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      annualAmount: seatPricing.planAnnual - seatPricing.builderAnnual,
+      period: '/ yr',
+    })
+    if (seats.builder > 0) {
+      productLines.push({
+        id: 'builder-seats',
+        name: 'Builder seats',
+        meta: `${seats.builder} × ${formatUsd(BUILDER_SEAT_MONTHLY)}/mo`,
+        annualAmount: seatPricing.builderAnnual,
+        period: '/ yr',
+      })
+    }
+  }
+
+  if (seats.viewer > 0) {
+    productLines.push({
+      id: 'viewer-seats',
+      name: 'Viewer seats',
+      meta: `${seats.viewer} · free`,
+      annualAmount: 0,
+      period: '/ yr',
+    })
+  }
+
+  for (const line of addonPricing.lines) {
+    productLines.push({
+      id: line.addon.id,
+      name: line.addon.name,
+      meta: [
+        `${formatPercent(line.addon.rate)} of seat contract`,
+        line.addon.annualMinimum > 0
+          ? `${formatUsd(line.addon.annualMinimum)} min`
+          : null,
+        designPartner &&
+        line.addon.id === 'agent-learning' &&
+        dppAgentLearningCredit > 0
+          ? `${formatUsd(dppAgentLearningCredit)} DPP credit`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      annualAmount: line.billedAmount,
+      period: '/ yr',
+    })
+  }
+
+  if (agency) {
+    productLines.push({
+      id: AGENCY_PROGRAM_ID,
+      name: 'Mastra Agency Partner Program',
+      meta: 'Program fee',
+      annualAmount: AGENCY_ANNUAL_FEE,
+      period: '/ yr',
+    })
+  }
+
+  if (platformOverageTotal > 0) {
+    productLines.push({
+      id: 'platform-usage',
+      name: 'Platform usage (additional)',
+      meta: getPlatformPackageName(platformConfig.packageId),
+      annualAmount: platformOverageTotal,
+      period: '/ yr',
+    })
+  }
+
+  const annualTotal = designPartner
+    ? DESIGN_PARTNER_ANNUAL_FEE +
+      addonPricing.total +
+      platformOverageTotal
+    : seatPricing.planAnnual +
+      (agency ? AGENCY_ANNUAL_FEE : 0) +
+      addonPricing.total +
+      platformOverageTotal
 
   return {
-    lineItems,
-    productLineItems,
-    purchaseCount: lineItems.length,
-    productPurchaseCount,
-    companyMultiplier: multiplier,
-    companySizeLabel: getCompanySizeLabel(employees),
-    companyBandId: band.id,
-    companyCustom: Boolean(band.custom),
-    dppEligible,
-    dppBandId: dppBand?.id ?? null,
-    dppMultiplier: dppBand?.multiplier ?? null,
-    byovpcEligible,
-    byocEligible,
-    discountRate,
-    discountAmount,
-    productSubtotal,
-    productTotal,
+    plan: effectivePlan,
+    seats,
+    seatPricing,
+    addonPricing,
+    designPartner,
+    agency,
+    programAnnual,
+    dppAgentLearningCredit,
     platformPackageId: platformSelected ? platformConfig.packageId : null,
     platformPackageName: platformSelected
       ? getPlatformPackageName(platformConfig.packageId)
       : null,
-    platformBasePrice,
     platformIncludes,
     platformUsageLines,
     platformOverageTotal,
-    platformUsageTotal,
-    dppIncludes,
-    dppUsageLines,
-    dppOverageTotal,
+    productLines,
     annualTotal,
   }
 }

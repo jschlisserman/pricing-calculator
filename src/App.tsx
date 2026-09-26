@@ -6,72 +6,51 @@ import {
   PATH1_TIERS,
   PATH2_MARGIN_OPTIONS,
   PATH2_PACKAGES,
-  buildConciergeMargin,
-  buildConciergeQuote,
+  buildSupportMargin,
+  buildSupportQuote,
   getAuditFee,
   getPath1ImpliedHourly,
-  getPath1QuarterlyList,
+  getPath1ListPrice,
+  getPath1PeriodLabel,
   getPath2Cost,
   getPath2ListPrice,
-  isConciergeId,
   isPath1Id,
   isPath2Id,
-  withoutConciergeItems,
   withoutOtherPath1Tiers,
-  type Path1Mode,
+  type Path1BillingPeriod,
   type Path2Hours,
   type Path2MarginRate,
   type Path2Margins,
   type Path2PackageId,
 } from './concierge'
 import {
-  BYOC_ID,
-  BYOVPC_ID,
-  CATALOG,
-  CATEGORY_ORDER,
-  DESIGN_PARTNER_ID,
-  PLATFORM_ID,
+  ADDONS,
+  BUILDER_SEAT_MONTHLY,
+  DPP_ALLOWED_PLANS,
+  PLANS,
   PLATFORM_PACKAGES,
   PLATFORM_USAGE_METRICS,
-  SELF_HOSTED_ID,
   buildPlatformMargin,
   buildQuote,
-  defaultDppUsageConfig,
+  clampSeats,
   defaultPlatformConfig,
-  dppUsageConfigFromProductTotal,
-  formatMultiplier,
   formatPercent,
   formatUnitCost,
   formatUsd,
   getAdditionalUsageUnitPrice,
-  getCatalogListAmount,
-  hasProgramSelected,
-  hasSelfHostedDeployment,
-  isByocEligible,
-  isByovpcEligible,
-  isDeploymentExclusiveGated,
-  isDeploymentId,
-  isDeploymentRequiredGated,
-  isDppEligible,
-  isGatedBySelfHosted,
-  isProgramExclusiveGated,
-  isProgramId,
+  getPlan,
+  isAddonAvailable,
   platformConfigFromPackage,
-  withoutDeploymentRequiredItems,
-  withoutSelfHostedGatedItems,
-  type CatalogItem,
-  type DppUsageConfig,
+  type AddonId,
+  type PlanId,
   type PlatformConfig,
   type PlatformPackageId,
+  type SeatCounts,
 } from './pricing'
 import TablesPage from './TablesPage'
 import ReviewPage from './ReviewPage'
+import NumberField from './NumberField'
 import type { OrderLineSnapshot, OrderSnapshot } from './orderSnapshot'
-
-const FUTURE_FEATURES: Record<string, string[]> = {
-  'security-controls': ['FGC'],
-  'agent-learning': ['Custom Signals', 'Agent Learning'],
-}
 
 function CheckIcon() {
   return (
@@ -100,26 +79,6 @@ function CloseIcon() {
   )
 }
 
-function periodLabel(item: CatalogItem): string {
-  return item.billingPeriod === 'quarter' ? '/ quarter' : '/ year'
-}
-
-function categoryMeta(category: string): string {
-  if (category === 'Deployment') return 'Pick one · required for packages'
-  if (category === 'Collaboration') {
-    return 'Requires Deployment'
-  }
-  if (category === 'Security and Controls' || category === 'Agent Learning') {
-    return 'Bundle · requires Deployment'
-  }
-  if (category === 'Programs') return 'Pick one · gated by Deployment'
-  return 'Exclusive'
-}
-
-function path1ModeLabel(mode: Path1Mode): string {
-  return mode === 'hands-on' ? 'Hands-On' : 'Advisory'
-}
-
 type AppPage = 'order' | 'tables' | 'review'
 
 export default function App() {
@@ -127,365 +86,247 @@ export default function App() {
   const [reviewSnapshot, setReviewSnapshot] = useState<OrderSnapshot | null>(
     null,
   )
-  const [employees, setEmployees] = useState(50)
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [planId, setPlanId] = useState<PlanId>('teams')
+  const [seats, setSeats] = useState<SeatCounts>({
+    developer: 5,
+    builder: 0,
+    viewer: 0,
+  })
+  const [selectedAddons, setSelectedAddons] = useState<AddonId[]>([])
+  const [designPartner, setDesignPartner] = useState(false)
+  const [agency, setAgency] = useState(false)
+  const [supportIds, setSupportIds] = useState<string[]>([])
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(() =>
     defaultPlatformConfig(0),
   )
-  const [dppUsageConfig, setDppUsageConfig] = useState<DppUsageConfig>(() =>
-    defaultDppUsageConfig(0),
-  )
-  const [path1Mode, setPath1Mode] = useState<Path1Mode>('advisory')
   const [path2Hours, setPath2Hours] = useState<Path2Hours>({})
   const [path2Margins, setPath2Margins] = useState<Path2Margins>({})
-  const [engineerCostPerHour, setEngineerCostPerHour] = useState(
-    DEFAULT_ENGINEER_COST_PER_HOUR,
-  )
+  const [path1BillingPeriod, setPath1BillingPeriod] =
+    useState<Path1BillingPeriod>('quarter')
+  const [engineerCostPerHour] = useState(DEFAULT_ENGINEER_COST_PER_HOUR)
+
+  const plan = getPlan(planId)
 
   useEffect(() => {
-    if (!isDppEligible(employees)) {
-      setSelectedIds((prev) => prev.filter((id) => id !== DESIGN_PARTNER_ID))
+    setSeats((prev) => clampSeats(getPlan(planId), prev))
+    setSelectedAddons((prev) =>
+      prev.filter((id) => {
+        const addon = ADDONS.find((a) => a.id === id)
+        return addon != null && isAddonAvailable(addon, getPlan(planId))
+      }),
+    )
+    if (designPartner && !DPP_ALLOWED_PLANS.includes(planId)) {
+      setDesignPartner(false)
     }
-    if (!isByovpcEligible(employees)) {
-      setSelectedIds((prev) => prev.filter((id) => id !== BYOVPC_ID))
-    }
-    if (!isByocEligible(employees)) {
-      setSelectedIds((prev) => prev.filter((id) => id !== BYOC_ID))
-    }
-  }, [employees])
+  }, [planId, designPartner])
 
-  /** Product total only — excludes usage overage so include scaling is not circular. */
-  const usageScaleAnnual = useMemo(
+  const quote = useMemo(
     () =>
-      buildQuote(
-        selectedIds,
-        Number.isFinite(employees) ? employees : 0,
-      ).productTotal,
-    [selectedIds, employees],
+      buildQuote({
+        planId,
+        seats,
+        selectedAddonIds: selectedAddons,
+        designPartner,
+        agency,
+        platformConfig,
+      }),
+    [planId, seats, selectedAddons, designPartner, agency, platformConfig],
   )
 
+  const usageScaleAnnual = quote.seatPricing.seatContract
+
   useEffect(() => {
+    if (!quote.plan.hasUsage || designPartner) return
     setPlatformConfig((prev) => {
       const scaled = platformConfigFromPackage(prev.packageId, usageScaleAnnual)
       return { ...scaled, additional: prev.additional }
     })
-    setDppUsageConfig((prev) => {
-      const scaled = dppUsageConfigFromProductTotal(usageScaleAnnual)
-      return { ...scaled, additional: prev.additional }
-    })
-  }, [usageScaleAnnual])
+  }, [usageScaleAnnual, quote.plan.hasUsage, designPartner])
 
-  const quote = useMemo(
+  const support = useMemo(
     () =>
-      buildQuote(
-        selectedIds,
-        Number.isFinite(employees) ? employees : 0,
-        platformConfig,
-        dppUsageConfig,
-      ),
-    [selectedIds, employees, platformConfig, dppUsageConfig],
-  )
-
-  const concierge = useMemo(
-    () =>
-      buildConciergeQuote(
-        selectedIds,
-        Number.isFinite(employees) ? employees : 0,
-        path1Mode,
+      buildSupportQuote(
+        supportIds,
         path2Hours,
         path2Margins,
-        quote.productPurchaseCount,
         engineerCostPerHour,
+        path1BillingPeriod,
       ),
     [
-      selectedIds,
-      employees,
-      path1Mode,
+      supportIds,
       path2Hours,
       path2Margins,
-      quote.productPurchaseCount,
       engineerCostPerHour,
+      path1BillingPeriod,
     ],
   )
 
   const margin = useMemo(
-    () => buildConciergeMargin(concierge, engineerCostPerHour),
-    [concierge, engineerCostPerHour],
+    () => buildSupportMargin(support, engineerCostPerHour),
+    [support, engineerCostPerHour],
   )
 
-  const platformSelected = selectedIds.includes(PLATFORM_ID)
+  const showUsage = quote.plan.hasUsage && !designPartner
+
   const platformMargin = useMemo(() => {
-    if (!platformSelected) return null
+    if (!showUsage) return null
     return buildPlatformMargin(
       quote.annualTotal,
       quote.platformIncludes,
       platformConfig.additional,
     )
   }, [
-    platformSelected,
+    showUsage,
     quote.annualTotal,
     quote.platformIncludes,
     platformConfig.additional,
   ])
 
-  const dppSelected = selectedIds.includes(DESIGN_PARTNER_ID)
-  const dppMargin = useMemo(() => {
-    if (!dppSelected) return null
-    return buildPlatformMargin(
-      quote.annualTotal,
-      quote.dppIncludes,
-      dppUsageConfig.additional,
-    )
-  }, [
-    dppSelected,
-    quote.annualTotal,
-    quote.dppIncludes,
-    dppUsageConfig.additional,
-  ])
-
-  const selfHostedSelected = hasSelfHostedDeployment(selectedIds)
-  const programSelected = hasProgramSelected(selectedIds)
-  const headcount = Number.isFinite(employees) ? employees : 0
-  const selectedPath1Id = selectedIds.find(isPath1Id)
-  const auditSelected = selectedIds.includes(AUDIT_ID)
-  const auditFee = getAuditFee(headcount)
-  const hasConcierge =
-    concierge.path1 != null ||
-    concierge.path2.length > 0 ||
-    concierge.audit != null
-  const hasProducts = quote.productLineItems.length > 0
-  const hasOrder = quote.lineItems.length > 0 || hasConcierge
+  const selectedPath1Id = supportIds.find(isPath1Id)
+  const auditSelected = supportIds.includes(AUDIT_ID)
+  const auditFee = getAuditFee()
+  const hasSupport =
+    support.path1 != null || support.path2.length > 0 || support.audit != null
+  const hasProducts = quote.productLines.length > 0
+  const hasOrder = hasProducts || hasSupport
 
   const orderSnapshot = useMemo((): OrderSnapshot | null => {
     if (!hasOrder) return null
 
-    const productLines: OrderLineSnapshot[] = quote.lineItems.map(
-      ({ item, listAmount, billedAmount }) => {
-        const isPlatform = item.id === PLATFORM_ID
-        const isSelfHosted = item.id === SELF_HOSTED_ID
-        const isDpp = item.id === DESIGN_PARTNER_ID
-        const listPrice = isPlatform
-          ? quote.platformBasePrice + quote.platformOverageTotal
-          : isDpp
-            ? listAmount + quote.dppOverageTotal
-            : listAmount
-        const price = isPlatform
-          ? billedAmount + quote.platformOverageTotal
-          : isDpp
-            ? billedAmount + quote.dppOverageTotal
-            : billedAmount
-        const noBaseFee = (isPlatform || isSelfHosted) && price === 0
-        return {
-          name: item.name,
-          meta: noBaseFee
-            ? 'No base subscription'
-            : quote.discountRate > 0 && listPrice > price
-              ? `${formatPercent(quote.discountRate)} off`
-              : undefined,
-          listAmount: noBaseFee ? null : listPrice,
-          billedAmount: noBaseFee ? null : price,
-          period: '/ yr',
-          noBaseFee,
-        }
-      },
+    const productLines: OrderLineSnapshot[] = quote.productLines.map(
+      (line) => ({
+        name: line.name,
+        meta: line.meta,
+        listAmount: line.annualAmount,
+        billedAmount: line.annualAmount,
+        period: '/ yr',
+        noBaseFee: line.annualAmount === 0 && line.id === 'plan',
+      }),
     )
 
-    const conciergeLines: OrderLineSnapshot[] = []
-    if (concierge.path1) {
-      conciergeLines.push({
-        name: `Path 1 · ${concierge.path1.tier.name}`,
-        meta: [
-          path1ModeLabel(concierge.path1.mode),
-          concierge.discountRate > 0
-            ? `${formatPercent(concierge.discountRate)} off`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(' · '),
-        listAmount: concierge.path1.listAmount,
-        billedAmount: concierge.path1.billedAmount,
-        period: '/ qtr',
+    // Restore list amount when DPP Agent Learning credit applies
+    for (const addonLine of quote.addonPricing.lines) {
+      if (
+        !(designPartner && addonLine.addon.id === 'agent-learning') ||
+        addonLine.listAmount === addonLine.billedAmount
+      ) {
+        continue
+      }
+      const snap = productLines.find((l) => l.name === addonLine.addon.name)
+      if (snap) {
+        snap.listAmount = addonLine.listAmount
+        snap.billedAmount = addonLine.billedAmount
+      }
+    }
+
+    const supportLines: OrderLineSnapshot[] = []
+    if (support.path1) {
+      supportLines.push({
+        name: `Support Path 1 · ${support.path1.tier.name}`,
+        meta: `${support.path1.tier.hoursPerWeek} hrs/wk · ${
+          support.path1.billingPeriod === 'year' ? 'Annual' : 'Quarterly'
+        }`,
+        listAmount: support.path1.listAmount,
+        billedAmount: support.path1.billedAmount,
+        period: support.path1.periodLabel,
       })
     }
-    for (const line of concierge.path2) {
-      conciergeLines.push({
-        name: `Path 2 · ${line.package.name}`,
-        meta: [
-          `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
-          concierge.discountRate > 0
-            ? `${formatPercent(concierge.discountRate)} off`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(' · '),
+    for (const line of support.path2) {
+      supportLines.push({
+        name: `Support Path 2 · ${line.package.name}`,
+        meta: `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
         listAmount: line.listAmount > 0 ? line.listAmount : null,
         billedAmount: line.listAmount > 0 ? line.billedAmount : null,
         period: '/ one-time',
       })
     }
-    if (concierge.audit) {
-      conciergeLines.push({
+    if (support.audit) {
+      supportLines.push({
         name: 'Mastra Audit',
-        meta:
-          concierge.discountRate > 0
-            ? `${formatPercent(concierge.discountRate)} off`
-            : undefined,
-        listAmount: concierge.audit.listAmount,
-        billedAmount: concierge.audit.billedAmount,
+        listAmount: support.audit.listAmount,
+        billedAmount: support.audit.billedAmount,
         period: '/ one-time',
       })
     }
 
     return {
-      employees: headcount,
-      companyBandLabel: quote.companySizeLabel,
+      planLabel: quote.plan.name,
+      seatsLabel: `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.viewer} viewer`,
+      programLabel: designPartner
+        ? 'Design Partner'
+        : agency
+          ? 'Agency Partner'
+          : null,
       productLines,
-      productDiscountRate: quote.discountRate,
-      productDiscountAmount: quote.discountAmount,
       productTotal: quote.annualTotal,
-      conciergeLines,
-      conciergeDiscountRate: concierge.discountRate,
-      conciergeDiscountAmount: concierge.discountAmount,
-      conciergeQuarterlyTotal: concierge.path1
-        ? concierge.path1TotalQuarterly
-        : null,
-      conciergeOneTimeTotal:
-        concierge.path2.length > 0 || concierge.audit
-          ? concierge.oneTimeTotal
+      supportLines,
+      supportPath1Total: support.path1 ? support.path1Total : null,
+      supportPath1Period: support.path1 ? support.path1.periodLabel : null,
+      supportOneTimeTotal:
+        support.path2.length > 0 || support.audit
+          ? support.oneTimeTotal
           : null,
     }
-  }, [hasOrder, quote, concierge, headcount])
+  }, [hasOrder, quote, support, designPartner, agency])
 
-  const byCategory = useMemo(() => {
-    const map = new Map<string, CatalogItem[]>()
-    for (const category of CATEGORY_ORDER) {
-      map.set(
-        category,
-        CATALOG.filter((item) => item.category === category),
-      )
-    }
-    return map
-  }, [])
+  function setSeatCount(key: keyof SeatCounts, count: number) {
+    setSeats(
+      clampSeats(plan, {
+        ...seats,
+        [key]: Math.max(0, Math.floor(count)),
+      }),
+    )
+  }
 
-  function toggleItem(id: string) {
-    setSelectedIds((prev) => {
-      const already = prev.includes(id)
+  function selectPlan(id: PlanId) {
+    setPlanId(id)
+    const nextPlan = getPlan(id)
+    setSeats(
+      clampSeats(nextPlan, {
+        developer: nextPlan.includedDeveloperSeats,
+        builder: seats.builder,
+        viewer: seats.viewer,
+      }),
+    )
+  }
 
-      if (already) {
-        const next = prev.filter((x) => x !== id)
-        if (isDeploymentId(id)) {
-          return withoutDeploymentRequiredItems(next)
-        }
-        return next
+  function toggleAddon(id: AddonId) {
+    setSelectedAddons((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
+  }
+
+  function toggleSupport(id: string) {
+    setSupportIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id)
+      if (isPath1Id(id)) return withoutOtherPath1Tiers([...prev, id], id)
+      if (isPath2Id(id)) {
+        return prev.includes(AUDIT_ID) ? [...prev, id] : [...prev, id, AUDIT_ID]
       }
-
-      if (isProgramExclusiveGated(id, prev)) {
-        return prev
-      }
-
-      if (isDeploymentExclusiveGated(id, prev)) {
-        return prev
-      }
-
-      if (isDeploymentRequiredGated(id, prev)) {
-        return prev
-      }
-
-      if (isGatedBySelfHosted(id) && hasSelfHostedDeployment(prev)) {
-        return prev
-      }
-
-      if (isConciergeId(id)) {
-        if (hasProgramSelected(prev)) {
-          return prev
-        }
-
-        if (isPath1Id(id)) {
-          return withoutSelfHostedGatedItems(
-            withoutOtherPath1Tiers([...prev, id], id),
-          )
-        }
-
-        if (isPath2Id(id)) {
-          const next = prev.includes(AUDIT_ID)
-            ? [...prev, id]
-            : [...prev, id, AUDIT_ID]
-          return withoutSelfHostedGatedItems(next)
-        }
-
-        return withoutSelfHostedGatedItems([...prev, id])
-      }
-
-      if (isProgramId(id)) {
-        return withoutSelfHostedGatedItems(
-          withoutConciergeItems([
-            ...prev.filter((x) => !isProgramId(x)),
-            id,
-          ]),
-        )
-      }
-
-      if (isDeploymentId(id)) {
-        return withoutSelfHostedGatedItems([
-          ...prev.filter((x) => !isDeploymentId(x)),
-          id,
-        ])
-      }
-
-      return withoutSelfHostedGatedItems([...prev, id])
+      return [...prev, id]
     })
   }
 
-  function removeItem(id: string) {
-    setSelectedIds((prev) => {
-      const next = prev.filter((x) => x !== id)
-      if (isDeploymentId(id)) {
-        return withoutDeploymentRequiredItems(next)
-      }
-      return next
-    })
+  function removeSupport(id: string) {
+    setSupportIds((prev) => prev.filter((x) => x !== id))
   }
 
-  function setUsageAmount(metricId: string, value: string) {
-    const parsed = Number(value.replace(/,/g, ''))
+  function setUsageAmount(metricId: string, amount: number) {
     setPlatformConfig((prev) => ({
       ...prev,
       additional: {
         ...prev.additional,
-        [metricId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+        [metricId]: Math.max(0, amount),
       },
     }))
   }
 
-  function setIncludeAmount(metricId: string, value: string) {
-    const parsed = Number(value.replace(/,/g, ''))
+  function setIncludeAmount(metricId: string, amount: number) {
     setPlatformConfig((prev) => ({
       ...prev,
       includes: {
         ...prev.includes,
-        [metricId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
-      },
-    }))
-  }
-
-  function setDppUsageAmount(metricId: string, value: string) {
-    const parsed = Number(value.replace(/,/g, ''))
-    setDppUsageConfig((prev) => ({
-      ...prev,
-      additional: {
-        ...prev.additional,
-        [metricId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
-      },
-    }))
-  }
-
-  function setDppIncludeAmount(metricId: string, value: string) {
-    const parsed = Number(value.replace(/,/g, ''))
-    setDppUsageConfig((prev) => ({
-      ...prev,
-      includes: {
-        ...prev.includes,
-        [metricId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+        [metricId]: Math.max(0, amount),
       },
     }))
   }
@@ -494,9 +335,11 @@ export default function App() {
     setPlatformConfig(platformConfigFromPackage(packageId, usageScaleAnnual))
   }
 
-  function setPath2DeliveryHours(packageId: Path2PackageId, value: string) {
-    const trimmed = value.trim()
-    if (trimmed === '') {
+  function setPath2DeliveryHours(
+    packageId: Path2PackageId,
+    hours: number | null,
+  ) {
+    if (hours == null) {
       setPath2Hours((prev) => {
         const next = { ...prev }
         delete next[packageId]
@@ -504,10 +347,9 @@ export default function App() {
       })
       return
     }
-    const parsed = Number(trimmed.replace(/,/g, ''))
     setPath2Hours((prev) => ({
       ...prev,
-      [packageId]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
+      [packageId]: Math.max(0, hours),
     }))
   }
 
@@ -522,19 +364,33 @@ export default function App() {
   }
 
   function clearOrder() {
-    setSelectedIds([])
+    setPlanId('teams')
+    setSeats({ developer: 5, builder: 0, viewer: 0 })
+    setSelectedAddons([])
+    setDesignPartner(false)
+    setAgency(false)
+    setSupportIds([])
     setPlatformConfig(defaultPlatformConfig(0))
-    setDppUsageConfig(defaultDppUsageConfig(0))
-    setPath1Mode('advisory')
     setPath2Hours({})
     setPath2Margins({})
-    setEngineerCostPerHour(DEFAULT_ENGINEER_COST_PER_HOUR)
+    setPath1BillingPeriod('quarter')
   }
+
+  const maxDev = designPartner
+    ? 25
+    : plan.maxDeveloperSeats
+  const maxBuilder = designPartner ? 25 : null
+  const dppPlanOk = DPP_ALLOWED_PLANS.includes(planId)
 
   return (
     <div className="app">
       <header className="topbar animate-in">
-        <a className="brand" href="https://mastra.ai" target="_blank" rel="noreferrer">
+        <a
+          className="brand"
+          href="https://mastra.ai"
+          target="_blank"
+          rel="noreferrer"
+        >
           <img
             className="brand-mark"
             src="/mastra-logo.png"
@@ -568,10 +424,7 @@ export default function App() {
       </header>
 
       {page === 'tables' ? (
-        <TablesPage
-          activeBandId={quote.companyBandId}
-          dppBandId={quote.dppBandId}
-        />
+        <TablesPage />
       ) : page === 'review' && reviewSnapshot ? (
         <ReviewPage
           order={reviewSnapshot}
@@ -583,413 +436,605 @@ export default function App() {
         />
       ) : (
         <>
-      <section className="hero animate-in delay-1">
-        <h1>Build an order. Adjust as you go.</h1>
-      </section>
+          <section className="hero animate-in delay-1">
+            <h1>Build an order. Adjust as you go.</h1>
+          </section>
 
-      <div className="layout animate-in delay-2">
-        <div className="panel">
-          <div className="size-block">
-            <div className="panel-head">
-              <h2>Company size</h2>
-            </div>
-            <div className="size-row">
-              <div className="field">
-                <label htmlFor="employees">Number of employees</label>
-                <input
-                  id="employees"
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={employees}
-                  onChange={(e) => {
-                    const next = Number(e.target.value)
-                    setEmployees(Number.isFinite(next) ? Math.max(0, next) : 0)
-                  }}
-                />
+          <div className="layout animate-in delay-2">
+            <div className="panel">
+              <div className="panel-head">
+                <h2>Plan</h2>
               </div>
-              <div className="size-badge" aria-live="polite">
-                {quote.companySizeLabel}
-                <strong>
-                  {formatMultiplier(
-                    quote.companyMultiplier,
-                    quote.companyCustom,
-                  )}
-                </strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="panel-head">
-            <h2>Catalog</h2>
-          </div>
-
-          {CATEGORY_ORDER.map((category) => {
-            const items = byCategory.get(category) ?? []
-            return (
-              <section className="category" key={category}>
-                <div className="category-title">
-                  <h3>{category}</h3>
-                  <span className="category-meta">{categoryMeta(category)}</span>
-                </div>
-                <div className="items">
-                  {items.map((item) => {
-                    const selected = selectedIds.includes(item.id)
-                    const isDpp = item.id === DESIGN_PARTNER_ID
-                    const isPlatform = item.id === PLATFORM_ID
-                    const isByovpc = item.id === BYOVPC_ID
-                    const isByoc = item.id === BYOC_ID
-                    const dppUnavailable = isDpp && !quote.dppEligible
-                    const byovpcUnavailable =
-                      isByovpc && !quote.byovpcEligible
-                    const byocUnavailable = isByoc && !quote.byocEligible
-                    const selfHostedGated =
-                      isGatedBySelfHosted(item.id) && selfHostedSelected
-                    const programGated =
-                      isProgramExclusiveGated(item.id, selectedIds) &&
-                      !selected
-                    const deploymentGated =
-                      isDeploymentExclusiveGated(item.id, selectedIds)
-                    const needsDeploymentGated =
-                      isDeploymentRequiredGated(item.id, selectedIds)
-                    const unavailable =
-                      dppUnavailable ||
-                      byovpcUnavailable ||
-                      byocUnavailable ||
-                      selfHostedGated ||
-                      programGated ||
-                      deploymentGated ||
-                      needsDeploymentGated
-                    const futureFeatures = FUTURE_FEATURES[item.id] ?? []
-                    const gateMessage = dppUnavailable
-                      ? null
-                      : byovpcUnavailable || byocUnavailable
-                        ? 'Available for Mid-Market and above (100+ employees).'
-                        : selfHostedGated
-                        ? 'Unavailable with Helm Chart, Self-Hosted, or BYOC. Use Platform deployment instead.'
-                        : needsDeploymentGated
-                          ? 'Select a Deployment option first.'
-                          : programGated
-                            ? isProgramId(item.id)
-                              ? selectedIds.includes(BYOC_ID)
-                                ? 'Unavailable with BYOC unless explicit permission is given.'
-                                : 'Unavailable while a Deployment is selected. BYOC is not offered with Agency or Design Partner unless explicit permission is given.'
-                              : isDeploymentId(item.id)
-                                ? item.id === BYOC_ID
-                                  ? 'BYOC is not offered with Agency or Design Partner unless explicit permission is given.'
-                                  : 'Unavailable while a Program is selected.'
-                                : 'Unavailable while a Program is selected.'
-                            : deploymentGated
-                              ? 'Deselect the current Deployment option to choose a different one.'
-                              : null
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={`item-wrap${(isPlatform || isDpp) && selected ? ' open' : ''}`}
+              <div className="items">
+                {PLANS.map((p) => {
+                  const selected = planId === p.id
+                  const dppBlocked =
+                    designPartner && !DPP_ALLOWED_PLANS.includes(p.id)
+                  return (
+                    <div
+                      key={p.id}
+                      className={`item-wrap${selected ? ' open' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className={`item radio${selected ? ' selected' : ''}${dppBlocked ? ' unavailable' : ''}`}
+                        onClick={() => {
+                          if (dppBlocked) return
+                          selectPlan(p.id)
+                        }}
+                        aria-pressed={selected}
+                        disabled={dppBlocked}
                       >
-                        <button
-                          type="button"
-                          className={`item${selected ? ' selected' : ''}${item.kind === 'program' || isDeploymentId(item.id) ? ' radio' : ''}${unavailable ? ' unavailable' : ''}`}
-                          onClick={() => {
-                            if (unavailable) return
-                            toggleItem(item.id)
-                          }}
-                          aria-pressed={selected}
-                          aria-disabled={unavailable}
-                          disabled={unavailable}
-                        >
-                          <span className="check" aria-hidden="true">
-                            {selected &&
-                            !(
-                              item.kind === 'program' ||
-                              isDeploymentId(item.id)
-                            ) ? (
-                              <CheckIcon />
-                            ) : null}
-                          </span>
-                          <span className="item-body">
-                            <span className="item-name">
-                              {item.name}
-                              {item.future && (
-                                <span className="pill future">Future</span>
-                              )}
-                              {item.kind === 'bundle' && (
-                                <span className="pill">Bundle</span>
-                              )}
-                              {isPlatform && (
-                                <span className="pill">Usage</span>
-                              )}
-                              {dppUnavailable && (
-                                <span className="pill">Not offered</span>
-                              )}
-                              {byovpcUnavailable && (
-                                <span className="pill">Mid-Market+</span>
-                              )}
-                              {byocUnavailable && (
-                                <span className="pill">Mid-Market+</span>
-                              )}
-                              {selfHostedGated && (
-                                <span className="pill">
-                                  Not with Helm/Self-Hosted/BYOC
+                        <span className="check" aria-hidden="true" />
+                        <span className="item-body">
+                          <span className="item-name">{p.name}</span>
+                          <p className="item-desc">{p.description}</p>
+                          {p.features.length > 0 && (
+                            <div className="feature-list">
+                              {p.features.map((f) => (
+                                <span className="feature" key={f}>
+                                  {f}
                                 </span>
-                              )}
-                              {needsDeploymentGated && (
-                                <span className="pill">Needs Deployment</span>
-                              )}
-                              {deploymentGated && (
-                                <span className="pill">Pick one</span>
-                              )}
-                              {programGated && (
-                                <span className="pill">
-                                  {isProgramId(item.id)
-                                    ? 'Not with Deployment'
-                                    : item.id === BYOC_ID
-                                      ? 'Needs permission'
-                                      : 'Program selected'}
+                              ))}
+                            </div>
+                          )}
+                        </span>
+                        <span className="item-price">
+                          {p.id === 'free' ? (
+                            <>
+                              $0
+                              <br />
+                              / forever
+                            </>
+                          ) : p.flatMonthly != null ? (
+                            <>
+                              {formatUsd(p.flatMonthly)}
+                              <br />
+                              / month
+                            </>
+                          ) : (
+                            <>
+                              {formatUsd(p.annualMinimum)}
+                              <br />
+                              / yr min
+                            </>
+                          )}
+                        </span>
+                      </button>
+
+                      {selected && (
+                        <>
+                          <div className="plan-seats">
+                            <div className="size-row seats-row">
+                              <div className="field">
+                                <label htmlFor="developer-seats">
+                                  Developer
+                                </label>
+                                <NumberField
+                                  id="developer-seats"
+                                  value={seats.developer}
+                                  min={
+                                    plan.id === 'free'
+                                      ? 1
+                                      : plan.isEnterprise
+                                        ? plan.includedDeveloperSeats
+                                        : 1
+                                  }
+                                  max={maxDev ?? undefined}
+                                  disabled={plan.id === 'free'}
+                                  onCommit={(next) =>
+                                    setSeatCount('developer', next ?? 0)
+                                  }
+                                />
+                                {maxDev != null && (
+                                  <span className="field-hint">
+                                    Max {maxDev}
+                                  </span>
+                                )}
+                                {plan.isEnterprise && !designPartner && (
+                                  <span className="field-hint">
+                                    Min {plan.includedDeveloperSeats} included
+                                  </span>
+                                )}
+                                {quote.seatPricing.developerMonthlyRate >
+                                  0 && (
+                                  <span className="field-hint seat-rate-hint">
+                                    Developer rate:{' '}
+                                    <strong>
+                                      {formatUsd(
+                                        quote.seatPricing.developerMonthlyRate,
+                                      )}
+                                      /seat/mo
+                                    </strong>{' '}
+                                    at {quote.seats.developer} seats
+                                    {quote.seatPricing.minimumApplied
+                                      ? ` · ${formatUsd(quote.plan.annualMinimum)}/yr min binds`
+                                      : ''}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="field">
+                                <label htmlFor="builder-seats">
+                                  Builder ({formatUsd(BUILDER_SEAT_MONTHLY)}
+                                  /mo)
+                                </label>
+                                <NumberField
+                                  id="builder-seats"
+                                  value={seats.builder}
+                                  min={0}
+                                  max={maxBuilder ?? undefined}
+                                  disabled={plan.id === 'free'}
+                                  onCommit={(next) =>
+                                    setSeatCount('builder', next ?? 0)
+                                  }
+                                />
+                                {maxBuilder != null && (
+                                  <span className="field-hint">
+                                    Max {maxBuilder}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="field">
+                                <label htmlFor="viewer-seats">
+                                  Viewer ($0)
+                                </label>
+                                <NumberField
+                                  id="viewer-seats"
+                                  value={seats.viewer}
+                                  min={0}
+                                  onCommit={(next) =>
+                                    setSeatCount('viewer', next ?? 0)
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {p.hasUsage && showUsage && (
+                            <div className="platform-usage">
+                              <div className="platform-usage-intro">
+                                <strong>Platform usage</strong>
+                                <span>Enterprise Platform meters</span>
+                              </div>
+                              <div className="platform-package-toggles">
+                                {PLATFORM_PACKAGES.map((pkg) => (
+                                  <button
+                                    key={pkg.id}
+                                    type="button"
+                                    className={`platform-package-toggle${
+                                      platformConfig.packageId === pkg.id
+                                        ? ' active'
+                                        : ''
+                                    }`}
+                                    onClick={() =>
+                                      selectPlatformPackage(pkg.id)
+                                    }
+                                  >
+                                    {pkg.name}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="platform-base-row">
+                                <span>
+                                  Usage include scale (seat contract)
                                 </span>
-                              )}
-                            </span>
-                            {gateMessage && (
-                              <p className="item-desc">{gateMessage}</p>
-                            )}
-                            {!gateMessage && item.description && (
-                              <p className="item-desc">{item.description}</p>
-                            )}
-                            {item.features && !gateMessage && (
-                              <div className="feature-list">
-                                {item.features.map((feature) => {
-                                  const isFuture =
-                                    futureFeatures.includes(feature)
+                                <strong>
+                                  {formatUsd(usageScaleAnnual)}/yr
+                                </strong>
+                              </div>
+                              <div className="platform-usage-table package-table">
+                                <div className="platform-usage-head package-head">
+                                  <span>Meter</span>
+                                  <span>Package include (mo)</span>
+                                  <span>Additional (mo)</span>
+                                  <span>Unit / overage</span>
+                                  <span>Additional @ 50% / mo</span>
+                                </div>
+                                {PLATFORM_USAGE_METRICS.map((metric) => {
+                                  const included =
+                                    platformConfig.includes[metric.id] ?? 0
+                                  const additional =
+                                    platformConfig.additional[metric.id] ?? 0
+                                  const billedUnit =
+                                    getAdditionalUsageUnitPrice(
+                                      metric.unitCost,
+                                    )
+                                  const monthlyCost = additional * billedUnit
                                   return (
-                                    <span
-                                      key={feature}
-                                      className={`feature${isFuture ? ' future' : ''}`}
+                                    <div
+                                      className="platform-usage-row package-row"
+                                      key={metric.id}
                                     >
-                                      {feature}
-                                      {isFuture ? ' · Future' : ''}
-                                    </span>
+                                      <div className="platform-usage-label">
+                                        <span>{metric.name}</span>
+                                        {metric.includedNote && (
+                                          <span className="platform-usage-note">
+                                            {metric.includedNote}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <NumberField
+                                        value={included}
+                                        min={0}
+                                        onCommit={(next) =>
+                                          setIncludeAmount(
+                                            metric.id,
+                                            next ?? 0,
+                                          )
+                                        }
+                                        aria-label={`Package include ${metric.name}`}
+                                      />
+                                      <NumberField
+                                        value={additional}
+                                        min={0}
+                                        onCommit={(next) =>
+                                          setUsageAmount(
+                                            metric.id,
+                                            next ?? 0,
+                                          )
+                                        }
+                                        aria-label={`Additional ${metric.name}`}
+                                      />
+                                      <span className="platform-usage-unit">
+                                        {formatUnitCost(metric.unitCost)}
+                                        <span className="platform-usage-note">
+                                          fixed / {metric.unitLabel}
+                                        </span>
+                                      </span>
+                                      <span className="platform-usage-cost">
+                                        {formatUsd(monthlyCost)}
+                                        <span className="platform-usage-note">
+                                          @ {formatUnitCost(billedUnit)} ·{' '}
+                                          {formatUsd(monthlyCost * 12)}/yr
+                                        </span>
+                                      </span>
+                                    </div>
                                   )
                                 })}
                               </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              <section className="category">
+                <div className="category-title">
+                  <h3>Add-ons</h3>
+                  <span className="category-meta">
+                    % of seat contract
+                  </span>
+                </div>
+                <div className="items">
+                  {ADDONS.map((addon) => {
+                    const allowed = isAddonAvailable(addon, plan)
+                    const selected = selectedAddons.includes(addon.id)
+                    const priced = quote.addonPricing.lines.find(
+                      (l) => l.addon.id === addon.id,
+                    )
+                    return (
+                      <button
+                        key={addon.id}
+                        type="button"
+                        className={`item${selected ? ' selected' : ''}${!allowed ? ' unavailable' : ''}`}
+                        onClick={() => {
+                          if (!allowed) return
+                          toggleAddon(addon.id)
+                        }}
+                        aria-pressed={selected}
+                        disabled={!allowed}
+                      >
+                        <span className="check" aria-hidden="true">
+                          {selected ? <CheckIcon /> : null}
+                        </span>
+                        <span className="item-body">
+                          <span className="item-name">
+                            {addon.name}
+                            {!allowed && (
+                              <span className="pill">
+                                {plan.id === 'free'
+                                  ? 'Not on Free'
+                                  : 'Enterprise only'}
+                              </span>
                             )}
                           </span>
+                          <p className="item-desc">{addon.description}</p>
+                        </span>
+                        <span className="item-price">
+                          {!allowed ? (
+                            '—'
+                          ) : priced ? (
+                            <>
+                              {formatUsd(priced.billedAmount)}
+                              <br />
+                              / year
+                            </>
+                          ) : (
+                            <>
+                              {formatPercent(addon.rate)}
+                              <br />
+                              {addon.annualMinimum > 0
+                                ? `${formatUsd(addon.annualMinimum)} min`
+                                : 'of contract'}
+                            </>
+                          )}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+
+              <section className="category">
+                <div className="category-title">
+                  <h3>Programs</h3>
+                  <span className="category-meta">Optional</span>
+                </div>
+                <div className="items">
+                  <button
+                    type="button"
+                    className={`item${agency ? ' selected' : ''}${designPartner ? ' unavailable' : ''}`}
+                    onClick={() => {
+                      if (designPartner) return
+                      setAgency((v) => !v)
+                    }}
+                    aria-pressed={agency}
+                    disabled={designPartner}
+                  >
+                    <span className="check" aria-hidden="true">
+                      {agency ? <CheckIcon /> : null}
+                    </span>
+                    <span className="item-body">
+                      <span className="item-name">
+                        Mastra Agency Partner Program
+                      </span>
+                      <p className="item-desc">
+                        Program fee. Agency client pass-through pricing is
+                        unpublished.
+                      </p>
+                    </span>
+                    <span className="item-price">
+                      {formatUsd(10_000)}
+                      <br />
+                      / year
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`item${designPartner ? ' selected' : ''}${
+                      !dppPlanOk && !designPartner ? ' unavailable' : ''
+                    }`}
+                    onClick={() => {
+                      if (!dppPlanOk && !designPartner) return
+                      setDesignPartner((v) => {
+                        const next = !v
+                        if (next) setAgency(false)
+                        return next
+                      })
+                    }}
+                    aria-pressed={designPartner}
+                    disabled={!dppPlanOk && !designPartner}
+                  >
+                    <span className="check" aria-hidden="true">
+                      {designPartner ? <CheckIcon /> : null}
+                    </span>
+                    <span className="item-body">
+                      <span className="item-name">
+                        Design Partner Program
+                        {!dppPlanOk && !designPartner && (
+                          <span className="pill">Platform or Self-Hosted</span>
+                        )}
+                      </span>
+                      <p className="item-desc">
+                        Up to 25 developer + 25 builder seats, $250/mo Agent
+                        Learning credit, one quarter Small support. Not
+                        available with BYOC, BYO VPC, or Private Cloud.
+                      </p>
+                    </span>
+                    <span className="item-price">
+                      {formatUsd(12_000)}
+                      <br />
+                      / year
+                    </span>
+                  </button>
+                </div>
+              </section>
+
+              <section className="category concierge-section">
+                <div className="category-title">
+                  <h3>Support</h3>
+                  <span className="category-meta">Services</span>
+                </div>
+
+                <div className="concierge-subhead">
+                  <h4>Path 1 — Standard</h4>
+                  <p>
+                    Ongoing engineering support. Annual is ~10% off quarterly
+                    annualized.
+                  </p>
+                </div>
+                <div
+                  className="mode-picker path1-billing-picker"
+                  role="radiogroup"
+                  aria-label="Path 1 billing period"
+                >
+                  <button
+                    type="button"
+                    className={`mode-option${path1BillingPeriod === 'quarter' ? ' active' : ''}`}
+                    role="radio"
+                    aria-checked={path1BillingPeriod === 'quarter'}
+                    onClick={() => setPath1BillingPeriod('quarter')}
+                  >
+                    <strong>Quarterly</strong>
+                    <span>Billed each quarter</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`mode-option${path1BillingPeriod === 'year' ? ' active' : ''}`}
+                    role="radio"
+                    aria-checked={path1BillingPeriod === 'year'}
+                    onClick={() => setPath1BillingPeriod('year')}
+                  >
+                    <strong>Annually</strong>
+                    <span>~10% off vs quarterly × 4</span>
+                  </button>
+                </div>
+                <div className="items">
+                  {PATH1_TIERS.map((tier) => {
+                    const selected = selectedPath1Id === tier.id
+                    const price = getPath1ListPrice(tier, path1BillingPeriod)
+                    const hourly = getPath1ImpliedHourly(
+                      price,
+                      tier,
+                      path1BillingPeriod,
+                    )
+                    const periodLabel = getPath1PeriodLabel(path1BillingPeriod)
+                    return (
+                      <button
+                        key={tier.id}
+                        type="button"
+                        className={`item radio${selected ? ' selected' : ''}`}
+                        onClick={() => toggleSupport(tier.id)}
+                        aria-pressed={selected}
+                      >
+                        <span className="check" aria-hidden="true" />
+                        <span className="item-body">
+                          <span className="item-name">
+                            {tier.name}
+                            <span className="pill">
+                              {tier.hoursPerWeek} hrs/wk
+                            </span>
+                          </span>
+                          <p className="item-desc">
+                            {formatUsd(Math.round(hourly))}/hr implied
+                            {path1BillingPeriod === 'quarter'
+                              ? ` · ${formatUsd(tier.annualPrice)} annual package`
+                              : ` · ${formatUsd(tier.quarterlyPrice)}/qtr`}
+                          </p>
+                        </span>
+                        <span className="item-price">
+                          {formatUsd(price)}
+                          <br />
+                          {periodLabel}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="concierge-subhead">
+                  <h4>Path 2 — Builds</h4>
+                  <p>
+                    Fixed-scope delivery. Price = ${engineerCostPerHour}/hr ×
+                    hours ÷ (1 − margin)
+                  </p>
+                </div>
+                <div className="items">
+                  {PATH2_PACKAGES.map((pkg) => {
+                    const selected = supportIds.includes(pkg.id)
+                    const hours = path2Hours[pkg.id] ?? 0
+                    const targetMargin =
+                      path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
+                    const cost = getPath2Cost(hours, engineerCostPerHour)
+                    const listPrice = getPath2ListPrice(
+                      hours,
+                      targetMargin,
+                      engineerCostPerHour,
+                    )
+                    return (
+                      <div
+                        key={pkg.id}
+                        className={`item-wrap${selected ? ' open' : ''}`}
+                      >
+                        <button
+                          type="button"
+                          className={`item${selected ? ' selected' : ''}`}
+                          onClick={() => toggleSupport(pkg.id)}
+                          aria-pressed={selected}
+                        >
+                          <span className="check" aria-hidden="true">
+                            {selected ? <CheckIcon /> : null}
+                          </span>
+                          <span className="item-body">
+                            <span className="item-name">
+                              {pkg.name}
+                              <span className="pill">Outcome</span>
+                            </span>
+                          </span>
                           <span className="item-price">
-                            {unavailable ? (
-                              '—'
-                            ) : item.id === PLATFORM_ID ||
-                              item.id === SELF_HOSTED_ID ? (
+                            {listPrice > 0 ? (
                               <>
-                                No base fee
+                                {formatUsd(Math.round(listPrice))}
                                 <br />
-                                {periodLabel(item)}
+                                / one-time
                               </>
                             ) : (
                               <>
-                                {formatUsd(
-                                  getCatalogListAmount(item, employees),
-                                )}
+                                Set hours
                                 <br />
-                                {periodLabel(item)}
-                              </>
-                            )}
-                            {dppUnavailable && (
-                              <>
-                                <br />
-                                Enterprise+
-                              </>
-                            )}
-                            {(selfHostedGated ||
-                              programGated ||
-                              deploymentGated ||
-                              needsDeploymentGated) && (
-                              <>
-                                <br />
-                                Gated
+                                / one-time
                               </>
                             )}
                           </span>
                         </button>
-
-                        {isPlatform && selected && (
-                          <div className="platform-usage">
-                            <div className="platform-package-toggles">
-                              {PLATFORM_PACKAGES.map((pkg) => (
+                        {selected && (
+                          <div className="path2-pricing">
+                            <label
+                              className="scoped-price"
+                              htmlFor={`hours-${pkg.id}`}
+                            >
+                              Project hours
+                              <NumberField
+                                id={`hours-${pkg.id}`}
+                                value={
+                                  path2Hours[pkg.id] != null
+                                    ? path2Hours[pkg.id]!
+                                    : null
+                                }
+                                min={0}
+                                placeholder="0"
+                                emptyValue={null}
+                                onCommit={(next) =>
+                                  setPath2DeliveryHours(pkg.id, next)
+                                }
+                              />
+                            </label>
+                            <div
+                              className="mode-picker path2-margin-picker"
+                              role="radiogroup"
+                              aria-label={`${pkg.name} target margin`}
+                            >
+                              {PATH2_MARGIN_OPTIONS.map((rate) => (
                                 <button
-                                  key={pkg.id}
+                                  key={rate}
                                   type="button"
-                                  className={`platform-package-toggle${
-                                    platformConfig.packageId === pkg.id
-                                      ? ' active'
-                                      : ''
-                                  }`}
-                                  onClick={() => selectPlatformPackage(pkg.id)}
+                                  className={`mode-option${targetMargin === rate ? ' active' : ''}`}
+                                  role="radio"
+                                  aria-checked={targetMargin === rate}
+                                  onClick={() =>
+                                    setPath2TargetMargin(pkg.id, rate)
+                                  }
                                 >
-                                  {pkg.name}
+                                  <strong>{formatPercent(rate)}</strong>
+                                  <span>target margin</span>
                                 </button>
                               ))}
                             </div>
-
-                            <div className="platform-base-row">
-                              <span>Base subscription</span>
-                              <strong>None — add products/bundles</strong>
-                            </div>
-                            <div className="platform-base-row">
-                              <span>Usage include scale (product total)</span>
+                            <div className="path2-price-breakdown">
+                              <span>
+                                Cost {formatUsd(Math.round(cost))}
+                                {hours > 0
+                                  ? ` · ${hours} hrs × ${formatUsd(engineerCostPerHour)}/hr`
+                                  : ''}
+                              </span>
                               <strong>
-                                {formatUsd(usageScaleAnnual)}/yr
+                                {listPrice > 0
+                                  ? formatUsd(Math.round(listPrice))
+                                  : '—'}
                               </strong>
-                            </div>
-
-                            <div className="platform-usage-table package-table">
-                              <div className="platform-usage-head package-head">
-                                <span>Meter</span>
-                                <span>Package include (mo)</span>
-                                <span>Additional (mo)</span>
-                                <span>Unit / overage</span>
-                                <span>Additional @ 50% / mo</span>
-                              </div>
-                              {PLATFORM_USAGE_METRICS.map((metric) => {
-                                const included =
-                                  platformConfig.includes[metric.id] ?? 0
-                                const additional =
-                                  platformConfig.additional[metric.id] ?? 0
-                                const billedUnit = getAdditionalUsageUnitPrice(
-                                  metric.unitCost,
-                                )
-                                const monthlyCost = additional * billedUnit
-                                return (
-                                  <div
-                                    className="platform-usage-row package-row"
-                                    key={metric.id}
-                                  >
-                                    <div className="platform-usage-label">
-                                      <span>{metric.name}</span>
-                                      {metric.includedNote && (
-                                        <span className="platform-usage-note">
-                                          {metric.includedNote}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      step={1}
-                                      value={included}
-                                      onChange={(e) =>
-                                        setIncludeAmount(
-                                          metric.id,
-                                          e.target.value,
-                                        )
-                                      }
-                                      aria-label={`Package include ${metric.name}`}
-                                    />
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      step={1}
-                                      value={additional}
-                                      onChange={(e) =>
-                                        setUsageAmount(metric.id, e.target.value)
-                                      }
-                                      aria-label={`Additional ${metric.name}`}
-                                    />
-                                    <span className="platform-usage-unit">
-                                      {formatUnitCost(metric.unitCost)}
-                                      <span className="platform-usage-note">
-                                        fixed / {metric.unitLabel}
-                                      </span>
-                                    </span>
-                                    <span className="platform-usage-cost">
-                                      {formatUsd(monthlyCost)}
-                                      <span className="platform-usage-note">
-                                        @ {formatUnitCost(billedUnit)} ·{' '}
-                                        {formatUsd(monthlyCost * 12)}/yr
-                                      </span>
-                                    </span>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {isDpp && selected && !unavailable && (
-                          <div className="platform-usage">
-                            <div className="platform-base-row">
-                              <span>Usage include scale (product total)</span>
-                              <strong>
-                                {formatUsd(usageScaleAnnual)}/yr
-                              </strong>
-                            </div>
-
-                            <div className="platform-usage-table package-table">
-                              <div className="platform-usage-head package-head">
-                                <span>Meter</span>
-                                <span>Package include (mo)</span>
-                                <span>Additional (mo)</span>
-                                <span>Unit / overage</span>
-                                <span>Additional @ 50% / mo</span>
-                              </div>
-                              {PLATFORM_USAGE_METRICS.map((metric) => {
-                                const included =
-                                  dppUsageConfig.includes[metric.id] ?? 0
-                                const additional =
-                                  dppUsageConfig.additional[metric.id] ?? 0
-                                const billedUnit = getAdditionalUsageUnitPrice(
-                                  metric.unitCost,
-                                )
-                                const monthlyCost = additional * billedUnit
-                                return (
-                                  <div
-                                    className="platform-usage-row package-row"
-                                    key={metric.id}
-                                  >
-                                    <div className="platform-usage-label">
-                                      <span>{metric.name}</span>
-                                    </div>
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      step={1}
-                                      value={included}
-                                      onChange={(e) =>
-                                        setDppIncludeAmount(
-                                          metric.id,
-                                          e.target.value,
-                                        )
-                                      }
-                                      aria-label={`DPP package include ${metric.name}`}
-                                    />
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      step={1}
-                                      value={additional}
-                                      onChange={(e) =>
-                                        setDppUsageAmount(
-                                          metric.id,
-                                          e.target.value,
-                                        )
-                                      }
-                                      aria-label={`DPP additional ${metric.name}`}
-                                    />
-                                    <span className="platform-usage-unit">
-                                      {formatUnitCost(metric.unitCost)}
-                                      <span className="platform-usage-note">
-                                        fixed / {metric.unitLabel}
-                                      </span>
-                                    </span>
-                                    <span className="platform-usage-cost">
-                                      {formatUsd(monthlyCost)}
-                                      <span className="platform-usage-note">
-                                        @ {formatUnitCost(billedUnit)} ·{' '}
-                                        {formatUsd(monthlyCost * 12)}/yr
-                                      </span>
-                                    </span>
-                                  </div>
-                                )
-                              })}
                             </div>
                           </div>
                         )}
@@ -997,622 +1042,280 @@ export default function App() {
                     )
                   })}
                 </div>
-              </section>
-            )
-          })}
 
-          <section className="category concierge-section">
-            <div className="category-title">
-              <h3>Concierge</h3>
-              <span className="category-meta">
-                {programSelected
-                  ? 'Unavailable with Programs'
-                  : 'Services'}
-              </span>
-            </div>
-
-            <div className="concierge-subhead">
-              <h4>Path 1 — Hours-based</h4>
-              <p>
-                {programSelected
-                  ? 'Unavailable while a Program is selected.'
-                  : 'Customer owns the outcome'}
-              </p>
-            </div>
-            <div className="items">
-              {PATH1_TIERS.map((tier) => {
-                const selected = selectedPath1Id === tier.id
-                const advisoryList = getPath1QuarterlyList(
-                  tier,
-                  'advisory',
-                  headcount,
-                )
-                const advisoryHourly = getPath1ImpliedHourly(
-                  advisoryList,
-                  tier,
-                )
-                return (
-                  <div
-                    key={tier.id}
-                    className={`item-wrap${selected && !programSelected ? ' open' : ''}`}
+                <div className="concierge-subhead">
+                  <h4>Mastra Audit</h4>
+                  <p>
+                    One-time scoping fee. Credits 100% against a Build within 90
+                    days.
+                  </p>
+                </div>
+                <div className="items">
+                  <button
+                    type="button"
+                    className={`item${auditSelected ? ' selected' : ''}`}
+                    onClick={() => toggleSupport(AUDIT_ID)}
+                    aria-pressed={auditSelected}
                   >
-                    <button
-                      type="button"
-                      className={`item radio${selected ? ' selected' : ''}${programSelected ? ' unavailable' : ''}`}
-                      onClick={() => {
-                        if (programSelected) return
-                        toggleItem(tier.id)
-                      }}
-                      aria-pressed={selected}
-                      aria-disabled={programSelected}
-                      disabled={programSelected}
-                    >
-                      <span className="check" aria-hidden="true" />
-                      <span className="item-body">
-                        <span className="item-name">
-                          {tier.name}
-                          <span className="pill">{tier.hoursPerWeek} hrs/wk</span>
-                          {programSelected && (
-                            <span className="pill">Program selected</span>
-                          )}
-                        </span>
-                      </span>
-                      <span className="item-price">
-                        {programSelected ? (
-                          <>
-                            —
-                            <br />
-                            Gated
-                          </>
-                        ) : (
-                          <>
-                            {formatUsd(advisoryList)}
-                            <br />
-                            / qtr
-                          </>
-                        )}
-                      </span>
-                    </button>
-
-                    {selected && !programSelected && (
-                      <div className="mode-picker" role="radiogroup" aria-label="Path 1 mode">
-                        <button
-                          type="button"
-                          className={`mode-option${path1Mode === 'advisory' ? ' active' : ''}`}
-                          role="radio"
-                          aria-checked={path1Mode === 'advisory'}
-                          onClick={() => setPath1Mode('advisory')}
-                        >
-                          <strong>Advisory</strong>
-                          <span>
-                            {formatUsd(advisoryList)}/qtr ·{' '}
-                            {formatUsd(Math.round(advisoryHourly))}/hr
-                          </span>
-                          <span className="item-price-note">
-                            {formatUsd(advisoryList * 4)} annualized
-                          </span>
-                        </button>
-                        {(() => {
-                          const handsOnList = getPath1QuarterlyList(
-                            tier,
-                            'hands-on',
-                            headcount,
-                          )
-                          const handsOnHourly = getPath1ImpliedHourly(
-                            handsOnList,
-                            tier,
-                          )
-                          return (
-                            <button
-                              type="button"
-                              className={`mode-option${path1Mode === 'hands-on' ? ' active' : ''}`}
-                              role="radio"
-                              aria-checked={path1Mode === 'hands-on'}
-                              onClick={() => setPath1Mode('hands-on')}
-                            >
-                              <strong>Hands-On</strong>
-                              <span>
-                                {formatUsd(handsOnList)}/qtr ·{' '}
-                                {formatUsd(Math.round(handsOnHourly))}/hr
-                              </span>
-                              <span className="item-price-note">
-                                {formatUsd(handsOnList * 4)} annualized
-                              </span>
-                            </button>
-                          )
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="concierge-subhead">
-              <h4>Path 2 — Outcome-based</h4>
-              <p>
-                {programSelected
-                  ? 'Unavailable while a Program is selected.'
-                  : `Price = $${engineerCostPerHour}/hr × hours ÷ (1 − margin)`}
-              </p>
-            </div>
-            <div className="items">
-              {PATH2_PACKAGES.map((pkg) => {
-                const selected = selectedIds.includes(pkg.id)
-                const hours = path2Hours[pkg.id] ?? 0
-                const targetMargin =
-                  path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
-                const cost = getPath2Cost(hours, engineerCostPerHour)
-                const listPrice = getPath2ListPrice(
-                  hours,
-                  targetMargin,
-                  engineerCostPerHour,
-                )
-                return (
-                  <div
-                    key={pkg.id}
-                    className={`item-wrap${selected && !programSelected ? ' open' : ''}`}
-                  >
-                    <button
-                      type="button"
-                      className={`item${selected ? ' selected' : ''}${programSelected ? ' unavailable' : ''}`}
-                      onClick={() => {
-                        if (programSelected) return
-                        toggleItem(pkg.id)
-                      }}
-                      aria-pressed={selected}
-                      aria-disabled={programSelected}
-                      disabled={programSelected}
-                    >
-                      <span className="check" aria-hidden="true">
-                        {selected && !programSelected ? <CheckIcon /> : null}
-                      </span>
-                      <span className="item-body">
-                        <span className="item-name">
-                          {pkg.name}
-                          <span className="pill">Outcome</span>
-                          {programSelected && (
-                            <span className="pill">Program selected</span>
-                          )}
-                        </span>
-                      </span>
-                      <span className="item-price">
-                        {programSelected ? (
-                          <>
-                            —
-                            <br />
-                            Gated
-                          </>
-                        ) : listPrice > 0 ? (
-                          <>
-                            {formatUsd(Math.round(listPrice))}
-                            <br />
-                            / one-time
-                          </>
-                        ) : (
-                          <>
-                            Set hours
-                            <br />
-                            / one-time
-                          </>
-                        )}
-                      </span>
-                    </button>
-                    {selected && !programSelected && (
-                      <div className="path2-pricing">
-                        <label
-                          className="scoped-price"
-                          htmlFor={`hours-${pkg.id}`}
-                        >
-                          Project hours
-                          <input
-                            id={`hours-${pkg.id}`}
-                            type="number"
-                            min={0}
-                            step={1}
-                            placeholder="0"
-                            value={
-                              path2Hours[pkg.id] != null
-                                ? String(path2Hours[pkg.id])
-                                : ''
-                            }
-                            onChange={(e) =>
-                              setPath2DeliveryHours(pkg.id, e.target.value)
-                            }
-                          />
-                        </label>
-
-                        <div
-                          className="mode-picker path2-margin-picker"
-                          role="radiogroup"
-                          aria-label={`${pkg.name} target margin`}
-                        >
-                          {PATH2_MARGIN_OPTIONS.map((rate) => (
-                            <button
-                              key={rate}
-                              type="button"
-                              className={`mode-option${targetMargin === rate ? ' active' : ''}`}
-                              role="radio"
-                              aria-checked={targetMargin === rate}
-                              onClick={() => setPath2TargetMargin(pkg.id, rate)}
-                            >
-                              <strong>{formatPercent(rate)}</strong>
-                              <span>target margin</span>
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="path2-price-breakdown">
-                          <span>
-                            Cost {formatUsd(Math.round(cost))}
-                            {hours > 0
-                              ? ` · ${hours} hrs × ${formatUsd(engineerCostPerHour)}/hr`
-                              : ''}
-                          </span>
-                          <strong>
-                            {listPrice > 0
-                              ? formatUsd(Math.round(listPrice))
-                              : '—'}
-                          </strong>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="concierge-subhead">
-              <h4>Mastra Audit</h4>
-              <p>
-                {programSelected
-                  ? 'Unavailable while a Program is selected.'
-                  : 'One-time scoping fee'}
-              </p>
-            </div>
-            <div className="items">
-              <div className="item-wrap">
-                <button
-                  type="button"
-                  className={`item${auditSelected ? ' selected' : ''}${programSelected ? ' unavailable' : ''}`}
-                  onClick={() => {
-                    if (programSelected) return
-                    toggleItem(AUDIT_ID)
-                  }}
-                  aria-pressed={auditSelected}
-                  aria-disabled={programSelected}
-                  disabled={programSelected}
-                >
-                  <span className="check" aria-hidden="true">
-                    {auditSelected && !programSelected ? <CheckIcon /> : null}
-                  </span>
-                  <span className="item-body">
-                    <span className="item-name">
-                      Mastra Audit
-                      {programSelected && (
-                        <span className="pill">Program selected</span>
-                      )}
+                    <span className="check" aria-hidden="true">
+                      {auditSelected ? <CheckIcon /> : null}
                     </span>
-                  </span>
-                  <span className="item-price">
-                    {programSelected ? (
-                      <>
-                        —
-                        <br />
-                        Gated
-                      </>
-                    ) : (
-                      <>
-                        {formatUsd(auditFee)}
-                        <br />
-                        / one-time
-                      </>
-                    )}
-                  </span>
-                </button>
-              </div>
+                    <span className="item-body">
+                      <span className="item-name">Mastra Audit</span>
+                    </span>
+                    <span className="item-price">
+                      {formatUsd(auditFee)}
+                      <br />
+                      / one-time
+                    </span>
+                  </button>
+                </div>
+              </section>
             </div>
-          </section>
-        </div>
 
-        <aside className="panel summary">
-          <div className="panel-head">
-            <h2>Order summary</h2>
-          </div>
+            <aside className="panel summary">
+              <div className="panel-head">
+                <h2>Order summary</h2>
+              </div>
 
-          {hasOrder ? (
-            <>
-              {hasProducts && (
-                <div className="summary-group">
-                  <h3 className="summary-group-title">Products</h3>
-                  <ul className="order-lines">
-                    {quote.lineItems.map(({ item, listAmount, billedAmount }) => {
-                      const isPlatform = item.id === PLATFORM_ID
-                      const isSelfHosted = item.id === SELF_HOSTED_ID
-                      const isDpp = item.id === DESIGN_PARTNER_ID
-                      const listPrice = isPlatform
-                        ? quote.platformBasePrice + quote.platformOverageTotal
-                        : isDpp
-                          ? listAmount + quote.dppOverageTotal
-                          : listAmount
-                      const price = isPlatform
-                        ? billedAmount + quote.platformOverageTotal
-                        : isDpp
-                          ? billedAmount + quote.dppOverageTotal
-                          : billedAmount
-                      const noBaseFee =
-                        (isPlatform || isSelfHosted) && price === 0
-                      const showDiscount =
-                        !noBaseFee &&
-                        listPrice > price &&
-                        quote.discountRate > 0
-                      return (
-                        <li className="order-line" key={item.id}>
-                          <div>
-                            <span className="order-line-name">{item.name}</span>
-                            {noBaseFee && (
-                              <span className="order-line-meta">
-                                No base subscription
-                              </span>
-                            )}
-                            {showDiscount && (
-                              <span className="order-line-meta">
-                                {formatPercent(quote.discountRate)} off
-                              </span>
-                            )}
-                          </div>
-                          <span className="order-line-price">
-                            {noBaseFee ? (
-                              <span className="order-line-meta">—</span>
-                            ) : (
-                              <>
-                                {showDiscount && (
-                                  <span className="strike">
-                                    {formatUsd(listPrice)}
+              {hasOrder ? (
+                <>
+                  {hasProducts && (
+                    <div className="summary-group">
+                      <h3 className="summary-group-title">Products</h3>
+                      <ul className="order-lines">
+                        {quote.productLines.map((line) => {
+                          const addonLine = quote.addonPricing.lines.find(
+                            (l) => l.addon.name === line.name,
+                          )
+                          const showStrike =
+                            addonLine != null &&
+                            addonLine.listAmount > addonLine.billedAmount
+                          return (
+                            <li className="order-line" key={line.id}>
+                              <div>
+                                <span className="order-line-name">
+                                  {line.name}
+                                </span>
+                                {line.meta && (
+                                  <span className="order-line-meta">
+                                    {line.meta}
                                   </span>
                                 )}
-                                {formatUsd(price)}
+                              </div>
+                              <span className="order-line-price">
+                                {showStrike && (
+                                  <span className="strike">
+                                    {formatUsd(addonLine!.listAmount)}
+                                  </span>
+                                )}
+                                {formatUsd(line.annualAmount)}
                                 <span className="order-line-meta">/ yr</span>
-                              </>
-                            )}
-                          </span>
-                          <button
-                            type="button"
-                            className="remove"
-                            onClick={() => removeItem(item.id)}
-                            aria-label={`Remove ${item.name}`}
-                          >
-                            <CloseIcon />
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-
-                  <div className="totals">
-                    {quote.discountRate > 0 && quote.discountAmount > 0 && (
-                      <div className="total-row discount">
-                        <span>
-                          Volume discount ({formatPercent(quote.discountRate)})
-                        </span>
-                        <span>−{formatUsd(quote.discountAmount)}</span>
-                      </div>
-                    )}
-
-                    <div className="total-row grand">
-                      <span>Product total / year</span>
-                      <span>{formatUsd(quote.annualTotal)}</span>
-                    </div>
-
-                    {platformSelected && platformMargin && (
-                      <div className="total-row muted">
-                        <span>Platform margin</span>
-                        <span>
-                          {formatUsd(platformMargin.margin)}
-                          {platformMargin.marginRate != null
-                            ? ` (${formatPercent(platformMargin.marginRate)})`
-                            : ''}
-                        </span>
-                      </div>
-                    )}
-
-                    {dppSelected && dppMargin && (
-                      <div className="total-row muted">
-                        <span>Design Partner margin</span>
-                        <span>
-                          {formatUsd(dppMargin.margin)}
-                          {dppMargin.marginRate != null
-                            ? ` (${formatPercent(dppMargin.marginRate)})`
-                            : ''}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {hasConcierge && (
-                <div className="summary-group">
-                  <h3 className="summary-group-title">Concierge</h3>
-                  <ul className="order-lines">
-                    {concierge.path1 && (
-                      <li className="order-line">
-                        <div>
-                          <span className="order-line-name">
-                            Path 1 · {concierge.path1.tier.name}
-                          </span>
-                          <span className="order-line-meta">
-                            {path1ModeLabel(concierge.path1.mode)}
-                            {concierge.discountRate > 0
-                              ? ` · ${formatPercent(concierge.discountRate)} off`
-                              : ''}
-                          </span>
-                        </div>
-                        <span className="order-line-price">
-                          {concierge.discountRate > 0 && (
-                            <span className="strike">
-                              {formatUsd(concierge.path1.listAmount)}
-                            </span>
-                          )}
-                          {formatUsd(concierge.path1.billedAmount)}
-                          <span className="order-line-meta">/ qtr</span>
-                        </span>
-                        <button
-                          type="button"
-                          className="remove"
-                          onClick={() => removeItem(concierge.path1!.tier.id)}
-                          aria-label={`Remove Path 1 ${concierge.path1.tier.name}`}
-                        >
-                          <CloseIcon />
-                        </button>
-                      </li>
-                    )}
-
-                    {concierge.path2.map((line) => (
-                      <li className="order-line" key={line.package.id}>
-                        <div>
-                          <span className="order-line-name">
-                            Path 2 · {line.package.name}
-                          </span>
-                          <span className="order-line-meta">
-                            {line.hours} hrs ·{' '}
-                            {formatPercent(line.targetMarginRate)} target
-                            {concierge.discountRate > 0
-                              ? ` · ${formatPercent(concierge.discountRate)} off`
-                              : ''}
-                          </span>
-                        </div>
-                        <span className="order-line-price">
-                          {line.listAmount > 0 ? (
-                            <>
-                              {concierge.discountRate > 0 && (
-                                <span className="strike">
-                                  {formatUsd(Math.round(line.listAmount))}
-                                </span>
+                              </span>
+                              {(line.id === 'agent-learning' ||
+                                line.id === 'compliance' ||
+                                line.id === 'premium-on-call' ||
+                                line.id === 'program-agency' ||
+                                line.id === 'program-design-partner') && (
+                                <button
+                                  type="button"
+                                  className="remove"
+                                  onClick={() => {
+                                    if (line.id === 'program-agency') {
+                                      setAgency(false)
+                                    } else if (
+                                      line.id === 'program-design-partner'
+                                    ) {
+                                      setDesignPartner(false)
+                                    } else {
+                                      toggleAddon(line.id as AddonId)
+                                    }
+                                  }}
+                                  aria-label={`Remove ${line.name}`}
+                                >
+                                  <CloseIcon />
+                                </button>
                               )}
-                              {formatUsd(line.billedAmount)}
-                            </>
-                          ) : (
-                            '—'
-                          )}
-                          <span className="order-line-meta">/ one-time</span>
-                        </span>
-                        <button
-                          type="button"
-                          className="remove"
-                          onClick={() => removeItem(line.package.id)}
-                          aria-label={`Remove ${line.package.name}`}
-                        >
-                          <CloseIcon />
-                        </button>
-                      </li>
-                    ))}
-
-                    {concierge.audit && (
-                      <li className="order-line">
-                        <div>
-                          <span className="order-line-name">Mastra Audit</span>
-                          {concierge.discountRate > 0 && (
-                            <span className="order-line-meta">
-                              {formatPercent(concierge.discountRate)} off
-                            </span>
-                          )}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                      <div className="totals">
+                        <div className="total-row grand">
+                          <span>Product total / year</span>
+                          <span>{formatUsd(quote.annualTotal)}</span>
                         </div>
-                        <span className="order-line-price">
-                          {concierge.discountRate > 0 && (
-                            <span className="strike">
-                              {formatUsd(concierge.audit.listAmount)}
+                        {platformMargin && (
+                          <div className="total-row muted">
+                            <span>Platform margin</span>
+                            <span>
+                              {formatUsd(platformMargin.margin)}
+                              {platformMargin.marginRate != null
+                                ? ` (${formatPercent(platformMargin.marginRate)})`
+                                : ''}
                             </span>
-                          )}
-                          {formatUsd(concierge.audit.billedAmount)}
-                          <span className="order-line-meta">/ one-time</span>
-                        </span>
-                        <button
-                          type="button"
-                          className="remove"
-                          onClick={() => removeItem(AUDIT_ID)}
-                          aria-label="Remove Mastra Audit"
-                        >
-                          <CloseIcon />
-                        </button>
-                      </li>
-                    )}
-                  </ul>
-
-                  <div className="totals">
-                    {concierge.discountRate > 0 &&
-                      concierge.discountAmount > 0 && (
-                      <div className="total-row discount">
-                        <span>
-                          Concierge discount (
-                          {formatPercent(concierge.discountRate)})
-                        </span>
-                        <span>−{formatUsd(concierge.discountAmount)}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {concierge.path1 && (
-                      <div className="total-row grand">
-                        <span>Concierge / quarter</span>
-                        <span>{formatUsd(concierge.path1TotalQuarterly)}</span>
+                  {hasSupport && (
+                    <div className="summary-group">
+                      <h3 className="summary-group-title">Support</h3>
+                      <ul className="order-lines">
+                        {support.path1 && (
+                          <li className="order-line">
+                            <div>
+                              <span className="order-line-name">
+                                Path 1 · {support.path1.tier.name}
+                              </span>
+                              <span className="order-line-meta">
+                                {support.path1.tier.hoursPerWeek} hrs/wk ·{' '}
+                                {support.path1.billingPeriod === 'year'
+                                  ? 'Annual'
+                                  : 'Quarterly'}
+                              </span>
+                            </div>
+                            <span className="order-line-price">
+                              {formatUsd(support.path1.billedAmount)}
+                              <span className="order-line-meta">
+                                {support.path1.periodLabel}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              className="remove"
+                              onClick={() =>
+                                removeSupport(support.path1!.tier.id)
+                              }
+                              aria-label={`Remove Path 1 ${support.path1.tier.name}`}
+                            >
+                              <CloseIcon />
+                            </button>
+                          </li>
+                        )}
+                        {support.path2.map((line) => (
+                          <li className="order-line" key={line.package.id}>
+                            <div>
+                              <span className="order-line-name">
+                                Path 2 · {line.package.name}
+                              </span>
+                              <span className="order-line-meta">
+                                {line.hours} hrs ·{' '}
+                                {formatPercent(line.targetMarginRate)} target
+                              </span>
+                            </div>
+                            <span className="order-line-price">
+                              {line.listAmount > 0
+                                ? formatUsd(line.billedAmount)
+                                : '—'}
+                              <span className="order-line-meta">
+                                / one-time
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              className="remove"
+                              onClick={() => removeSupport(line.package.id)}
+                              aria-label={`Remove ${line.package.name}`}
+                            >
+                              <CloseIcon />
+                            </button>
+                          </li>
+                        ))}
+                        {support.audit && (
+                          <li className="order-line">
+                            <div>
+                              <span className="order-line-name">
+                                Mastra Audit
+                              </span>
+                            </div>
+                            <span className="order-line-price">
+                              {formatUsd(support.audit.billedAmount)}
+                              <span className="order-line-meta">
+                                / one-time
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              className="remove"
+                              onClick={() => removeSupport(AUDIT_ID)}
+                              aria-label="Remove Mastra Audit"
+                            >
+                              <CloseIcon />
+                            </button>
+                          </li>
+                        )}
+                      </ul>
+                      <div className="totals">
+                        {support.path1 && (
+                          <div className="total-row grand">
+                            <span>
+                              Support /{' '}
+                              {support.path1.billingPeriod === 'year'
+                                ? 'year'
+                                : 'quarter'}
+                            </span>
+                            <span>{formatUsd(support.path1Total)}</span>
+                          </div>
+                        )}
+                        {(support.path2.length > 0 || support.audit) && (
+                          <div
+                            className={`total-row${support.path1 ? '' : ' grand'}`}
+                          >
+                            <span>Support one-time</span>
+                            <span>{formatUsd(support.oneTimeTotal)}</span>
+                          </div>
+                        )}
+                        {support.path1 && (
+                          <div className="total-row muted">
+                            <span>Path 1 margin</span>
+                            <span>
+                              {formatUsd(margin.path1Margin)}
+                              {margin.path1MarginRate != null
+                                ? ` (${formatPercent(margin.path1MarginRate)})`
+                                : ''}
+                            </span>
+                          </div>
+                        )}
+                        {margin.path2.map((row) => (
+                          <div
+                            className="total-row muted"
+                            key={`margin-${row.id}`}
+                          >
+                            <span>Path 2 · {row.name} margin</span>
+                            <span>
+                              {formatUsd(Math.round(row.margin))}
+                              {row.marginRate != null
+                                ? ` (${formatPercent(row.marginRate)})`
+                                : ''}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {(concierge.path2.length > 0 || concierge.audit) && (
-                      <div
-                        className={`total-row${concierge.path1 ? '' : ' grand'}`}
-                      >
-                        <span>Concierge one-time</span>
-                        <span>{formatUsd(concierge.oneTimeTotal)}</span>
-                      </div>
-                    )}
-
-                    {concierge.path1 && (
-                      <div className="total-row muted">
-                        <span>Path 1 margin</span>
-                        <span>
-                          {formatUsd(margin.path1Margin)}
-                          {margin.path1MarginRate != null
-                            ? ` (${formatPercent(margin.path1MarginRate)})`
-                            : ''}
-                        </span>
-                      </div>
-                    )}
-
-                    {margin.path2.map((row) => (
-                      <div className="total-row muted" key={`margin-${row.id}`}>
-                        <span>Path 2 · {row.name} margin</span>
-                        <span>
-                          {formatUsd(Math.round(row.margin))}
-                          {row.marginRate != null
-                            ? ` (${formatPercent(row.marginRate)})`
-                            : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                  <button
+                    type="button"
+                    className="clear-btn confirm-btn"
+                    onClick={() => {
+                      if (!orderSnapshot) return
+                      setReviewSnapshot(orderSnapshot)
+                      setPage('review')
+                    }}
+                  >
+                    Submit order
+                  </button>
+                </>
+              ) : (
+                <p className="summary-empty">
+                  Select a plan and seats to build an order.
+                </p>
               )}
-
-              <button
-                type="button"
-                className="clear-btn confirm-btn"
-                onClick={() => {
-                  if (!orderSnapshot) return
-                  setReviewSnapshot(orderSnapshot)
-                  setPage('review')
-                }}
-              >
-                Submit order
-              </button>
-            </>
-          ) : (
-            <p className="summary-empty">
-              Select items from the catalog to build an order.
-            </p>
-          )}
-        </aside>
-      </div>
+            </aside>
+          </div>
         </>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { formatPercent, formatUsd } from './pricing'
+import { formatUsd } from './pricing'
 
 export interface OrderLineSnapshot {
   name: string
@@ -10,17 +10,15 @@ export interface OrderLineSnapshot {
 }
 
 export interface OrderSnapshot {
-  employees: number
-  companyBandLabel: string
+  planLabel: string
+  seatsLabel: string
+  programLabel: string | null
   productLines: OrderLineSnapshot[]
-  productDiscountRate: number
-  productDiscountAmount: number
   productTotal: number
-  conciergeLines: OrderLineSnapshot[]
-  conciergeDiscountRate: number
-  conciergeDiscountAmount: number
-  conciergeQuarterlyTotal: number | null
-  conciergeOneTimeTotal: number | null
+  supportLines: OrderLineSnapshot[]
+  supportPath1Total: number | null
+  supportPath1Period: '/ qtr' | '/ yr' | null
+  supportOneTimeTotal: number | null
 }
 
 export interface OrderContactDetails {
@@ -40,10 +38,9 @@ export const ORDER_EMAIL_RECIPIENTS = [
   'jake@mastra.ai',
 ] as const
 
-
 function lineText(line: OrderLineSnapshot): string {
   if (line.noBaseFee) {
-    return `${line.name}${line.meta ? ` (${line.meta})` : ''}: No base subscription`
+    return `${line.name}${line.meta ? ` (${line.meta})` : ''}: $0`
   }
   const billed =
     line.billedAmount != null ? formatUsd(line.billedAmount) : '—'
@@ -76,41 +73,33 @@ export function formatOrderEmailText(
     notes ? `Notes: ${notes}` : 'Notes: (none)',
     '',
     'Order details',
-    `Company size: ${order.employees} employees · ${order.companyBandLabel}`,
-    '',
+    `Plan: ${order.planLabel}`,
+    `Seats: ${order.seatsLabel}`,
   ]
+
+  if (order.programLabel) {
+    sections.push(`Program: ${order.programLabel}`)
+  }
+  sections.push('')
 
   if (order.productLines.length > 0) {
     sections.push('Products')
     for (const line of order.productLines) sections.push(`- ${lineText(line)}`)
-    if (order.productDiscountRate > 0 && order.productDiscountAmount > 0) {
-      sections.push(
-        `- Volume discount (${formatPercent(order.productDiscountRate)}): −${formatUsd(order.productDiscountAmount)}`,
-      )
-    }
     sections.push(`Product total / year: ${formatUsd(order.productTotal)}`)
     sections.push('')
   }
 
-  if (order.conciergeLines.length > 0) {
-    sections.push('Concierge')
-    for (const line of order.conciergeLines) sections.push(`- ${lineText(line)}`)
-    if (
-      order.conciergeDiscountRate > 0 &&
-      order.conciergeDiscountAmount > 0
-    ) {
+  if (order.supportLines.length > 0) {
+    sections.push('Support')
+    for (const line of order.supportLines) sections.push(`- ${lineText(line)}`)
+    if (order.supportPath1Total != null) {
       sections.push(
-        `- Concierge discount (${formatPercent(order.conciergeDiscountRate)}): −${formatUsd(order.conciergeDiscountAmount)}`,
+        `Support ${order.supportPath1Period === '/ yr' ? '/ year' : '/ quarter'}: ${formatUsd(order.supportPath1Total)}`,
       )
     }
-    if (order.conciergeQuarterlyTotal != null) {
+    if (order.supportOneTimeTotal != null) {
       sections.push(
-        `Concierge / quarter: ${formatUsd(order.conciergeQuarterlyTotal)}`,
-      )
-    }
-    if (order.conciergeOneTimeTotal != null) {
-      sections.push(
-        `Concierge one-time: ${formatUsd(order.conciergeOneTimeTotal)}`,
+        `Support one-time: ${formatUsd(order.supportOneTimeTotal)}`,
       )
     }
     sections.push('')
@@ -136,7 +125,7 @@ export function formatOrderEmailHtml(
     lines
       .map((line) => {
         const price = line.noBaseFee
-          ? 'No base subscription'
+          ? '$0'
           : line.billedAmount != null
             ? `${formatUsd(line.billedAmount)}${line.period}`
             : '—'
@@ -161,32 +150,21 @@ export function formatOrderEmailHtml(
     order.productLines.length > 0
       ? `<h3 style="margin:24px 0 8px">Products</h3>
          <table style="width:100%;border-collapse:collapse">${renderLines(order.productLines)}</table>
-         ${
-           order.productDiscountRate > 0 && order.productDiscountAmount > 0
-             ? `<p style="color:#0a7a3e">Volume discount (${formatPercent(order.productDiscountRate)}): −${formatUsd(order.productDiscountAmount)}</p>`
-             : ''
-         }
          <p style="font-size:18px;font-weight:700">Product total / year: ${formatUsd(order.productTotal)}</p>`
       : ''
 
-  const conciergeBlock =
-    order.conciergeLines.length > 0
-      ? `<h3 style="margin:24px 0 8px">Concierge</h3>
-         <table style="width:100%;border-collapse:collapse">${renderLines(order.conciergeLines)}</table>
+  const supportBlock =
+    order.supportLines.length > 0
+      ? `<h3 style="margin:24px 0 8px">Support</h3>
+         <table style="width:100%;border-collapse:collapse">${renderLines(order.supportLines)}</table>
          ${
-           order.conciergeDiscountRate > 0 &&
-           order.conciergeDiscountAmount > 0
-             ? `<p style="color:#0a7a3e">Concierge discount (${formatPercent(order.conciergeDiscountRate)}): −${formatUsd(order.conciergeDiscountAmount)}</p>`
+           order.supportPath1Total != null
+             ? `<p style="font-size:18px;font-weight:700">Support ${order.supportPath1Period === '/ yr' ? '/ year' : '/ quarter'}: ${formatUsd(order.supportPath1Total)}</p>`
              : ''
          }
          ${
-           order.conciergeQuarterlyTotal != null
-             ? `<p style="font-size:18px;font-weight:700">Concierge / quarter: ${formatUsd(order.conciergeQuarterlyTotal)}</p>`
-             : ''
-         }
-         ${
-           order.conciergeOneTimeTotal != null
-             ? `<p style="font-size:18px;font-weight:700">Concierge one-time: ${formatUsd(order.conciergeOneTimeTotal)}</p>`
+           order.supportOneTimeTotal != null
+             ? `<p style="font-size:18px;font-weight:700">Support one-time: ${formatUsd(order.supportOneTimeTotal)}</p>`
              : ''
          }`
       : ''
@@ -202,9 +180,11 @@ export function formatOrderEmailHtml(
     <p><strong>Point of contact email:</strong> ${contact.pointOfContactEmail.trim() ? esc(contact.pointOfContactEmail.trim()) : '<span style="color:#888">(none)</span>'}</p>
     <p><strong>Notes:</strong> ${notes ? esc(notes) : '<span style="color:#888">(none)</span>'}</p>
     <h2 style="font-size:16px;margin:24px 0 8px">Order details</h2>
-    <p><strong>Company size:</strong> ${order.employees} employees · ${esc(order.companyBandLabel)}</p>
+    <p><strong>Plan:</strong> ${esc(order.planLabel)}</p>
+    <p><strong>Seats:</strong> ${esc(order.seatsLabel)}</p>
+    ${order.programLabel ? `<p><strong>Program:</strong> ${esc(order.programLabel)}</p>` : ''}
     ${productBlock}
-    ${conciergeBlock}
+    ${supportBlock}
   </body>
 </html>`
 }

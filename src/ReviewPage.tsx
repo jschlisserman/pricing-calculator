@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { OrderSnapshot, SubmitOrderRequest } from './orderSnapshot'
-import { formatPercent, formatUsd } from './pricing'
+import { formatUsd } from './pricing'
 
 interface ReviewPageProps {
   order: OrderSnapshot
@@ -13,67 +13,28 @@ type ReviewStep = 'order' | 'details'
 function OrderLines({ order }: { order: OrderSnapshot }) {
   return (
     <>
+      <div className="summary-group">
+        <h3 className="summary-group-title">Plan</h3>
+        <ul className="order-lines">
+          <li className="order-line review-line">
+            <div>
+              <span className="order-line-name">{order.planLabel}</span>
+              <span className="order-line-meta">{order.seatsLabel}</span>
+              {order.programLabel && (
+                <span className="order-line-meta">{order.programLabel}</span>
+              )}
+            </div>
+          </li>
+        </ul>
+      </div>
+
       {order.productLines.length > 0 && (
         <div className="summary-group">
           <h3 className="summary-group-title">Products</h3>
           <ul className="order-lines">
             {order.productLines.map((line) => {
-              const showDiscount =
+              const showCap =
                 !line.noBaseFee &&
-                line.listAmount != null &&
-                line.billedAmount != null &&
-                line.listAmount > line.billedAmount
-              return (
-                <li className="order-line review-line" key={line.name}>
-                  <div>
-                    <span className="order-line-name">{line.name}</span>
-                    {line.meta && (
-                      <span className="order-line-meta">{line.meta}</span>
-                    )}
-                  </div>
-                  <span className="order-line-price">
-                    {line.noBaseFee ? (
-                      <span className="order-line-meta">—</span>
-                    ) : (
-                      <>
-                        {showDiscount && (
-                          <span className="strike">
-                            {formatUsd(line.listAmount!)}
-                          </span>
-                        )}
-                        {formatUsd(line.billedAmount ?? 0)}
-                        <span className="order-line-meta">{line.period}</span>
-                      </>
-                    )}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-          <div className="totals">
-            {order.productDiscountRate > 0 &&
-              order.productDiscountAmount > 0 && (
-                <div className="total-row discount">
-                  <span>
-                    Volume discount ({formatPercent(order.productDiscountRate)})
-                  </span>
-                  <span>−{formatUsd(order.productDiscountAmount)}</span>
-                </div>
-              )}
-            <div className="total-row grand">
-              <span>Product total / year</span>
-              <span>{formatUsd(order.productTotal)}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {order.conciergeLines.length > 0 && (
-        <div className="summary-group">
-          <h3 className="summary-group-title">Concierge</h3>
-          <ul className="order-lines">
-            {order.conciergeLines.map((line) => {
-              const showDiscount =
                 line.listAmount != null &&
                 line.billedAmount != null &&
                 line.listAmount > line.billedAmount
@@ -89,47 +50,73 @@ function OrderLines({ order }: { order: OrderSnapshot }) {
                     )}
                   </div>
                   <span className="order-line-price">
-                    {line.billedAmount == null || line.billedAmount === 0 ? (
-                      '—'
+                    {line.noBaseFee ? (
+                      <span className="order-line-meta">$0</span>
                     ) : (
                       <>
-                        {showDiscount && (
+                        {showCap && (
                           <span className="strike">
-                            {formatUsd(Math.round(line.listAmount!))}
+                            {formatUsd(line.listAmount!)}
                           </span>
                         )}
-                        {formatUsd(line.billedAmount)}
+                        {formatUsd(line.billedAmount ?? 0)}
+                        <span className="order-line-meta">{line.period}</span>
                       </>
                     )}
-                    <span className="order-line-meta">{line.period}</span>
                   </span>
                 </li>
               )
             })}
           </ul>
           <div className="totals">
-            {order.conciergeDiscountRate > 0 &&
-              order.conciergeDiscountAmount > 0 && (
-                <div className="total-row discount">
-                  <span>
-                    Concierge discount (
-                    {formatPercent(order.conciergeDiscountRate)})
-                  </span>
-                  <span>−{formatUsd(order.conciergeDiscountAmount)}</span>
+            <div className="total-row grand">
+              <span>Product total / year</span>
+              <span>{formatUsd(order.productTotal)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {order.supportLines.length > 0 && (
+        <div className="summary-group">
+          <h3 className="summary-group-title">Support</h3>
+          <ul className="order-lines">
+            {order.supportLines.map((line) => (
+              <li
+                className="order-line review-line"
+                key={line.name + (line.meta ?? '')}
+              >
+                <div>
+                  <span className="order-line-name">{line.name}</span>
+                  {line.meta && (
+                    <span className="order-line-meta">{line.meta}</span>
+                  )}
                 </div>
-              )}
-            {order.conciergeQuarterlyTotal != null && (
+                <span className="order-line-price">
+                  {line.billedAmount == null || line.billedAmount === 0
+                    ? '—'
+                    : formatUsd(line.billedAmount)}
+                  <span className="order-line-meta">{line.period}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="totals">
+            {order.supportPath1Total != null && (
               <div className="total-row grand">
-                <span>Concierge / quarter</span>
-                <span>{formatUsd(order.conciergeQuarterlyTotal)}</span>
+                <span>
+                  Support /{' '}
+                  {order.supportPath1Period === '/ yr' ? 'year' : 'quarter'}
+                </span>
+                <span>{formatUsd(order.supportPath1Total)}</span>
               </div>
             )}
-            {order.conciergeOneTimeTotal != null && (
+            {order.supportOneTimeTotal != null && (
               <div
-                className={`total-row${order.conciergeQuarterlyTotal != null ? '' : ' grand'}`}
+                className={`total-row${order.supportPath1Total != null ? '' : ' grand'}`}
               >
-                <span>Concierge one-time</span>
-                <span>{formatUsd(order.conciergeOneTimeTotal)}</span>
+                <span>Support one-time</span>
+                <span>{formatUsd(order.supportOneTimeTotal)}</span>
               </div>
             )}
           </div>
