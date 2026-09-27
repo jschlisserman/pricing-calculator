@@ -114,7 +114,7 @@ export const PLANS: Plan[] = [
       '10 developer seats included',
       'Then $150/seat/mo (volume tiers apply)',
     ],
-    annualMinimum: 25_000,
+    annualMinimum: 30_000,
     includedDeveloperSeats: 10,
     maxDeveloperSeats: null,
     seatRateColumn: 'isolation',
@@ -127,12 +127,12 @@ export const PLANS: Plan[] = [
     id: 'private-cloud',
     name: 'Private Cloud',
     description:
-      'Enterprise, deployed into a dedicated single-tenant environment Mastra operates. Priced as BYO VPC.',
+      'Enterprise, deployed into a dedicated single-tenant environment Mastra operates.',
     features: [
       '10 developer seats included',
       'Then $150/seat/mo (volume tiers apply)',
     ],
-    annualMinimum: 25_000,
+    annualMinimum: 50_000,
     includedDeveloperSeats: 10,
     maxDeveloperSeats: null,
     seatRateColumn: 'isolation',
@@ -266,7 +266,7 @@ export const ADDONS: Addon[] = [
     description:
       'Named on-call rotation, escalation path via Slack, response commitments beyond the standard SLA. Enterprise only.',
     rate: 0.2,
-    annualMinimum: 5_000,
+    annualMinimum: 15_000,
     enterpriseOnly: true,
   },
 ]
