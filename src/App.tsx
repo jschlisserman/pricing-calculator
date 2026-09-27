@@ -531,13 +531,22 @@ export default function App() {
                                     Max {maxDev}
                                   </span>
                                 )}
+                                {plan.id === 'teams' && (
+                                  <span className="field-hint">
+                                    {plan.includedDeveloperSeats} included
+                                    {plan.extraDeveloperSeatMonthly != null
+                                      ? ` · ${formatUsd(plan.extraDeveloperSeatMonthly)}/seat/mo after`
+                                      : ''}
+                                  </span>
+                                )}
                                 {plan.isEnterprise && !designPartner && (
                                   <span className="field-hint">
                                     Min {plan.includedDeveloperSeats} included
                                   </span>
                                 )}
-                                {quote.seatPricing.developerMonthlyRate >
-                                  0 && (
+                                {plan.isEnterprise &&
+                                  quote.seatPricing.developerMonthlyRate >
+                                    0 && (
                                   <span className="field-hint seat-rate-hint">
                                     Developer rate:{' '}
                                     <strong>

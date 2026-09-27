@@ -30,7 +30,7 @@ export default function TablesPage() {
       <section className="rules">
         <div className="rule">
           <h4>Teams</h4>
-          <p>$250/mo flat · up to 5 developer seats</p>
+          <p>$250/mo · 5 developer seats, then $39/seat/mo</p>
         </div>
         <div className="rule">
           <h4>Enterprise</h4>
@@ -75,7 +75,7 @@ export default function TablesPage() {
                     {plan.id === 'free'
                       ? '1 included'
                       : plan.id === 'teams'
-                        ? '5 developer (included), unlimited viewers'
+                        ? `5 developer included, then ${formatUsd(plan.extraDeveloperSeatMonthly ?? 0)}/seat/mo`
                         : `${plan.includedDeveloperSeats} developer included, then volume-tier $/seat/mo`}
                   </td>
                   <td>{plan.description}</td>

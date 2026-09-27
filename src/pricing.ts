@@ -20,12 +20,14 @@ export interface Plan {
   annualMinimum: number
   /** Included developer seats in the plan commitment. */
   includedDeveloperSeats: number
-  /** Max developer seats (Teams = 5). null = unlimited. */
+  /** Max developer seats. null = unlimited. */
   maxDeveloperSeats: number | null
   /** Monthly per-developer rate column for volume tiers. null = flat/free. */
   seatRateColumn: SeatRateColumn | null
-  /** Flat monthly price (Teams). */
+  /** Flat monthly price covering included developer seats (Teams). */
   flatMonthly: number | null
+  /** Per extra developer seat per month beyond included seats. */
+  extraDeveloperSeatMonthly: number | null
   /** Hosted Platform — usage packages apply. */
   hasUsage: boolean
   isEnterprise: boolean
@@ -43,6 +45,7 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: 1,
     seatRateColumn: null,
     flatMonthly: 0,
+    extraDeveloperSeatMonthly: null,
     hasUsage: false,
     isEnterprise: false,
   },
@@ -53,14 +56,16 @@ export const PLANS: Plan[] = [
       'SOC 2, data residency, reduced usage grants. Self-serve, monthly.',
     features: [
       '5 developer seats included',
+      'Then $39/seat/mo',
       'Unlimited viewer seats',
       'Builder seats purchased separately',
     ],
     annualMinimum: 0,
     includedDeveloperSeats: 5,
-    maxDeveloperSeats: 5,
+    maxDeveloperSeats: null,
     seatRateColumn: null,
     flatMonthly: 250,
+    extraDeveloperSeatMonthly: 39,
     hasUsage: false,
     isEnterprise: false,
   },
@@ -78,6 +83,7 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: 'platform',
     flatMonthly: null,
+    extraDeveloperSeatMonthly: null,
     hasUsage: true,
     isEnterprise: true,
   },
@@ -95,6 +101,7 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: 'selfHosted',
     flatMonthly: null,
+    extraDeveloperSeatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -112,6 +119,7 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: 'isolation',
     flatMonthly: null,
+    extraDeveloperSeatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -129,6 +137,7 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: 'isolation',
     flatMonthly: null,
+    extraDeveloperSeatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -145,6 +154,7 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: 'isolation',
     flatMonthly: null,
+    extraDeveloperSeatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -292,6 +302,8 @@ export function clampSeats(plan: Plan, seats: SeatCounts): SeatCounts {
   let developer = Math.max(0, Math.floor(seats.developer))
   if (plan.id === 'free') {
     developer = Math.min(1, Math.max(0, developer))
+  } else if (plan.id === 'teams') {
+    developer = Math.max(1, developer)
   } else if (maxDev != null) {
     developer = Math.min(maxDev, developer)
   } else {
@@ -308,6 +320,9 @@ export function clampSeats(plan: Plan, seats: SeatCounts): SeatCounts {
 export interface SeatPricing {
   developerMonthlyRate: number
   developerAnnual: number
+  /** Developer seats billed above the included block. */
+  extraDeveloperSeats: number
+  extraDeveloperAnnual: number
   builderAnnual: number
   viewerAnnual: number
   /** Developer + builder annual before plan minimum floor. */
@@ -326,6 +341,8 @@ export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
     return {
       developerMonthlyRate: 0,
       developerAnnual: 0,
+      extraDeveloperSeats: 0,
+      extraDeveloperAnnual: 0,
       builderAnnual: 0,
       viewerAnnual: 0,
       seatContractRaw: 0,
@@ -336,12 +353,20 @@ export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
   }
 
   if (plan.flatMonthly != null) {
-    const developerAnnual = plan.flatMonthly * 12
+    const extraRate = plan.extraDeveloperSeatMonthly ?? 0
+    const extraDeveloperSeats = Math.max(
+      0,
+      clamped.developer - plan.includedDeveloperSeats,
+    )
+    const extraDeveloperAnnual = extraDeveloperSeats * extraRate * 12
+    const developerAnnual = plan.flatMonthly * 12 + extraDeveloperAnnual
     const builderAnnual = clamped.builder * BUILDER_SEAT_MONTHLY * 12
     const seatContractRaw = developerAnnual + builderAnnual
     return {
-      developerMonthlyRate: 0,
+      developerMonthlyRate: extraDeveloperSeats > 0 ? extraRate : 0,
       developerAnnual,
+      extraDeveloperSeats,
+      extraDeveloperAnnual,
       builderAnnual,
       viewerAnnual: 0,
       seatContractRaw,
@@ -359,6 +384,8 @@ export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
   return {
     developerMonthlyRate: rate,
     developerAnnual,
+    extraDeveloperSeats: 0,
+    extraDeveloperAnnual: 0,
     builderAnnual,
     viewerAnnual: 0,
     seatContractRaw,
@@ -778,6 +805,8 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     seatPricing = {
       developerMonthlyRate: 0,
       developerAnnual: 0,
+      extraDeveloperSeats: 0,
+      extraDeveloperAnnual: 0,
       builderAnnual: 0,
       viewerAnnual: 0,
       seatContractRaw: DESIGN_PARTNER_ANNUAL_FEE,
@@ -847,13 +876,26 @@ export function buildQuote(input: BuildQuoteInput): Quote {
       period: '/ yr',
     })
   } else if (effectivePlan.id === 'teams') {
+    const included = Math.min(
+      seats.developer,
+      effectivePlan.includedDeveloperSeats,
+    )
     productLines.push({
       id: 'plan',
       name: 'Teams',
-      meta: `${seats.developer} developer seat${seats.developer === 1 ? '' : 's'} (up to 5)`,
-      annualAmount: seatPricing.developerAnnual,
+      meta: `${included} developer seat${included === 1 ? '' : 's'} included (up to ${effectivePlan.includedDeveloperSeats})`,
+      annualAmount: (effectivePlan.flatMonthly ?? 0) * 12,
       period: '/ yr',
     })
+    if (seatPricing.extraDeveloperSeats > 0) {
+      productLines.push({
+        id: 'extra-developer-seats',
+        name: 'Additional developer seats',
+        meta: `${seatPricing.extraDeveloperSeats} × ${formatUsd(effectivePlan.extraDeveloperSeatMonthly ?? 0)}/mo`,
+        annualAmount: seatPricing.extraDeveloperAnnual,
+        period: '/ yr',
+      })
+    }
     if (seats.builder > 0) {
       productLines.push({
         id: 'builder-seats',
