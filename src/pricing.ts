@@ -876,26 +876,18 @@ export function buildQuote(input: BuildQuoteInput): Quote {
       period: '/ yr',
     })
   } else if (effectivePlan.id === 'teams') {
-    const included = Math.min(
-      seats.developer,
-      effectivePlan.includedDeveloperSeats,
-    )
+    const extraRate = effectivePlan.extraDeveloperSeatMonthly ?? 0
+    const extra = seatPricing.extraDeveloperSeats
     productLines.push({
       id: 'plan',
       name: 'Teams',
-      meta: `${included} developer seat${included === 1 ? '' : 's'} included (up to ${effectivePlan.includedDeveloperSeats})`,
-      annualAmount: (effectivePlan.flatMonthly ?? 0) * 12,
+      meta:
+        extra > 0
+          ? `${effectivePlan.includedDeveloperSeats} included + ${extra} × ${formatUsd(extraRate)}/mo`
+          : `${seats.developer} developer seat${seats.developer === 1 ? '' : 's'} included (up to ${effectivePlan.includedDeveloperSeats})`,
+      annualAmount: seatPricing.developerAnnual,
       period: '/ yr',
     })
-    if (seatPricing.extraDeveloperSeats > 0) {
-      productLines.push({
-        id: 'extra-developer-seats',
-        name: 'Additional developer seats',
-        meta: `${seatPricing.extraDeveloperSeats} × ${formatUsd(effectivePlan.extraDeveloperSeatMonthly ?? 0)}/mo`,
-        annualAmount: seatPricing.extraDeveloperAnnual,
-        period: '/ yr',
-      })
-    }
     if (seats.builder > 0) {
       productLines.push({
         id: 'builder-seats',
