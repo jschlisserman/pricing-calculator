@@ -73,7 +73,7 @@ export default function TablesPage() {
                   </td>
                   <td>
                     {plan.id === 'free'
-                      ? '1 included'
+                      ? 'Up to 5 developer seats'
                       : plan.id === 'teams'
                         ? `5 developer included, then ${formatUsd(plan.extraDeveloperSeatMonthly ?? 0)}/seat/mo`
                         : `${plan.includedDeveloperSeats} developer included, then volume-tier $/seat/mo`}

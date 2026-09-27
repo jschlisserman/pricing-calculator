@@ -39,10 +39,10 @@ export const PLANS: Plan[] = [
     id: 'free',
     name: 'Free',
     description: 'Reduced usage grants',
-    features: ['1 developer seat included'],
+    features: ['Up to 5 developer seats'],
     annualMinimum: 0,
     includedDeveloperSeats: 1,
-    maxDeveloperSeats: 1,
+    maxDeveloperSeats: 5,
     seatRateColumn: null,
     flatMonthly: 0,
     extraDeveloperSeatMonthly: null,
@@ -301,7 +301,8 @@ export function clampSeats(plan: Plan, seats: SeatCounts): SeatCounts {
   const maxDev = plan.maxDeveloperSeats
   let developer = Math.max(0, Math.floor(seats.developer))
   if (plan.id === 'free') {
-    developer = Math.min(1, Math.max(0, developer))
+    const cap = plan.maxDeveloperSeats ?? 5
+    developer = Math.min(cap, Math.max(1, developer))
   } else if (plan.id === 'teams') {
     developer = Math.max(1, developer)
   } else if (maxDev != null) {
@@ -871,7 +872,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     productLines.push({
       id: 'plan',
       name: 'Free',
-      meta: '1 developer seat',
+      meta: `${seats.developer} developer seat${seats.developer === 1 ? '' : 's'} (up to ${effectivePlan.maxDeveloperSeats ?? 5})`,
       annualAmount: 0,
       period: '/ yr',
     })

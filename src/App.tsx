@@ -521,7 +521,6 @@ export default function App() {
                                         : 1
                                   }
                                   max={maxDev ?? undefined}
-                                  disabled={plan.id === 'free'}
                                   onCommit={(next) =>
                                     setSeatCount('developer', next ?? 0)
                                   }

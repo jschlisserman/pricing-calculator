@@ -24,7 +24,7 @@ For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastra
 
 | Plan | Price | Seats |
 | --- | --- | --- |
-| Free | $0 | 1 developer |
+| Free | $0 | Up to 5 developer seats |
 | Teams | $250/month | 5 developer included, then $39/seat/mo · unlimited viewers · builders separate |
 | Enterprise (Platform) | $10,000/yr minimum | 10 developer included, then volume-tier $/seat/mo |
 | Enterprise Self-Hosted | $12,000/yr minimum | 10 included, then $125-lane tiers |
