@@ -177,7 +177,9 @@ export interface VolumeTier {
   isolation: number
 }
 
-/** Developer seat volume tiers ($/seat/mo). All seats bill at the matching tier. */
+/** Developer seat volume tiers ($/seat/mo). All seats bill at the matching tier.
+ * Self-hosted and isolation follow the platform step-down, rounded.
+ */
 export const VOLUME_TIERS: VolumeTier[] = [
   {
     minSeats: 1,
@@ -189,23 +191,23 @@ export const VOLUME_TIERS: VolumeTier[] = [
   {
     minSeats: 51,
     maxSeats: 150,
-    platform: 90,
-    selfHosted: 100,
+    platform: 85,
+    selfHosted: 105,
     isolation: 125,
   },
   {
     minSeats: 151,
     maxSeats: 400,
-    platform: 80,
-    selfHosted: 90,
-    isolation: 100,
+    platform: 70,
+    selfHosted: 85,
+    isolation: 105,
   },
   {
     minSeats: 401,
     maxSeats: null,
-    platform: 70,
-    selfHosted: 80,
-    isolation: 90,
+    platform: 55,
+    selfHosted: 65,
+    isolation: 80,
   },
 ]
 

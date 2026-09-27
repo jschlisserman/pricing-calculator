@@ -45,9 +45,11 @@ Enterprise billed amount is `max(annual minimum, seats × rate × 12)` plus buil
 | Seats | Platform | Self-Hosted | Isolated |
 | --- | --- | --- | --- |
 | 1–50 | $100 | $125 | $150 |
-| 51–150 | $90 | $100 | $125 |
-| 151–400 | $80 | $90 | $100 |
-| 401+ | $70 | $80 | $90 |
+| 51–150 | $85 | $105 | $125 |
+| 151–400 | $70 | $85 | $105 |
+| 401+ | $55 | $65 | $80 |
+
+Self-hosted and isolated rates follow the platform step-down, rounded to the amounts above.
 
 ### Add-ons
 

@@ -92,8 +92,8 @@ export default function TablesPage() {
         </div>
         <p className="band-table-intro">
           All developer seats bill at the rate for the total seat count.
-          Columns: Platform / Self-Hosted / Isolated (BYO VPC, Private Cloud,
-          BYOC).
+          Self-hosted and isolated (BYO VPC, Private Cloud, BYOC) follow the
+          platform step-down.
         </p>
         <div className="band-table-wrap">
           <table className="band-table">
