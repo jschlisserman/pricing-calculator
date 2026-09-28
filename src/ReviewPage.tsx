@@ -50,7 +50,9 @@ function OrderLines({ order }: { order: OrderSnapshot }) {
                     )}
                   </div>
                   <span className="order-line-price">
-                    {line.noBaseFee ? (
+                    {line.included ? (
+                      <span className="order-line-meta">Included</span>
+                    ) : line.noBaseFee ? (
                       <span className="order-line-meta">$0</span>
                     ) : (
                       <>

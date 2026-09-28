@@ -7,6 +7,7 @@ export interface OrderLineSnapshot {
   billedAmount: number | null
   period: '/ yr' | '/ qtr' | '/ one-time' | ''
   noBaseFee?: boolean
+  included?: boolean
 }
 
 export interface OrderSnapshot {
@@ -39,6 +40,9 @@ export const ORDER_EMAIL_RECIPIENTS = [
 ] as const
 
 function lineText(line: OrderLineSnapshot): string {
+  if (line.included) {
+    return `${line.name}${line.meta ? ` (${line.meta})` : ''}: Included`
+  }
   if (line.noBaseFee) {
     return `${line.name}${line.meta ? ` (${line.meta})` : ''}: $0`
   }
@@ -124,11 +128,13 @@ export function formatOrderEmailHtml(
   const renderLines = (lines: OrderLineSnapshot[]) =>
     lines
       .map((line) => {
-        const price = line.noBaseFee
-          ? '$0'
-          : line.billedAmount != null
-            ? `${formatUsd(line.billedAmount)}${line.period}`
-            : '—'
+        const price = line.included
+          ? 'Included'
+          : line.noBaseFee
+            ? '$0'
+            : line.billedAmount != null
+              ? `${formatUsd(line.billedAmount)}${line.period}`
+              : '—'
         const list =
           !line.noBaseFee &&
           line.listAmount != null &&

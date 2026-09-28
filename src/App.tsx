@@ -197,10 +197,11 @@ export default function App() {
       (line) => ({
         name: line.name,
         meta: line.meta,
-        listAmount: line.annualAmount,
-        billedAmount: line.annualAmount,
+        listAmount: line.included ? null : line.annualAmount,
+        billedAmount: line.included ? null : line.annualAmount,
         period: '/ yr',
         noBaseFee: line.annualAmount === 0 && line.id === 'plan',
+        included: line.included,
       }),
     )
 
@@ -1117,8 +1118,16 @@ export default function App() {
                                     {formatUsd(addonLine!.listAmount)}
                                   </span>
                                 )}
-                                {formatUsd(line.annualAmount)}
-                                <span className="order-line-meta">/ yr</span>
+                                {line.included ? (
+                                  <span className="order-line-meta">Included</span>
+                                ) : line.id === 'plan' && line.annualAmount === 0 ? (
+                                  <span className="order-line-meta">—</span>
+                                ) : (
+                                  <>
+                                    {formatUsd(line.annualAmount)}
+                                    <span className="order-line-meta">/ yr</span>
+                                  </>
+                                )}
                               </span>
                               {(line.id === 'agent-learning' ||
                                 line.id === 'compliance' ||

@@ -380,21 +380,25 @@ export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
   }
 
   const rate = getDeveloperSeatMonthlyRate(plan, clamped.developer)
-  const developerAnnual = clamped.developer * rate * 12
+  const extraDeveloperSeats = Math.max(
+    0,
+    clamped.developer - plan.includedDeveloperSeats,
+  )
+  const extraDeveloperAnnual = extraDeveloperSeats * rate * 12
   const builderAnnual = clamped.builder * BUILDER_SEAT_MONTHLY * 12
-  const seatContractRaw = developerAnnual + builderAnnual
-  const planAnnual = Math.max(plan.annualMinimum, seatContractRaw)
+  const planAnnual =
+    plan.annualMinimum + extraDeveloperAnnual + builderAnnual
   return {
     developerMonthlyRate: rate,
-    developerAnnual,
-    extraDeveloperSeats: 0,
-    extraDeveloperAnnual: 0,
+    developerAnnual: extraDeveloperAnnual,
+    extraDeveloperSeats,
+    extraDeveloperAnnual,
     builderAnnual,
     viewerAnnual: 0,
-    seatContractRaw,
+    seatContractRaw: extraDeveloperAnnual + builderAnnual,
     planAnnual,
     seatContract: planAnnual,
-    minimumApplied: planAnnual > seatContractRaw,
+    minimumApplied: false,
   }
 }
 
@@ -748,6 +752,8 @@ export interface QuoteLine {
   meta?: string
   annualAmount: number
   period: '/ yr' | '/ mo'
+  /** Covered by the plan floor; shown as included rather than a charge. */
+  included?: boolean
 }
 
 export interface Quote {
@@ -880,17 +886,34 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     })
   } else if (effectivePlan.id === 'teams') {
     const extraRate = effectivePlan.extraDeveloperSeatMonthly ?? 0
-    const extra = seatPricing.extraDeveloperSeats
+    const included = Math.min(
+      seats.developer,
+      effectivePlan.includedDeveloperSeats,
+    )
     productLines.push({
       id: 'plan',
       name: 'Teams',
-      meta:
-        extra > 0
-          ? `${effectivePlan.includedDeveloperSeats} included + ${extra} × ${formatUsd(extraRate)}/mo`
-          : `${seats.developer} developer seat${seats.developer === 1 ? '' : 's'} included (up to ${effectivePlan.includedDeveloperSeats})`,
-      annualAmount: seatPricing.developerAnnual,
+      meta: `Includes ${included} developer seat${included === 1 ? '' : 's'}`,
+      annualAmount: (effectivePlan.flatMonthly ?? 0) * 12,
       period: '/ yr',
     })
+    productLines.push({
+      id: 'included-developer-seats',
+      name: 'Developer seats',
+      meta: `${included} included`,
+      annualAmount: 0,
+      period: '/ yr',
+      included: true,
+    })
+    if (seatPricing.extraDeveloperSeats > 0) {
+      productLines.push({
+        id: 'developer-seats',
+        name: 'Additional developer seats',
+        meta: `${seatPricing.extraDeveloperSeats} × ${formatUsd(extraRate)}/mo`,
+        annualAmount: seatPricing.extraDeveloperAnnual,
+        period: '/ yr',
+      })
+    }
     if (seats.builder > 0) {
       productLines.push({
         id: 'builder-seats',
@@ -901,25 +924,34 @@ export function buildQuote(input: BuildQuoteInput): Quote {
       })
     }
   } else {
-    const rateLabel =
-      seatPricing.developerMonthlyRate > 0
-        ? `${formatUsd(seatPricing.developerMonthlyRate)}/seat/mo`
-        : null
+    const included = Math.min(
+      seats.developer,
+      effectivePlan.includedDeveloperSeats,
+    )
     productLines.push({
       id: 'plan',
       name: effectivePlan.name,
-      meta: [
-        `${seats.developer} developer seats`,
-        rateLabel,
-        seatPricing.minimumApplied
-          ? `${formatUsd(effectivePlan.annualMinimum)} minimum applied`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' · '),
-      annualAmount: seatPricing.planAnnual - seatPricing.builderAnnual,
+      meta: `Includes ${included} developer seat${included === 1 ? '' : 's'}`,
+      annualAmount: effectivePlan.annualMinimum,
       period: '/ yr',
     })
+    productLines.push({
+      id: 'included-developer-seats',
+      name: 'Developer seats',
+      meta: `${included} included`,
+      annualAmount: 0,
+      period: '/ yr',
+      included: true,
+    })
+    if (seatPricing.extraDeveloperSeats > 0) {
+      productLines.push({
+        id: 'developer-seats',
+        name: 'Additional developer seats',
+        meta: `${seatPricing.extraDeveloperSeats} × ${formatUsd(seatPricing.developerMonthlyRate)}/seat/mo`,
+        annualAmount: seatPricing.extraDeveloperAnnual,
+        period: '/ yr',
+      })
+    }
     if (seats.builder > 0) {
       productLines.push({
         id: 'builder-seats',

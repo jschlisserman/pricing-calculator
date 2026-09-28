@@ -32,7 +32,7 @@ For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastra
 | Private Cloud | $50,000/yr minimum | 10 included, then $150-lane tiers |
 | BYOC | $100,000/yr minimum | 25 included, then $150-lane tiers |
 
-Enterprise billed amount is `max(annual minimum, seats × rate × 12)` plus builder seats. Included seats are priced at the same rate as marginal seats.
+Enterprise billed amount is the annual minimum, which includes the plan’s developer seats, plus additional developer seats and builder seats purchased on top.
 
 ### Seat types
 
