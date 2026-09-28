@@ -59,7 +59,7 @@ Self-hosted and isolated rates follow the platform step-down, rounded to the amo
 
 ### Platform usage
 
-Enterprise Platform only. Usage packages scale includes from seat contract. Additional volume bills at 50% of list unit cost.
+Enterprise Platform only. Usage packages scale includes from the product total per year, excluding additional usage. Additional volume bills at 50% of list unit cost.
 
 ### Programs
 

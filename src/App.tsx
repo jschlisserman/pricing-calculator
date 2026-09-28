@@ -133,7 +133,7 @@ export default function App() {
     [planId, seats, selectedAddons, designPartner, agency, platformConfig],
   )
 
-  const usageScaleAnnual = quote.seatPricing.seatContract
+  const usageScaleAnnual = quote.annualTotal - quote.platformOverageTotal
 
   useEffect(() => {
     if (!quote.plan.hasUsage || designPartner) return
@@ -624,7 +624,7 @@ export default function App() {
                               </div>
                               <div className="platform-base-row">
                                 <span>
-                                  Usage include scale (seat contract)
+                                  Usage include scale (product total)
                                 </span>
                                 <strong>
                                   {formatUsd(usageScaleAnnual)}/yr
