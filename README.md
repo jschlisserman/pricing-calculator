@@ -24,8 +24,8 @@ For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastra
 
 | Plan | Price | Seats |
 | --- | --- | --- |
-| Free | $0 | Up to 5 developer seats |
-| Teams | $250/month | 5 developer included, then $39/seat/mo · unlimited viewers · builders separate |
+| Free | $0 | Unlimited users · bounded usage grant |
+| Teams | $250/month | No seats |
 | Enterprise (Platform) | $10,000/yr minimum | 10 developer included, then volume-tier $/seat/mo |
 | Enterprise Self-Hosted | $12,000/yr minimum | 10 included, then $125-lane tiers |
 | BYO VPC | $30,000/yr minimum | 10 included, then $150-lane tiers |
@@ -36,9 +36,9 @@ Enterprise billed amount is the annual minimum, which includes the plan’s deve
 
 ### Seat types
 
-- **Developer** — plan rate (volume tiers on Enterprise)
-- **Builder** — $50/mo flat (Agent Builder only; no CLI/deploy/admin)
-- **Viewer** — $0 (read-only)
+- **Developer** — Enterprise only. Included seats come with the plan floor; additional seats use the volume tier
+- **Builder** — Enterprise only. $50/mo flat (Agent Builder only; no CLI/deploy/admin)
+- **Viewer** — Enterprise only. $0 (read-only)
 
 ### Developer volume tiers ($/seat/mo)
 
@@ -53,7 +53,7 @@ Self-hosted and isolated rates follow the platform step-down, rounded to the amo
 
 ### Add-ons
 
-- **Agent Learning** — 30% of seat contract, $7.5k/yr minimum (Teams + Enterprise)
+- **Agent Learning** — 30% of seat contract, $7.5k/yr minimum (Enterprise only)
 - **Compliance** — 25% of seat contract, $5k/yr minimum (Enterprise only)
 - **Premium on-call** — 20% of seat contract, $15k/yr minimum (Enterprise only)
 

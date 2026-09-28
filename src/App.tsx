@@ -88,7 +88,7 @@ export default function App() {
   )
   const [planId, setPlanId] = useState<PlanId>('teams')
   const [seats, setSeats] = useState<SeatCounts>({
-    developer: 5,
+    developer: 0,
     builder: 0,
     viewer: 0,
   })
@@ -252,7 +252,12 @@ export default function App() {
 
     return {
       planLabel: quote.plan.name,
-      seatsLabel: `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.viewer} viewer`,
+      seatsLabel:
+        quote.plan.id === 'free'
+          ? 'Unlimited users'
+          : quote.plan.isEnterprise
+            ? `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.viewer} viewer`
+            : 'No seats',
       programLabel: designPartner
         ? 'Design Partner'
         : agency
@@ -366,7 +371,7 @@ export default function App() {
 
   function clearOrder() {
     setPlanId('teams')
-    setSeats({ developer: 5, builder: 0, viewer: 0 })
+    setSeats({ developer: 0, builder: 0, viewer: 0 })
     setSelectedAddons([])
     setDesignPartner(false)
     setAgency(false)
@@ -503,103 +508,76 @@ export default function App() {
                         </span>
                       </button>
 
-                      {selected && (
-                        <>
-                          <div className="plan-seats">
-                            <div className="size-row seats-row">
-                              <div className="field">
-                                <label htmlFor="developer-seats">
-                                  Developer
-                                </label>
-                                <NumberField
-                                  id="developer-seats"
-                                  value={seats.developer}
-                                  min={
-                                    plan.id === 'free'
-                                      ? 1
-                                      : plan.isEnterprise
-                                        ? plan.includedDeveloperSeats
-                                        : 1
-                                  }
-                                  max={maxDev ?? undefined}
-                                  onCommit={(next) =>
-                                    setSeatCount('developer', next ?? 0)
-                                  }
-                                />
-                                {maxDev != null && (
-                                  <span className="field-hint">
-                                    Max {maxDev}
-                                  </span>
-                                )}
-                                {plan.id === 'teams' && (
-                                  <span className="field-hint">
-                                    {plan.includedDeveloperSeats} included
-                                    {plan.extraDeveloperSeatMonthly != null
-                                      ? ` · ${formatUsd(plan.extraDeveloperSeatMonthly)}/seat/mo after`
-                                      : ''}
-                                  </span>
-                                )}
-                                {plan.isEnterprise && !designPartner && (
-                                  <span className="field-hint">
-                                    Min {plan.includedDeveloperSeats} included
-                                  </span>
-                                )}
-                                {plan.isEnterprise &&
-                                  quote.seatPricing.developerMonthlyRate >
-                                    0 && (
-                                  <span className="field-hint seat-rate-hint">
-                                    Developer rate:{' '}
-                                    <strong>
-                                      {formatUsd(
-                                        quote.seatPricing.developerMonthlyRate,
-                                      )}
-                                      /seat/mo
-                                    </strong>{' '}
-                                    at {quote.seats.developer} seats
-                                    {quote.seatPricing.minimumApplied
-                                      ? ` · ${formatUsd(quote.plan.annualMinimum)}/yr min binds`
-                                      : ''}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="field">
-                                <label htmlFor="builder-seats">
-                                  Builder ({formatUsd(BUILDER_SEAT_MONTHLY)}
-                                  /mo)
-                                </label>
-                                <NumberField
-                                  id="builder-seats"
-                                  value={seats.builder}
-                                  min={0}
-                                  max={maxBuilder ?? undefined}
-                                  disabled={plan.id === 'free'}
-                                  onCommit={(next) =>
-                                    setSeatCount('builder', next ?? 0)
-                                  }
-                                />
-                                {maxBuilder != null && (
-                                  <span className="field-hint">
-                                    Max {maxBuilder}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="field">
-                                <label htmlFor="viewer-seats">
-                                  Viewer ($0)
-                                </label>
-                                <NumberField
-                                  id="viewer-seats"
-                                  value={seats.viewer}
-                                  min={0}
-                                  onCommit={(next) =>
-                                    setSeatCount('viewer', next ?? 0)
-                                  }
-                                />
-                              </div>
+                      {selected && plan.isEnterprise && (
+                        <div className="plan-seats">
+                          <div className="size-row seats-row">
+                            <div className="field">
+                              <label htmlFor="developer-seats">Developer</label>
+                              <NumberField
+                                id="developer-seats"
+                                value={seats.developer}
+                                min={plan.includedDeveloperSeats}
+                                max={maxDev ?? undefined}
+                                onCommit={(next) =>
+                                  setSeatCount('developer', next ?? 0)
+                                }
+                              />
+                              {!designPartner && (
+                                <span className="field-hint">
+                                  Min {plan.includedDeveloperSeats} included
+                                </span>
+                              )}
+                              {quote.seatPricing.developerMonthlyRate > 0 && (
+                                <span className="field-hint seat-rate-hint">
+                                  Developer rate:{' '}
+                                  <strong>
+                                    {formatUsd(
+                                      quote.seatPricing.developerMonthlyRate,
+                                    )}
+                                    /seat/mo
+                                  </strong>{' '}
+                                  at {quote.seats.developer} seats
+                                  {quote.seatPricing.minimumApplied
+                                    ? ` · ${formatUsd(quote.plan.annualMinimum)}/yr min binds`
+                                    : ''}
+                                </span>
+                              )}
+                            </div>
+                            <div className="field">
+                              <label htmlFor="builder-seats">
+                                Builder ({formatUsd(BUILDER_SEAT_MONTHLY)}/mo)
+                              </label>
+                              <NumberField
+                                id="builder-seats"
+                                value={seats.builder}
+                                min={0}
+                                max={maxBuilder ?? undefined}
+                                onCommit={(next) =>
+                                  setSeatCount('builder', next ?? 0)
+                                }
+                              />
+                              {maxBuilder != null && (
+                                <span className="field-hint">
+                                  Max {maxBuilder}
+                                </span>
+                              )}
+                            </div>
+                            <div className="field">
+                              <label htmlFor="viewer-seats">Viewer ($0)</label>
+                              <NumberField
+                                id="viewer-seats"
+                                value={seats.viewer}
+                                min={0}
+                                onCommit={(next) =>
+                                  setSeatCount('viewer', next ?? 0)
+                                }
+                              />
                             </div>
                           </div>
+                        </div>
+                      )}
 
-                          {p.hasUsage && showUsage && (
+                      {selected && p.hasUsage && showUsage && (
                             <div className="platform-usage">
                               <div className="platform-usage-intro">
                                 <strong>Platform usage</strong>
@@ -703,8 +681,6 @@ export default function App() {
                               </div>
                             </div>
                           )}
-                        </>
-                      )}
                     </div>
                   )
                 })}
@@ -743,11 +719,7 @@ export default function App() {
                           <span className="item-name">
                             {addon.name}
                             {!allowed && (
-                              <span className="pill">
-                                {plan.id === 'free'
-                                  ? 'Not on Free'
-                                  : 'Enterprise only'}
-                              </span>
+                              <span className="pill">Enterprise only</span>
                             )}
                           </span>
                           <p className="item-desc">{addon.description}</p>

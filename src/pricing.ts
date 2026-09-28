@@ -24,10 +24,8 @@ export interface Plan {
   maxDeveloperSeats: number | null
   /** Monthly per-developer rate column for volume tiers. null = flat/free. */
   seatRateColumn: SeatRateColumn | null
-  /** Flat monthly price covering included developer seats (Teams). */
+  /** Flat monthly price (Teams). */
   flatMonthly: number | null
-  /** Per extra developer seat per month beyond included seats. */
-  extraDeveloperSeatMonthly: number | null
   /** Hosted Platform — usage packages apply. */
   hasUsage: boolean
   isEnterprise: boolean
@@ -38,14 +36,13 @@ export const PLANS: Plan[] = [
   {
     id: 'free',
     name: 'Free',
-    description: 'Reduced usage grants',
-    features: ['Up to 5 developer seats'],
+    description: 'Unlimited users. Bounded usage grant.',
+    features: ['Unlimited users', 'Bounded usage grant'],
     annualMinimum: 0,
-    includedDeveloperSeats: 1,
-    maxDeveloperSeats: 5,
+    includedDeveloperSeats: 0,
+    maxDeveloperSeats: null,
     seatRateColumn: null,
     flatMonthly: 0,
-    extraDeveloperSeatMonthly: null,
     hasUsage: false,
     isEnterprise: false,
   },
@@ -54,18 +51,12 @@ export const PLANS: Plan[] = [
     name: 'Teams',
     description:
       'SOC 2, data residency, reduced usage grants. Self-serve, monthly.',
-    features: [
-      '5 developer seats included',
-      'Then $39/seat/mo',
-      'Unlimited viewer seats',
-      'Builder seats purchased separately',
-    ],
+    features: ['SOC 2', 'Data residency', 'Self-serve, monthly'],
     annualMinimum: 0,
-    includedDeveloperSeats: 5,
+    includedDeveloperSeats: 0,
     maxDeveloperSeats: null,
     seatRateColumn: null,
     flatMonthly: 250,
-    extraDeveloperSeatMonthly: 39,
     hasUsage: false,
     isEnterprise: false,
   },
@@ -83,7 +74,6 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: 'platform',
     flatMonthly: null,
-    extraDeveloperSeatMonthly: null,
     hasUsage: true,
     isEnterprise: true,
   },
@@ -101,7 +91,6 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: 'selfHosted',
     flatMonthly: null,
-    extraDeveloperSeatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -119,7 +108,6 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: 'isolation',
     flatMonthly: null,
-    extraDeveloperSeatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -137,7 +125,6 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: 'isolation',
     flatMonthly: null,
-    extraDeveloperSeatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -154,7 +141,6 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: 'isolation',
     flatMonthly: null,
-    extraDeveloperSeatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -164,7 +150,7 @@ export function getPlan(planId: PlanId): Plan {
   return PLANS.find((p) => p.id === planId) ?? PLANS[0]
 }
 
-/** Builder seats stay flat at $50/mo. Viewers are free. */
+/** Builder and viewer seats are Enterprise only. Builders are $50/mo. Viewers are free. */
 export const BUILDER_SEAT_MONTHLY = 50
 export const VIEWER_SEAT_MONTHLY = 0
 
@@ -239,7 +225,7 @@ export interface Addon {
   rate: number
   /** Annual floor; 0 = no floor. */
   annualMinimum: number
-  /** Teams + Enterprise, or Enterprise only. */
+  /** Enterprise only. */
   enterpriseOnly: boolean
 }
 
@@ -250,7 +236,7 @@ export const ADDONS: Addon[] = [
     description: 'Trace Intelligence, Custom Signals',
     rate: 0.3,
     annualMinimum: 7_500,
-    enterpriseOnly: false,
+    enterpriseOnly: true,
   },
   {
     id: 'compliance',
@@ -288,9 +274,7 @@ export const DPP_ALLOWED_PLANS: PlanId[] = [
 ]
 
 export function isAddonAvailable(addon: Addon, plan: Plan): boolean {
-  if (plan.id === 'free') return false
-  if (addon.enterpriseOnly) return plan.isEnterprise
-  return plan.id === 'teams' || plan.isEnterprise
+  return plan.isEnterprise && addon.enterpriseOnly
 }
 
 export interface SeatCounts {
@@ -300,22 +284,19 @@ export interface SeatCounts {
 }
 
 export function clampSeats(plan: Plan, seats: SeatCounts): SeatCounts {
+  if (!plan.isEnterprise) {
+    return { developer: 0, builder: 0, viewer: 0 }
+  }
+
   const maxDev = plan.maxDeveloperSeats
   let developer = Math.max(0, Math.floor(seats.developer))
-  if (plan.id === 'free') {
-    const cap = plan.maxDeveloperSeats ?? 5
-    developer = Math.min(cap, Math.max(1, developer))
-  } else if (plan.id === 'teams') {
-    developer = Math.max(1, developer)
-  } else if (maxDev != null) {
+  if (maxDev != null) {
     developer = Math.min(maxDev, developer)
   } else {
     developer = Math.max(plan.includedDeveloperSeats, developer)
   }
 
-  let builder = Math.max(0, Math.floor(seats.builder))
-  if (plan.id === 'free') builder = 0
-
+  const builder = Math.max(0, Math.floor(seats.builder))
   const viewer = Math.max(0, Math.floor(seats.viewer))
   return { developer, builder, viewer }
 }
@@ -356,25 +337,17 @@ export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
   }
 
   if (plan.flatMonthly != null) {
-    const extraRate = plan.extraDeveloperSeatMonthly ?? 0
-    const extraDeveloperSeats = Math.max(
-      0,
-      clamped.developer - plan.includedDeveloperSeats,
-    )
-    const extraDeveloperAnnual = extraDeveloperSeats * extraRate * 12
-    const developerAnnual = plan.flatMonthly * 12 + extraDeveloperAnnual
-    const builderAnnual = clamped.builder * BUILDER_SEAT_MONTHLY * 12
-    const seatContractRaw = developerAnnual + builderAnnual
+    const planAnnual = plan.flatMonthly * 12
     return {
-      developerMonthlyRate: extraDeveloperSeats > 0 ? extraRate : 0,
-      developerAnnual,
-      extraDeveloperSeats,
-      extraDeveloperAnnual,
-      builderAnnual,
+      developerMonthlyRate: 0,
+      developerAnnual: planAnnual,
+      extraDeveloperSeats: 0,
+      extraDeveloperAnnual: 0,
+      builderAnnual: 0,
       viewerAnnual: 0,
-      seatContractRaw,
-      planAnnual: seatContractRaw,
-      seatContract: seatContractRaw,
+      seatContractRaw: planAnnual,
+      planAnnual,
+      seatContract: planAnnual,
       minimumApplied: false,
     }
   }
@@ -880,49 +853,18 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     productLines.push({
       id: 'plan',
       name: 'Free',
-      meta: `${seats.developer} developer seat${seats.developer === 1 ? '' : 's'} (up to ${effectivePlan.maxDeveloperSeats ?? 5})`,
+      meta: 'Unlimited users · bounded usage grant',
       annualAmount: 0,
       period: '/ yr',
     })
   } else if (effectivePlan.id === 'teams') {
-    const extraRate = effectivePlan.extraDeveloperSeatMonthly ?? 0
-    const included = Math.min(
-      seats.developer,
-      effectivePlan.includedDeveloperSeats,
-    )
     productLines.push({
       id: 'plan',
       name: 'Teams',
-      meta: `Includes ${included} developer seat${included === 1 ? '' : 's'}`,
+      meta: 'Self-serve, monthly',
       annualAmount: (effectivePlan.flatMonthly ?? 0) * 12,
       period: '/ yr',
     })
-    productLines.push({
-      id: 'included-developer-seats',
-      name: 'Developer seats',
-      meta: `${included} included`,
-      annualAmount: 0,
-      period: '/ yr',
-      included: true,
-    })
-    if (seatPricing.extraDeveloperSeats > 0) {
-      productLines.push({
-        id: 'developer-seats',
-        name: 'Additional developer seats',
-        meta: `${seatPricing.extraDeveloperSeats} × ${formatUsd(extraRate)}/mo`,
-        annualAmount: seatPricing.extraDeveloperAnnual,
-        period: '/ yr',
-      })
-    }
-    if (seats.builder > 0) {
-      productLines.push({
-        id: 'builder-seats',
-        name: 'Builder seats',
-        meta: `${seats.builder} × ${formatUsd(BUILDER_SEAT_MONTHLY)}/mo`,
-        annualAmount: seatPricing.builderAnnual,
-        period: '/ yr',
-      })
-    }
   } else {
     const included = Math.min(
       seats.developer,
@@ -963,7 +905,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     }
   }
 
-  if (seats.viewer > 0) {
+  if (effectivePlan.isEnterprise && seats.viewer > 0) {
     productLines.push({
       id: 'viewer-seats',
       name: 'Viewer seats',
