@@ -26,11 +26,11 @@ For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastra
 | --- | --- | --- |
 | Free | $0 | Unlimited users · bounded usage grant |
 | Teams | $250/month | No seats |
-| Enterprise (Platform) | $10,000/yr minimum | 10 developer included, then volume-tier $/seat/mo |
-| Enterprise Self-Hosted | $12,000/yr minimum | 10 included, then $125-lane tiers |
+| Enterprise (Platform) | $8,000/yr minimum | 5 developer included, then volume-tier $/seat/mo |
+| Enterprise Self-Hosted | $10,000/yr minimum | 5 included, then $125-lane tiers |
 | BYO VPC | $30,000/yr minimum | 10 included, then $150-lane tiers |
 | Private Cloud | $50,000/yr minimum | 10 included, then $150-lane tiers |
-| BYOC | $100,000/yr minimum | 25 included, then $150-lane tiers |
+| BYOC | $100,000/yr minimum | 10 included, then $150-lane tiers |
 
 Enterprise billed amount is the annual minimum, which includes the plan’s developer seats, plus additional developer seats and builder seats purchased on top.
 

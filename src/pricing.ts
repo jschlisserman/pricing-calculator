@@ -66,11 +66,11 @@ export const PLANS: Plan[] = [
     description:
       'Auth, SSO, RBAC, FGA, SLA, SOC 2 report, data residency. Annual invoice, usage drawn from a commit.',
     features: [
-      '10 developer seats included',
+      '5 developer seats included',
       'Then $100/seat/mo (volume tiers apply)',
     ],
-    annualMinimum: 10_000,
-    includedDeveloperSeats: 10,
+    annualMinimum: 8_000,
+    includedDeveloperSeats: 5,
     maxDeveloperSeats: null,
     seatRateColumn: 'platform',
     flatMonthly: null,
@@ -83,11 +83,11 @@ export const PLANS: Plan[] = [
     description:
       'Same as Enterprise. The uplift covers usage that cannot be metered.',
     features: [
-      '10 developer seats included',
+      '5 developer seats included',
       'Then $125/seat/mo (volume tiers apply)',
     ],
-    annualMinimum: 12_000,
-    includedDeveloperSeats: 10,
+    annualMinimum: 10_000,
+    includedDeveloperSeats: 5,
     maxDeveloperSeats: null,
     seatRateColumn: 'selfHosted',
     flatMonthly: null,
@@ -133,11 +133,11 @@ export const PLANS: Plan[] = [
     name: 'BYOC',
     description: "Mastra-operated inside the customer's own cloud account",
     features: [
-      '25 developer seats included',
+      '10 developer seats included',
       'Then $150/seat/mo (volume tiers apply)',
     ],
     annualMinimum: 100_000,
-    includedDeveloperSeats: 25,
+    includedDeveloperSeats: 10,
     maxDeveloperSeats: null,
     seatRateColumn: 'isolation',
     flatMonthly: null,
