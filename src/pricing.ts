@@ -761,7 +761,7 @@ export interface QuoteLine {
 }
 
 export interface Quote {
-  plan: Plan
+  plan: Plan | null
   seats: SeatCounts
   seatPricing: SeatPricing
   addonPricing: AddonPricing
@@ -779,7 +779,7 @@ export interface Quote {
 }
 
 export interface BuildQuoteInput {
-  planId: PlanId
+  planId: PlanId | null
   seats: SeatCounts
   selectedAddonIds: AddonId[]
   designPartner?: boolean
@@ -788,17 +788,40 @@ export interface BuildQuoteInput {
 }
 
 export function buildQuote(input: BuildQuoteInput): Quote {
-  const plan = getPlan(input.planId)
+  const plan = input.planId == null ? null : getPlan(input.planId)
   const designPartner = Boolean(input.designPartner)
   const agency = Boolean(input.agency) && !designPartner
 
   let effectivePlan = plan
   const programSelected = designPartner || agency
-  if (programSelected && !DPP_ALLOWED_PLANS.includes(plan.id)) {
+  if (
+    programSelected &&
+    effectivePlan != null &&
+    !DPP_ALLOWED_PLANS.includes(effectivePlan.id)
+  ) {
     effectivePlan = getPlan('enterprise-platform')
   }
 
-  let seats = clampSeats(effectivePlan, input.seats)
+  const seats = effectivePlan
+    ? clampSeats(effectivePlan, input.seats)
+    : {
+        developer: Math.max(0, Math.floor(input.seats.developer)),
+        builder: Math.max(0, Math.floor(input.seats.builder)),
+        viewer: Math.max(0, Math.floor(input.seats.viewer)),
+      }
+
+  const emptySeatPricing: SeatPricing = {
+    developerMonthlyRate: 0,
+    developerAnnual: 0,
+    extraDeveloperSeats: 0,
+    extraDeveloperAnnual: 0,
+    builderAnnual: 0,
+    viewerAnnual: 0,
+    seatContractRaw: 0,
+    planAnnual: 0,
+    seatContract: 0,
+    minimumApplied: false,
+  }
 
   let seatPricing: SeatPricing
   let programAnnual = 0
@@ -810,20 +833,24 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   } else if (agency) {
     programAnnual = AGENCY_ANNUAL_FEE
     seatPricing = priceProgramSeats(AGENCY_ANNUAL_FEE, seats)
-  } else {
+  } else if (effectivePlan) {
     seatPricing = priceSeats(effectivePlan, seats)
+  } else {
+    seatPricing = emptySeatPricing
   }
 
-  const addonIds = input.selectedAddonIds.filter((id) => {
-    const addon = ADDONS.find((a) => a.id === id)
-    return addon != null && isAddonAvailable(addon, effectivePlan)
-  })
+  const addonPlan =
+    effectivePlan ?? (programSelected ? getPlan('enterprise-platform') : null)
+  const addonIds = addonPlan
+    ? input.selectedAddonIds.filter((id) => {
+        const addon = ADDONS.find((a) => a.id === id)
+        return addon != null && isAddonAvailable(addon, addonPlan)
+      })
+    : []
 
-  let addonPricing = priceAddons(
-    effectivePlan,
-    seatPricing.seatContract,
-    addonIds,
-  )
+  let addonPricing = addonPlan
+    ? priceAddons(addonPlan, seatPricing.seatContract, addonIds)
+    : { lines: [], total: 0 }
 
   if (designPartner && addonIds.includes('agent-learning')) {
     dppAgentLearningCredit =
@@ -839,7 +866,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     }
   }
 
-  const platformSelected = effectivePlan.hasUsage && !designPartner
+  const platformSelected = Boolean(effectivePlan?.hasUsage) && !designPartner
   const platformConfig = input.platformConfig ?? defaultPlatformConfig(0)
   const platformUsageLines = platformSelected
     ? buildPlatformUsageLines(platformConfig.additional)
@@ -863,7 +890,9 @@ export function buildQuote(input: BuildQuoteInput): Quote {
       name: designPartner
         ? 'Mastra Design Partner Program'
         : 'Mastra Agency Partner Program',
-      meta: `${effectivePlan.name} · includes ${DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS} developer seats and ${DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder seats`,
+      meta: effectivePlan
+        ? `${effectivePlan.name} · includes ${DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS} developer seats and ${DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder seats`
+        : `Includes ${DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS} developer seats and ${DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder seats`,
       annualAmount: programFee,
       period: '/ yr',
     })
@@ -889,7 +918,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
         period: '/ yr',
       })
     }
-  } else if (effectivePlan.id === 'free') {
+  } else if (effectivePlan?.id === 'free') {
     productLines.push({
       id: 'plan',
       name: 'Free',
@@ -897,7 +926,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
       annualAmount: 0,
       period: '/ yr',
     })
-  } else if (effectivePlan.id === 'teams') {
+  } else if (effectivePlan?.id === 'teams') {
     productLines.push({
       id: 'plan',
       name: 'Teams',
@@ -905,7 +934,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
       annualAmount: (effectivePlan.flatMonthly ?? 0) * 12,
       period: '/ yr',
     })
-  } else {
+  } else if (effectivePlan) {
     const included = Math.min(
       seats.developer,
       effectivePlan.includedDeveloperSeats,
@@ -945,7 +974,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     }
   }
 
-  if (effectivePlan.isEnterprise && seats.viewer > 0) {
+  if (effectivePlan?.isEnterprise && seats.viewer > 0) {
     productLines.push({
       id: 'viewer-seats',
       name: 'Viewer seats',

@@ -89,7 +89,7 @@ export default function App() {
   const [reviewSnapshot, setReviewSnapshot] = useState<OrderSnapshot | null>(
     null,
   )
-  const [planId, setPlanId] = useState<PlanId>('teams')
+  const [planId, setPlanId] = useState<PlanId | null>(null)
   const [seats, setSeats] = useState<SeatCounts>({
     developer: 0,
     builder: 0,
@@ -108,14 +108,16 @@ export default function App() {
     useState<Path1BillingPeriod>('quarter')
   const [engineerCostPerHour] = useState(DEFAULT_ENGINEER_COST_PER_HOUR)
 
-  const plan = getPlan(planId)
+  const plan = planId == null ? null : getPlan(planId)
 
   useEffect(() => {
-    setSeats((prev) => clampSeats(getPlan(planId), prev))
+    if (planId == null) return
+    const nextPlan = getPlan(planId)
+    setSeats((prev) => clampSeats(nextPlan, prev))
     setSelectedAddons((prev) =>
       prev.filter((id) => {
         const addon = ADDONS.find((a) => a.id === id)
-        return addon != null && isAddonAvailable(addon, getPlan(planId))
+        return addon != null && isAddonAvailable(addon, nextPlan)
       }),
     )
     if (!DPP_ALLOWED_PLANS.includes(planId)) {
@@ -140,12 +142,12 @@ export default function App() {
   const usageScaleAnnual = quote.annualTotal - quote.platformOverageTotal
 
   useEffect(() => {
-    if (!quote.plan.hasUsage || designPartner) return
+    if (!quote.plan?.hasUsage || designPartner) return
     setPlatformConfig((prev) => {
       const scaled = platformConfigFromPackage(prev.packageId, usageScaleAnnual)
       return { ...scaled, additional: prev.additional }
     })
-  }, [usageScaleAnnual, quote.plan.hasUsage, designPartner])
+  }, [usageScaleAnnual, quote.plan?.hasUsage, designPartner])
 
   const support = useMemo(
     () =>
@@ -170,7 +172,7 @@ export default function App() {
     [support, engineerCostPerHour],
   )
 
-  const showUsage = quote.plan.hasUsage && !designPartner
+  const showUsage = Boolean(quote.plan?.hasUsage) && !designPartner
 
   const platformMargin = useMemo(() => {
     if (!showUsage) return null
@@ -255,13 +257,17 @@ export default function App() {
     }
 
     return {
-      planLabel: quote.plan.name,
+      planLabel: quote.plan?.name ?? 'No plan',
       seatsLabel:
-        quote.plan.id === 'free'
-          ? 'Unlimited users'
-          : quote.plan.isEnterprise
+        quote.plan == null
+          ? designPartner || agency
             ? `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.viewer} viewer`
-            : 'No seats',
+            : 'No plan'
+          : quote.plan.id === 'free'
+            ? 'Unlimited users'
+            : quote.plan.isEnterprise
+              ? `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.viewer} viewer`
+              : 'No seats',
       programLabel: designPartner
         ? 'Design Partner'
         : agency
@@ -280,15 +286,21 @@ export default function App() {
   }, [hasOrder, quote, support, designPartner, agency])
 
   function setSeatCount(key: keyof SeatCounts, count: number) {
+    const nextCount = Math.max(0, Math.floor(count))
+    if (plan == null) {
+      setSeats({ ...seats, [key]: nextCount })
+      return
+    }
     setSeats(
       clampSeats(plan, {
         ...seats,
-        [key]: Math.max(0, Math.floor(count)),
+        [key]: nextCount,
       }),
     )
   }
 
   function selectPlan(id: PlanId) {
+    if (programActive) return
     setPlanId(id)
     const nextPlan = getPlan(id)
     setSeats(
@@ -374,7 +386,7 @@ export default function App() {
   }
 
   function clearOrder() {
-    setPlanId('teams')
+    setPlanId(null)
     setSeats({ developer: 0, builder: 0, viewer: 0 })
     setSelectedAddons([])
     setDesignPartner(false)
@@ -386,9 +398,55 @@ export default function App() {
     setPath1BillingPeriod('quarter')
   }
 
-  const maxDev = plan.maxDeveloperSeats
+  const maxDev = plan?.maxDeveloperSeats ?? null
   const programActive = designPartner || agency
-  const programPlanOk = DPP_ALLOWED_PLANS.includes(planId)
+  const programPlanOk = planId == null || DPP_ALLOWED_PLANS.includes(planId)
+
+  function renderProgramSeats(idPrefix: string) {
+    return (
+      <div className="plan-seats">
+        <div className="size-row seats-row">
+          <div className="field">
+            <label htmlFor={`${idPrefix}-developer-seats`}>Developer</label>
+            <NumberField
+              id={`${idPrefix}-developer-seats`}
+              value={seats.developer}
+              min={DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS}
+              onCommit={(next) => setSeatCount('developer', next ?? 0)}
+            />
+            <span className="field-hint">
+              {DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS} included ·{' '}
+              {formatUsd(DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY)}/seat/mo after
+            </span>
+          </div>
+          <div className="field">
+            <label htmlFor={`${idPrefix}-builder-seats`}>
+              Builder ({formatUsd(BUILDER_SEAT_MONTHLY)}/mo)
+            </label>
+            <NumberField
+              id={`${idPrefix}-builder-seats`}
+              value={seats.builder}
+              min={DESIGN_PARTNER_INCLUDED_BUILDER_SEATS}
+              onCommit={(next) => setSeatCount('builder', next ?? 0)}
+            />
+            <span className="field-hint">
+              {DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} included ·{' '}
+              {formatUsd(BUILDER_SEAT_MONTHLY)}/seat/mo after
+            </span>
+          </div>
+          <div className="field">
+            <label htmlFor={`${idPrefix}-viewer-seats`}>Viewer ($0)</label>
+            <NumberField
+              id={`${idPrefix}-viewer-seats`}
+              value={seats.viewer}
+              min={0}
+              onCommit={(next) => setSeatCount('viewer', next ?? 0)}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app">
@@ -456,7 +514,7 @@ export default function App() {
               <div className="items">
                 {PLANS.map((p) => {
                   const selected = planId === p.id
-                  const plansLocked = programActive
+                  const planBlocked = programActive
                   return (
                     <div
                       key={p.id}
@@ -464,13 +522,13 @@ export default function App() {
                     >
                       <button
                         type="button"
-                        className={`item radio${selected ? ' selected' : ''}${plansLocked && !selected ? ' unavailable' : ''}`}
+                        className={`item radio${selected ? ' selected' : ''}${planBlocked && !selected ? ' unavailable' : ''}`}
                         onClick={() => {
-                          if (plansLocked) return
+                          if (planBlocked) return
                           selectPlan(p.id)
                         }}
                         aria-pressed={selected}
-                        disabled={plansLocked}
+                        disabled={planBlocked}
                       >
                         <span className="check" aria-hidden="true" />
                         <span className="item-body">
@@ -509,7 +567,7 @@ export default function App() {
                         </span>
                       </button>
 
-                      {selected && plan.isEnterprise && (
+                      {selected && plan != null && plan.isEnterprise && !programActive && (
                         <div className="plan-seats">
                           <div className="size-row seats-row">
                             <div className="field">
@@ -553,7 +611,7 @@ export default function App() {
                                   </strong>{' '}
                                   at {quote.seats.developer} seats
                                   {quote.seatPricing.minimumApplied
-                                    ? ` · ${formatUsd(quote.plan.annualMinimum)}/yr min binds`
+                                    ? ` · ${formatUsd(plan.annualMinimum)}/yr min binds`
                                     : ''}
                                 </span>
                               )}
@@ -715,7 +773,8 @@ export default function App() {
                 </div>
                 <div className="items">
                   {ADDONS.map((addon) => {
-                    const allowed = isAddonAvailable(addon, plan)
+                    const allowed =
+                      plan != null && isAddonAvailable(addon, plan)
                     const selected = selectedAddons.includes(addon.id)
                     const priced = quote.addonPricing.lines.find(
                       (l) => l.addon.id === addon.id,
@@ -775,6 +834,7 @@ export default function App() {
                   <span className="category-meta">Optional</span>
                 </div>
                 <div className="items">
+                  <div className={`item-wrap${agency ? ' open' : ''}`}>
                   <button
                     type="button"
                     className={`item${agency ? ' selected' : ''}${
@@ -827,6 +887,9 @@ export default function App() {
                       / year
                     </span>
                   </button>
+                  {agency && renderProgramSeats('agency')}
+                  </div>
+                  <div className={`item-wrap${designPartner ? ' open' : ''}`}>
                   <button
                     type="button"
                     className={`item${designPartner ? ' selected' : ''}${
@@ -879,6 +942,8 @@ export default function App() {
                       / year
                     </span>
                   </button>
+                  {designPartner && renderProgramSeats('design-partner')}
+                  </div>
                 </div>
               </section>
 
