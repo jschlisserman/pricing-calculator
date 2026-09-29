@@ -79,7 +79,9 @@ export default function TablesPage() {
                       ? 'Unlimited users'
                       : plan.id === 'teams'
                         ? 'None'
-                        : `${plan.includedDeveloperSeats} developer included, then volume-tier $/seat/mo`}
+                        : plan.id === 'enterprise-platform'
+                          ? `${plan.includedDeveloperSeats} developer included, $100/seat/mo`
+                          : `${plan.includedDeveloperSeats} developer included, then volume-tier $/seat/mo`}
                   </td>
                   <td>{plan.description}</td>
                 </tr>
@@ -260,8 +262,8 @@ export default function TablesPage() {
                 <td>Design Partner</td>
                 <td>{formatUsd(DESIGN_PARTNER_ANNUAL_FEE)}/yr</td>
                 <td>
-                  Up to {DESIGN_PARTNER_MAX_DEVELOPER_SEATS} developer +{' '}
-                  {DESIGN_PARTNER_MAX_BUILDER_SEATS} builder seats;{' '}
+                  Includes {DESIGN_PARTNER_MAX_DEVELOPER_SEATS} developer
+                  seats and {DESIGN_PARTNER_MAX_BUILDER_SEATS} builder seats;{' '}
                   {formatUsd(DESIGN_PARTNER_AGENT_LEARNING_CREDIT_MONTHLY)}
                   /mo Agent Learning credit; one quarter Small support.
                   Platform or Self-Hosted only.

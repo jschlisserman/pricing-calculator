@@ -26,7 +26,7 @@ For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastra
 | --- | --- | --- |
 | Free | $0 | Unlimited users · bounded usage grant |
 | Teams | $250/month | No seats |
-| Enterprise (Platform) | $8,000/yr minimum | 5 developer included, then volume-tier $/seat/mo |
+| Enterprise (Platform) | $8,000/yr minimum | 5 developer included, $100/seat/mo |
 | Enterprise Self-Hosted | $10,000/yr minimum | 5 included, then $125-lane tiers |
 | BYO VPC | $30,000/yr minimum | 10 included, then $150-lane tiers |
 | Private Cloud | $50,000/yr minimum | 10 included, then $150-lane tiers |
@@ -64,7 +64,7 @@ Enterprise Platform only. Usage packages scale includes from the product total p
 ### Programs
 
 - **Agency Partner** — $10,000/yr program fee (client pass-through unpublished)
-- **Design Partner** — $12,000/yr; Platform or Self-Hosted only; up to 25 developer + 25 builder; $250/mo Agent Learning credit; one quarter Small support
+- **Design Partner** — $12,000/yr; Platform or Self-Hosted only; includes 10 developer seats and 5 builder seats; $250/mo Agent Learning credit; one quarter Small support
 
 ### Support
 

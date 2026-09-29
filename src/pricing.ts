@@ -67,7 +67,7 @@ export const PLANS: Plan[] = [
       'Auth, SSO, RBAC, FGA, SLA, SOC 2 report, data residency. Annual invoice, usage drawn from a commit.',
     features: [
       '5 developer seats included',
-      'Then $100/seat/mo (volume tiers apply)',
+      '$100/seat/mo',
     ],
     annualMinimum: 8_000,
     includedDeveloperSeats: 5,
@@ -262,8 +262,8 @@ export const DESIGN_PARTNER_ID = 'program-design-partner'
 
 export const AGENCY_ANNUAL_FEE = 10_000
 export const DESIGN_PARTNER_ANNUAL_FEE = 12_000
-export const DESIGN_PARTNER_MAX_DEVELOPER_SEATS = 25
-export const DESIGN_PARTNER_MAX_BUILDER_SEATS = 25
+export const DESIGN_PARTNER_MAX_DEVELOPER_SEATS = 10
+export const DESIGN_PARTNER_MAX_BUILDER_SEATS = 5
 /** Monthly credit toward Agent Learning under DPP. */
 export const DESIGN_PARTNER_AGENT_LEARNING_CREDIT_MONTHLY = 250
 
@@ -845,7 +845,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     productLines.push({
       id: DESIGN_PARTNER_ID,
       name: 'Mastra Design Partner Program',
-      meta: `${effectivePlan.name} · up to ${seats.developer} developer / ${seats.builder} builder seats`,
+      meta: `${effectivePlan.name} · includes ${DESIGN_PARTNER_MAX_DEVELOPER_SEATS} developer seats and ${DESIGN_PARTNER_MAX_BUILDER_SEATS} builder seats`,
       annualAmount: DESIGN_PARTNER_ANNUAL_FEE,
       period: '/ yr',
     })

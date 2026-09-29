@@ -26,6 +26,8 @@ import {
 import {
   ADDONS,
   BUILDER_SEAT_MONTHLY,
+  DESIGN_PARTNER_MAX_BUILDER_SEATS,
+  DESIGN_PARTNER_MAX_DEVELOPER_SEATS,
   DPP_ALLOWED_PLANS,
   PLANS,
   PLATFORM_PACKAGES,
@@ -383,9 +385,9 @@ export default function App() {
   }
 
   const maxDev = designPartner
-    ? 25
+    ? DESIGN_PARTNER_MAX_DEVELOPER_SEATS
     : plan.maxDeveloperSeats
-  const maxBuilder = designPartner ? 25 : null
+  const maxBuilder = designPartner ? DESIGN_PARTNER_MAX_BUILDER_SEATS : null
   const dppPlanOk = DPP_ALLOWED_PLANS.includes(planId)
 
   return (
@@ -792,7 +794,14 @@ export default function App() {
                       if (!dppPlanOk && !designPartner) return
                       setDesignPartner((v) => {
                         const next = !v
-                        if (next) setAgency(false)
+                        if (next) {
+                          setAgency(false)
+                          setSeats({
+                            developer: DESIGN_PARTNER_MAX_DEVELOPER_SEATS,
+                            builder: DESIGN_PARTNER_MAX_BUILDER_SEATS,
+                            viewer: seats.viewer,
+                          })
+                        }
                         return next
                       })
                     }}
@@ -810,9 +819,11 @@ export default function App() {
                         )}
                       </span>
                       <p className="item-desc">
-                        Up to 25 developer + 25 builder seats, $250/mo Agent
-                        Learning credit, one quarter Small support. Not
-                        available with BYOC, BYO VPC, or Private Cloud.
+                        Includes {DESIGN_PARTNER_MAX_DEVELOPER_SEATS} developer
+                        seats and {DESIGN_PARTNER_MAX_BUILDER_SEATS} builder
+                        seats, $250/mo Agent Learning credit, one quarter
+                        Small support. Not available with BYOC, BYO VPC, or
+                        Private Cloud.
                       </p>
                     </span>
                     <span className="item-price">
