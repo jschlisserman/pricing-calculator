@@ -26,8 +26,9 @@ import {
 import {
   ADDONS,
   BUILDER_SEAT_MONTHLY,
-  DESIGN_PARTNER_MAX_BUILDER_SEATS,
-  DESIGN_PARTNER_MAX_DEVELOPER_SEATS,
+  DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY,
+  DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
+  DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
   DPP_ALLOWED_PLANS,
   PLANS,
   PLATFORM_PACKAGES,
@@ -117,8 +118,9 @@ export default function App() {
         return addon != null && isAddonAvailable(addon, getPlan(planId))
       }),
     )
-    if (designPartner && !DPP_ALLOWED_PLANS.includes(planId)) {
-      setDesignPartner(false)
+    if (!DPP_ALLOWED_PLANS.includes(planId)) {
+      if (designPartner) setDesignPartner(false)
+      if (agency) setAgency(false)
     }
   }, [planId, designPartner])
 
@@ -384,11 +386,9 @@ export default function App() {
     setPath1BillingPeriod('quarter')
   }
 
-  const maxDev = designPartner
-    ? DESIGN_PARTNER_MAX_DEVELOPER_SEATS
-    : plan.maxDeveloperSeats
-  const maxBuilder = designPartner ? DESIGN_PARTNER_MAX_BUILDER_SEATS : null
-  const dppPlanOk = DPP_ALLOWED_PLANS.includes(planId)
+  const maxDev = plan.maxDeveloperSeats
+  const programActive = designPartner || agency
+  const programPlanOk = DPP_ALLOWED_PLANS.includes(planId)
 
   return (
     <div className="app">
@@ -456,8 +456,7 @@ export default function App() {
               <div className="items">
                 {PLANS.map((p) => {
                   const selected = planId === p.id
-                  const dppBlocked =
-                    designPartner && !DPP_ALLOWED_PLANS.includes(p.id)
+                  const plansLocked = programActive
                   return (
                     <div
                       key={p.id}
@@ -465,13 +464,13 @@ export default function App() {
                     >
                       <button
                         type="button"
-                        className={`item radio${selected ? ' selected' : ''}${dppBlocked ? ' unavailable' : ''}`}
+                        className={`item radio${selected ? ' selected' : ''}${plansLocked && !selected ? ' unavailable' : ''}`}
                         onClick={() => {
-                          if (dppBlocked) return
+                          if (plansLocked) return
                           selectPlan(p.id)
                         }}
                         aria-pressed={selected}
-                        disabled={dppBlocked}
+                        disabled={plansLocked}
                       >
                         <span className="check" aria-hidden="true" />
                         <span className="item-body">
@@ -518,18 +517,32 @@ export default function App() {
                               <NumberField
                                 id="developer-seats"
                                 value={seats.developer}
-                                min={plan.includedDeveloperSeats}
+                                min={
+                                  programActive
+                                    ? DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS
+                                    : plan.includedDeveloperSeats
+                                }
                                 max={maxDev ?? undefined}
                                 onCommit={(next) =>
                                   setSeatCount('developer', next ?? 0)
                                 }
                               />
-                              {!designPartner && (
+                              {programActive ? (
+                                <span className="field-hint">
+                                  {DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS}{' '}
+                                  included ·{' '}
+                                  {formatUsd(
+                                    DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY,
+                                  )}
+                                  /seat/mo after
+                                </span>
+                              ) : (
                                 <span className="field-hint">
                                   Min {plan.includedDeveloperSeats} included
                                 </span>
                               )}
-                              {quote.seatPricing.developerMonthlyRate > 0 && (
+                              {!programActive &&
+                                quote.seatPricing.developerMonthlyRate > 0 && (
                                 <span className="field-hint seat-rate-hint">
                                   Developer rate:{' '}
                                   <strong>
@@ -552,15 +565,20 @@ export default function App() {
                               <NumberField
                                 id="builder-seats"
                                 value={seats.builder}
-                                min={0}
-                                max={maxBuilder ?? undefined}
+                                min={
+                                  programActive
+                                    ? DESIGN_PARTNER_INCLUDED_BUILDER_SEATS
+                                    : 0
+                                }
                                 onCommit={(next) =>
                                   setSeatCount('builder', next ?? 0)
                                 }
                               />
-                              {maxBuilder != null && (
+                              {programActive && (
                                 <span className="field-hint">
-                                  Max {maxBuilder}
+                                  {DESIGN_PARTNER_INCLUDED_BUILDER_SEATS}{' '}
+                                  included · {formatUsd(BUILDER_SEAT_MONTHLY)}
+                                  /seat/mo after
                                 </span>
                               )}
                             </div>
@@ -759,13 +777,28 @@ export default function App() {
                 <div className="items">
                   <button
                     type="button"
-                    className={`item${agency ? ' selected' : ''}${designPartner ? ' unavailable' : ''}`}
+                    className={`item${agency ? ' selected' : ''}${
+                      designPartner || (!programPlanOk && !agency)
+                        ? ' unavailable'
+                        : ''
+                    }`}
                     onClick={() => {
-                      if (designPartner) return
-                      setAgency((v) => !v)
+                      if (designPartner || (!programPlanOk && !agency)) return
+                      setAgency((v) => {
+                        const next = !v
+                        if (next) {
+                          setDesignPartner(false)
+                          setSeats({
+                            developer: DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
+                            builder: DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
+                            viewer: seats.viewer,
+                          })
+                        }
+                        return next
+                      })
                     }}
                     aria-pressed={agency}
-                    disabled={designPartner}
+                    disabled={designPartner || (!programPlanOk && !agency)}
                   >
                     <span className="check" aria-hidden="true">
                       {agency ? <CheckIcon /> : null}
@@ -773,10 +806,19 @@ export default function App() {
                     <span className="item-body">
                       <span className="item-name">
                         Mastra Agency Partner Program
+                        {!programPlanOk && !agency && (
+                          <span className="pill">Platform or Self-Hosted</span>
+                        )}
                       </span>
                       <p className="item-desc">
-                        Program fee. Agency client pass-through pricing is
-                        unpublished.
+                        Includes {DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS}{' '}
+                        developer seats and{' '}
+                        {DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder seats,
+                        then {formatUsd(DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY)}
+                        /developer seat/mo and {formatUsd(BUILDER_SEAT_MONTHLY)}
+                        /builder seat/mo. Client pass-through pricing is
+                        unpublished. Not available with BYOC, BYO VPC, or
+                        Private Cloud.
                       </p>
                     </span>
                     <span className="item-price">
@@ -788,17 +830,19 @@ export default function App() {
                   <button
                     type="button"
                     className={`item${designPartner ? ' selected' : ''}${
-                      !dppPlanOk && !designPartner ? ' unavailable' : ''
+                      agency || (!programPlanOk && !designPartner)
+                        ? ' unavailable'
+                        : ''
                     }`}
                     onClick={() => {
-                      if (!dppPlanOk && !designPartner) return
+                      if (agency || (!programPlanOk && !designPartner)) return
                       setDesignPartner((v) => {
                         const next = !v
                         if (next) {
                           setAgency(false)
                           setSeats({
-                            developer: DESIGN_PARTNER_MAX_DEVELOPER_SEATS,
-                            builder: DESIGN_PARTNER_MAX_BUILDER_SEATS,
+                            developer: DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
+                            builder: DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
                             viewer: seats.viewer,
                           })
                         }
@@ -806,7 +850,7 @@ export default function App() {
                       })
                     }}
                     aria-pressed={designPartner}
-                    disabled={!dppPlanOk && !designPartner}
+                    disabled={agency || (!programPlanOk && !designPartner)}
                   >
                     <span className="check" aria-hidden="true">
                       {designPartner ? <CheckIcon /> : null}
@@ -814,16 +858,19 @@ export default function App() {
                     <span className="item-body">
                       <span className="item-name">
                         Design Partner Program
-                        {!dppPlanOk && !designPartner && (
+                        {!programPlanOk && !designPartner && (
                           <span className="pill">Platform or Self-Hosted</span>
                         )}
                       </span>
                       <p className="item-desc">
-                        Includes {DESIGN_PARTNER_MAX_DEVELOPER_SEATS} developer
-                        seats and {DESIGN_PARTNER_MAX_BUILDER_SEATS} builder
-                        seats, $250/mo Agent Learning credit, one quarter
-                        Small support. Not available with BYOC, BYO VPC, or
-                        Private Cloud.
+                        Includes {DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS}{' '}
+                        developer seats and{' '}
+                        {DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder seats,
+                        then {formatUsd(DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY)}
+                        /developer seat/mo and {formatUsd(BUILDER_SEAT_MONTHLY)}
+                        /builder seat/mo. $250/mo Agent Learning credit, one
+                        quarter Small support. Not available with BYOC, BYO
+                        VPC, or Private Cloud.
                       </p>
                     </span>
                     <span className="item-price">

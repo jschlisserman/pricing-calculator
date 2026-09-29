@@ -63,8 +63,8 @@ Enterprise Platform only. Usage packages scale includes from the product total p
 
 ### Programs
 
-- **Agency Partner** — $10,000/yr program fee (client pass-through unpublished)
-- **Design Partner** — $12,000/yr; Platform or Self-Hosted only; includes 10 developer seats and 5 builder seats; $250/mo Agent Learning credit; one quarter Small support
+- **Agency Partner** — $10,000/yr; Platform or Self-Hosted only; includes 10 developer seats and 5 builder seats, then $100/developer seat/mo and $50/builder seat/mo; client pass-through unpublished
+- **Design Partner** — $12,000/yr; Platform or Self-Hosted only; includes 10 developer seats and 5 builder seats, then $100/developer seat/mo and $50/builder seat/mo; $250/mo Agent Learning credit; one quarter Small support
 
 ### Support
 

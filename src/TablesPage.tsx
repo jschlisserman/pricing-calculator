@@ -11,8 +11,9 @@ import {
   BUILDER_SEAT_MONTHLY,
   DESIGN_PARTNER_AGENT_LEARNING_CREDIT_MONTHLY,
   DESIGN_PARTNER_ANNUAL_FEE,
-  DESIGN_PARTNER_MAX_BUILDER_SEATS,
-  DESIGN_PARTNER_MAX_DEVELOPER_SEATS,
+  DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY,
+  DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
+  DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
   PLANS,
   VOLUME_TIERS,
   formatPercent,
@@ -256,14 +257,24 @@ export default function TablesPage() {
               <tr>
                 <td>Agency Partner</td>
                 <td>{formatUsd(AGENCY_ANNUAL_FEE)}/yr</td>
-                <td>Program fee only; client pass-through unpublished</td>
+                <td>
+                  Includes {DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS} developer
+                  seats and {DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder
+                  seats, then {formatUsd(DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY)}
+                  /developer seat/mo and {formatUsd(BUILDER_SEAT_MONTHLY)}
+                  /builder seat/mo. Client pass-through unpublished. Platform
+                  or Self-Hosted only.
+                </td>
               </tr>
               <tr>
                 <td>Design Partner</td>
                 <td>{formatUsd(DESIGN_PARTNER_ANNUAL_FEE)}/yr</td>
                 <td>
-                  Includes {DESIGN_PARTNER_MAX_DEVELOPER_SEATS} developer
-                  seats and {DESIGN_PARTNER_MAX_BUILDER_SEATS} builder seats;{' '}
+                  Includes {DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS} developer
+                  seats and {DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder
+                  seats, then {formatUsd(DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY)}
+                  /developer seat/mo and {formatUsd(BUILDER_SEAT_MONTHLY)}
+                  /builder seat/mo;{' '}
                   {formatUsd(DESIGN_PARTNER_AGENT_LEARNING_CREDIT_MONTHLY)}
                   /mo Agent Learning credit; one quarter Small support.
                   Platform or Self-Hosted only.

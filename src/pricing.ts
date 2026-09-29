@@ -262,8 +262,10 @@ export const DESIGN_PARTNER_ID = 'program-design-partner'
 
 export const AGENCY_ANNUAL_FEE = 10_000
 export const DESIGN_PARTNER_ANNUAL_FEE = 12_000
-export const DESIGN_PARTNER_MAX_DEVELOPER_SEATS = 10
-export const DESIGN_PARTNER_MAX_BUILDER_SEATS = 5
+export const DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS = 10
+export const DESIGN_PARTNER_INCLUDED_BUILDER_SEATS = 5
+/** Additional developer seats beyond the Design Partner grant. */
+export const DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY = 100
 /** Monthly credit toward Agent Learning under DPP. */
 export const DESIGN_PARTNER_AGENT_LEARNING_CREDIT_MONTHLY = 250
 
@@ -363,6 +365,35 @@ export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
     plan.annualMinimum + extraDeveloperAnnual + builderAnnual
   return {
     developerMonthlyRate: rate,
+    developerAnnual: extraDeveloperAnnual,
+    extraDeveloperSeats,
+    extraDeveloperAnnual,
+    builderAnnual,
+    viewerAnnual: 0,
+    seatContractRaw: extraDeveloperAnnual + builderAnnual,
+    planAnnual,
+    seatContract: planAnnual,
+    minimumApplied: false,
+  }
+}
+
+/** Design Partner and Agency: included seats are inside the program fee. */
+function priceProgramSeats(annualFee: number, seats: SeatCounts): SeatPricing {
+  const extraDeveloperSeats = Math.max(
+    0,
+    seats.developer - DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
+  )
+  const extraBuilderSeats = Math.max(
+    0,
+    seats.builder - DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
+  )
+  const extraDeveloperAnnual =
+    extraDeveloperSeats * DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY * 12
+  const builderAnnual = extraBuilderSeats * BUILDER_SEAT_MONTHLY * 12
+  const planAnnual = annualFee + extraDeveloperAnnual + builderAnnual
+  return {
+    developerMonthlyRate:
+      extraDeveloperSeats > 0 ? DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY : 0,
     developerAnnual: extraDeveloperAnnual,
     extraDeveloperSeats,
     extraDeveloperAnnual,
@@ -762,21 +793,12 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   const agency = Boolean(input.agency) && !designPartner
 
   let effectivePlan = plan
-  if (designPartner && !DPP_ALLOWED_PLANS.includes(plan.id)) {
+  const programSelected = designPartner || agency
+  if (programSelected && !DPP_ALLOWED_PLANS.includes(plan.id)) {
     effectivePlan = getPlan('enterprise-platform')
   }
 
   let seats = clampSeats(effectivePlan, input.seats)
-  if (designPartner) {
-    seats = {
-      developer: Math.min(
-        DESIGN_PARTNER_MAX_DEVELOPER_SEATS,
-        Math.max(effectivePlan.includedDeveloperSeats, seats.developer),
-      ),
-      builder: Math.min(DESIGN_PARTNER_MAX_BUILDER_SEATS, seats.builder),
-      viewer: seats.viewer,
-    }
-  }
 
   let seatPricing: SeatPricing
   let programAnnual = 0
@@ -784,21 +806,12 @@ export function buildQuote(input: BuildQuoteInput): Quote {
 
   if (designPartner) {
     programAnnual = DESIGN_PARTNER_ANNUAL_FEE
-    seatPricing = {
-      developerMonthlyRate: 0,
-      developerAnnual: 0,
-      extraDeveloperSeats: 0,
-      extraDeveloperAnnual: 0,
-      builderAnnual: 0,
-      viewerAnnual: 0,
-      seatContractRaw: DESIGN_PARTNER_ANNUAL_FEE,
-      planAnnual: DESIGN_PARTNER_ANNUAL_FEE,
-      seatContract: DESIGN_PARTNER_ANNUAL_FEE,
-      minimumApplied: false,
-    }
+    seatPricing = priceProgramSeats(DESIGN_PARTNER_ANNUAL_FEE, seats)
+  } else if (agency) {
+    programAnnual = AGENCY_ANNUAL_FEE
+    seatPricing = priceProgramSeats(AGENCY_ANNUAL_FEE, seats)
   } else {
     seatPricing = priceSeats(effectivePlan, seats)
-    if (agency) programAnnual = AGENCY_ANNUAL_FEE
   }
 
   const addonIds = input.selectedAddonIds.filter((id) => {
@@ -841,14 +854,41 @@ export function buildQuote(input: BuildQuoteInput): Quote {
 
   const productLines: QuoteLine[] = []
 
-  if (designPartner) {
+  if (designPartner || agency) {
+    const programFee = designPartner
+      ? DESIGN_PARTNER_ANNUAL_FEE
+      : AGENCY_ANNUAL_FEE
     productLines.push({
-      id: DESIGN_PARTNER_ID,
-      name: 'Mastra Design Partner Program',
-      meta: `${effectivePlan.name} · includes ${DESIGN_PARTNER_MAX_DEVELOPER_SEATS} developer seats and ${DESIGN_PARTNER_MAX_BUILDER_SEATS} builder seats`,
-      annualAmount: DESIGN_PARTNER_ANNUAL_FEE,
+      id: designPartner ? DESIGN_PARTNER_ID : AGENCY_PROGRAM_ID,
+      name: designPartner
+        ? 'Mastra Design Partner Program'
+        : 'Mastra Agency Partner Program',
+      meta: `${effectivePlan.name} · includes ${DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS} developer seats and ${DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder seats`,
+      annualAmount: programFee,
       period: '/ yr',
     })
+    if (seatPricing.extraDeveloperSeats > 0) {
+      productLines.push({
+        id: 'developer-seats',
+        name: 'Additional developer seats',
+        meta: `${seatPricing.extraDeveloperSeats} × ${formatUsd(DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY)}/seat/mo`,
+        annualAmount: seatPricing.extraDeveloperAnnual,
+        period: '/ yr',
+      })
+    }
+    const extraBuilderSeats = Math.max(
+      0,
+      seats.builder - DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
+    )
+    if (extraBuilderSeats > 0) {
+      productLines.push({
+        id: 'builder-seats',
+        name: 'Additional builder seats',
+        meta: `${extraBuilderSeats} × ${formatUsd(BUILDER_SEAT_MONTHLY)}/seat/mo`,
+        annualAmount: seatPricing.builderAnnual,
+        period: '/ yr',
+      })
+    }
   } else if (effectivePlan.id === 'free') {
     productLines.push({
       id: 'plan',
@@ -937,16 +977,6 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     })
   }
 
-  if (agency) {
-    productLines.push({
-      id: AGENCY_PROGRAM_ID,
-      name: 'Mastra Agency Partner Program',
-      meta: 'Program fee',
-      annualAmount: AGENCY_ANNUAL_FEE,
-      period: '/ yr',
-    })
-  }
-
   if (platformOverageTotal > 0) {
     productLines.push({
       id: 'platform-usage',
@@ -957,14 +987,8 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     })
   }
 
-  const annualTotal = designPartner
-    ? DESIGN_PARTNER_ANNUAL_FEE +
-      addonPricing.total +
-      platformOverageTotal
-    : seatPricing.planAnnual +
-      (agency ? AGENCY_ANNUAL_FEE : 0) +
-      addonPricing.total +
-      platformOverageTotal
+  const annualTotal =
+    seatPricing.planAnnual + addonPricing.total + platformOverageTotal
 
   return {
     plan: effectivePlan,
