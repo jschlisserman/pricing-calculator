@@ -30,7 +30,7 @@ For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastra
 | Enterprise Self-Hosted | $10,000/yr minimum | 5 included, then $125-lane tiers |
 | BYO VPC | $30,000/yr minimum | 10 included, then $150-lane tiers |
 | Private Cloud | $50,000/yr minimum | 10 included, then $150-lane tiers |
-| BYOC | $100,000/yr minimum | 10 included, then $150-lane tiers |
+| BYOC | $100,000/yr minimum | 10 included, $200/seat/mo |
 
 Enterprise billed amount is the annual minimum, which includes the plan’s developer seats, plus additional developer seats and builder seats purchased on top.
 
@@ -49,7 +49,7 @@ Enterprise billed amount is the annual minimum, which includes the plan’s deve
 | 151–400 | $70 | $85 | $105 |
 | 401+ | $55 | $65 | $80 |
 
-Self-hosted and isolated rates follow the platform step-down, rounded to the amounts above.
+Self-hosted and isolated rates follow the platform step-down, rounded to the amounts above. BYOC developer seats are a flat $200/seat/mo and do not use this ladder.
 
 ### Add-ons
 

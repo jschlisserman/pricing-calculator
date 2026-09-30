@@ -24,6 +24,8 @@ export interface Plan {
   maxDeveloperSeats: number | null
   /** Monthly per-developer rate column for volume tiers. null = flat/free. */
   seatRateColumn: SeatRateColumn | null
+  /** Flat monthly developer seat rate. When set, volume tiers do not apply. */
+  flatDeveloperSeatMonthly?: number
   /** Flat monthly price (Teams). */
   flatMonthly: number | null
   /** Hosted Platform — usage packages apply. */
@@ -134,12 +136,13 @@ export const PLANS: Plan[] = [
     description: "Mastra-operated inside the customer's own cloud account",
     features: [
       '10 developer seats included',
-      'Then $150/seat/mo (volume tiers apply)',
+      '$200/seat/mo',
     ],
     annualMinimum: 100_000,
     includedDeveloperSeats: 10,
     maxDeveloperSeats: null,
-    seatRateColumn: 'isolation',
+    seatRateColumn: null,
+    flatDeveloperSeatMonthly: 200,
     flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
@@ -210,6 +213,7 @@ export function getDeveloperSeatMonthlyRate(
   plan: Plan,
   developerSeats: number,
 ): number {
+  if (plan.flatDeveloperSeatMonthly != null) return plan.flatDeveloperSeatMonthly
   if (plan.seatRateColumn == null) return 0
   const tier = getVolumeTier(developerSeats)
   return tier[plan.seatRateColumn]

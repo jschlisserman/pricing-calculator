@@ -82,7 +82,9 @@ export default function TablesPage() {
                         ? 'None'
                         : plan.id === 'enterprise-platform'
                           ? `${plan.includedDeveloperSeats} developer included, $100/seat/mo`
-                          : `${plan.includedDeveloperSeats} developer included, then volume-tier $/seat/mo`}
+                          : plan.id === 'byoc'
+                            ? `${plan.includedDeveloperSeats} developer included, ${formatUsd(plan.flatDeveloperSeatMonthly ?? 0)}/seat/mo`
+                            : `${plan.includedDeveloperSeats} developer included, then volume-tier $/seat/mo`}
                   </td>
                   <td>{plan.description}</td>
                 </tr>
@@ -98,8 +100,8 @@ export default function TablesPage() {
         </div>
         <p className="band-table-intro">
           All developer seats bill at the rate for the total seat count.
-          Self-hosted and isolated (BYO VPC, Private Cloud, BYOC) follow the
-          platform step-down.
+          Self-hosted and isolated (BYO VPC, Private Cloud) follow the
+          platform step-down. BYOC is a flat $200/seat/mo.
         </p>
         <div className="band-table-wrap">
           <table className="band-table">
