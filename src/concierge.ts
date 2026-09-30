@@ -14,7 +14,7 @@ export type Path2PackageId =
 export const AUDIT_ID = 'support-audit'
 
 /** Flat Mastra Audit fee (Pricing v5). */
-export const AUDIT_FEE = 2_000
+export const AUDIT_FEE = 500
 
 /** Weeks in a quarterly Path 1 engagement (for implied hourly). */
 export const PATH1_WEEKS_PER_QUARTER = 13

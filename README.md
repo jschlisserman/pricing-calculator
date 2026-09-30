@@ -70,6 +70,6 @@ Enterprise Platform only. Usage packages scale includes from the product total p
 
 - **Path 1** — Small / Medium / Large; choose quarterly ($9k / $24k / $70k) or annual package ($32k / $86k / $250k, ~10% off)
 - **Path 2** — Evals / Integrations / Infrastructure / Custom; price = engineer $/hr × hours ÷ (1 − margin)
-- **Mastra Audit** — $2,000 one-time
+- **Mastra Audit** — $500 one-time
 
 No purchase-count or support package discounts.
