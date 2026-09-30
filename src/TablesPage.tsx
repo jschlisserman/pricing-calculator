@@ -35,7 +35,7 @@ export default function TablesPage() {
         </div>
         <div className="rule">
           <h4>Enterprise</h4>
-          <p>Annual minimum · seats at volume-tier rates</p>
+          <p>Annual minimum · fixed seat price, except Platform volume tiers</p>
         </div>
         <div className="rule">
           <h4>Builder seats</h4>
@@ -80,10 +80,10 @@ export default function TablesPage() {
                       ? 'Unlimited users'
                       : plan.id === 'teams'
                         ? 'None'
-                        : plan.id === 'enterprise-platform'
-                          ? `${plan.includedDeveloperSeats} developer included, $100/seat/mo`
-                          : plan.id === 'byoc'
-                            ? `${plan.includedDeveloperSeats} developer included, ${formatUsd(plan.flatDeveloperSeatMonthly ?? 0)}/seat/mo`
+                        : plan.flatDeveloperSeatMonthly != null
+                          ? `${plan.includedDeveloperSeats} developer included, ${formatUsd(plan.flatDeveloperSeatMonthly)}/seat/mo`
+                          : plan.id === 'enterprise-platform'
+                            ? `${plan.includedDeveloperSeats} developer included, $100/seat/mo`
                             : `${plan.includedDeveloperSeats} developer included, then volume-tier $/seat/mo`}
                   </td>
                   <td>{plan.description}</td>
@@ -99,9 +99,9 @@ export default function TablesPage() {
           <h2>Developer seat volume tiers</h2>
         </div>
         <p className="band-table-intro">
-          All developer seats bill at the rate for the total seat count.
-          Self-hosted and isolated (BYO VPC, Private Cloud) follow the
-          platform step-down. BYOC is a flat $200/seat/mo.
+          Enterprise Platform bills every developer seat at the rate for the
+          total seat count. Self-Hosted is $125/seat/mo, BYO VPC and Private
+          Cloud are $150/seat/mo, and BYOC is $200/seat/mo.
         </p>
         <div className="band-table-wrap">
           <table className="band-table">
@@ -109,8 +109,6 @@ export default function TablesPage() {
               <tr>
                 <th>Developer seats</th>
                 <th>Platform</th>
-                <th>Self-Hosted</th>
-                <th>Isolated</th>
               </tr>
             </thead>
             <tbody>
@@ -122,8 +120,6 @@ export default function TablesPage() {
                       : `${tier.minSeats}–${tier.maxSeats}`}
                   </td>
                   <td>{formatUsd(tier.platform)}/mo</td>
-                  <td>{formatUsd(tier.selfHosted)}/mo</td>
-                  <td>{formatUsd(tier.isolation)}/mo</td>
                 </tr>
               ))}
             </tbody>

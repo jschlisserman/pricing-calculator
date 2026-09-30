@@ -27,29 +27,29 @@ For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastra
 | Free | $0 | Unlimited users · bounded usage grant |
 | Teams | $250/month | No seats |
 | Enterprise (Platform) | $8,000/yr minimum | 5 developer included, $100/seat/mo |
-| Enterprise Self-Hosted | $10,000/yr minimum | 5 included, then $125-lane tiers |
-| BYO VPC | $30,000/yr minimum | 10 included, then $150-lane tiers |
-| Private Cloud | $50,000/yr minimum | 10 included, then $150-lane tiers |
+| Enterprise Self-Hosted | $10,000/yr minimum | 5 included, $125/seat/mo |
+| BYO VPC | $30,000/yr minimum | 10 included, $150/seat/mo |
+| Private Cloud | $50,000/yr minimum | 10 included, $150/seat/mo |
 | BYOC | $100,000/yr minimum | 10 included, $200/seat/mo |
 
 Enterprise billed amount is the annual minimum, which includes the plan’s developer seats, plus additional developer seats and builder seats purchased on top.
 
 ### Seat types
 
-- **Developer** — Enterprise only. Included seats come with the plan floor; additional seats use the volume tier
+- **Developer** — Enterprise only. Included seats come with the plan floor. Additional seats are $100/seat/mo on Platform (volume tiers), $125 on Self-Hosted, $150 on BYO VPC and Private Cloud, and $200 on BYOC
 - **Builder** — Enterprise only. $50/mo flat (Agent Builder only; no CLI/deploy/admin)
 - **Viewer** — Enterprise only. $0 (read-only)
 
 ### Developer volume tiers ($/seat/mo)
 
-| Seats | Platform | Self-Hosted | Isolated |
-| --- | --- | --- | --- |
-| 1–50 | $100 | $125 | $150 |
-| 51–150 | $85 | $105 | $125 |
-| 151–400 | $70 | $85 | $105 |
-| 401+ | $55 | $65 | $80 |
+| Seats | Platform |
+| --- | --- |
+| 1–50 | $100 |
+| 51–150 | $85 |
+| 151–400 | $70 |
+| 401+ | $55 |
 
-Self-hosted and isolated rates follow the platform step-down, rounded to the amounts above. BYOC developer seats are a flat $200/seat/mo and do not use this ladder.
+Only Enterprise Platform uses this ladder. Self-Hosted is $125/seat/mo, BYO VPC and Private Cloud are $150/seat/mo, and BYOC is $200/seat/mo.
 
 ### Add-ons
 

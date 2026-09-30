@@ -86,12 +86,13 @@ export const PLANS: Plan[] = [
       'Same as Enterprise. The uplift covers usage that cannot be metered.',
     features: [
       '5 developer seats included',
-      'Then $125/seat/mo (volume tiers apply)',
+      '$125/seat/mo',
     ],
     annualMinimum: 10_000,
     includedDeveloperSeats: 5,
     maxDeveloperSeats: null,
-    seatRateColumn: 'selfHosted',
+    seatRateColumn: null,
+    flatDeveloperSeatMonthly: 125,
     flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
@@ -103,12 +104,13 @@ export const PLANS: Plan[] = [
       "Enterprise, with the data plane running inside the customer's own VPC. Mastra operates the control plane, so usage is still metered.",
     features: [
       '10 developer seats included',
-      'Then $150/seat/mo (volume tiers apply)',
+      '$150/seat/mo',
     ],
     annualMinimum: 30_000,
     includedDeveloperSeats: 10,
     maxDeveloperSeats: null,
-    seatRateColumn: 'isolation',
+    seatRateColumn: null,
+    flatDeveloperSeatMonthly: 150,
     flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
@@ -120,12 +122,13 @@ export const PLANS: Plan[] = [
       'Enterprise, deployed into a dedicated single-tenant environment Mastra operates.',
     features: [
       '10 developer seats included',
-      'Then $150/seat/mo (volume tiers apply)',
+      '$150/seat/mo',
     ],
     annualMinimum: 50_000,
     includedDeveloperSeats: 10,
     maxDeveloperSeats: null,
-    seatRateColumn: 'isolation',
+    seatRateColumn: null,
+    flatDeveloperSeatMonthly: 150,
     flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
@@ -166,9 +169,7 @@ export interface VolumeTier {
   isolation: number
 }
 
-/** Developer seat volume tiers ($/seat/mo). All seats bill at the matching tier.
- * Self-hosted and isolation follow the platform step-down, rounded.
- */
+/** Developer seat volume tiers ($/seat/mo). Platform bills every seat at the matching tier. */
 export const VOLUME_TIERS: VolumeTier[] = [
   {
     minSeats: 1,
