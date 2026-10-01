@@ -53,9 +53,9 @@ Only Enterprise Platform uses this ladder. Self-Hosted is $125/seat/mo, BYO VPC 
 
 ### Add-ons
 
-- **Agent Learning** — 30% of seat contract, $7.5k/yr minimum (Enterprise only)
-- **Compliance** — 25% of seat contract, $5k/yr minimum (Enterprise only)
-- **Premium on-call** — 20% of seat contract, $15k/yr minimum (Enterprise only)
+- **Agent Learning** — 50% of seat contract, $10k/yr minimum (Enterprise only)
+- **Compliance** — 20% of seat contract, $5k/yr minimum (Enterprise only)
+- **Premium on-call** — 30% of seat contract, $10k/yr minimum (Enterprise only)
 
 ### Platform usage
 
