@@ -26,6 +26,7 @@ import {
 import {
   ADDONS,
   BUILDER_SEAT_MONTHLY,
+  OPERATOR_SEAT_MONTHLY,
   DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY,
   DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
   DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
@@ -93,7 +94,7 @@ export default function App() {
   const [seats, setSeats] = useState<SeatCounts>({
     developer: 0,
     builder: 0,
-    viewer: 0,
+    operator: 0,
   })
   const [selectedAddons, setSelectedAddons] = useState<AddonId[]>([])
   const [designPartner, setDesignPartner] = useState(false)
@@ -261,12 +262,12 @@ export default function App() {
       seatsLabel:
         quote.plan == null
           ? designPartner || agency
-            ? `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.viewer} viewer`
+            ? `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.operator} operator`
             : 'No plan'
           : quote.plan.id === 'free'
             ? 'Unlimited users'
             : quote.plan.isEnterprise
-              ? `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.viewer} viewer`
+              ? `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.operator} operator`
               : 'No seats',
       programLabel: designPartner
         ? 'Design Partner'
@@ -307,7 +308,7 @@ export default function App() {
       clampSeats(nextPlan, {
         developer: nextPlan.includedDeveloperSeats,
         builder: seats.builder,
-        viewer: seats.viewer,
+        operator: seats.operator,
       }),
     )
   }
@@ -387,7 +388,7 @@ export default function App() {
 
   function clearOrder() {
     setPlanId(null)
-    setSeats({ developer: 0, builder: 0, viewer: 0 })
+    setSeats({ developer: 0, builder: 0, operator: 0 })
     setSelectedAddons([])
     setDesignPartner(false)
     setAgency(false)
@@ -435,12 +436,14 @@ export default function App() {
             </span>
           </div>
           <div className="field">
-            <label htmlFor={`${idPrefix}-viewer-seats`}>Viewer ($0)</label>
+            <label htmlFor={`${idPrefix}-operator-seats`}>
+              Operator ({formatUsd(OPERATOR_SEAT_MONTHLY)}/mo)
+            </label>
             <NumberField
-              id={`${idPrefix}-viewer-seats`}
-              value={seats.viewer}
+              id={`${idPrefix}-operator-seats`}
+              value={seats.operator}
               min={0}
-              onCommit={(next) => setSeatCount('viewer', next ?? 0)}
+              onCommit={(next) => setSeatCount('operator', next ?? 0)}
             />
           </div>
         </div>
@@ -641,13 +644,15 @@ export default function App() {
                               )}
                             </div>
                             <div className="field">
-                              <label htmlFor="viewer-seats">Viewer ($0)</label>
+                              <label htmlFor="operator-seats">
+                                Operator ({formatUsd(OPERATOR_SEAT_MONTHLY)}/mo)
+                              </label>
                               <NumberField
-                                id="viewer-seats"
-                                value={seats.viewer}
+                                id="operator-seats"
+                                value={seats.operator}
                                 min={0}
                                 onCommit={(next) =>
-                                  setSeatCount('viewer', next ?? 0)
+                                  setSeatCount('operator', next ?? 0)
                                 }
                               />
                             </div>
@@ -851,7 +856,7 @@ export default function App() {
                           setSeats({
                             developer: DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
                             builder: DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
-                            viewer: seats.viewer,
+                            operator: seats.operator,
                           })
                         }
                         return next
@@ -906,7 +911,7 @@ export default function App() {
                           setSeats({
                             developer: DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
                             builder: DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
-                            viewer: seats.viewer,
+                            operator: seats.operator,
                           })
                         }
                         return next

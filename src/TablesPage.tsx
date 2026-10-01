@@ -9,6 +9,7 @@ import {
   ADDONS,
   AGENCY_ANNUAL_FEE,
   BUILDER_SEAT_MONTHLY,
+  OPERATOR_SEAT_MONTHLY,
   DESIGN_PARTNER_AGENT_LEARNING_CREDIT_MONTHLY,
   DESIGN_PARTNER_ANNUAL_FEE,
   DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY,
@@ -37,10 +38,10 @@ export default function TablesPage() {
           <p>Annual minimum · fixed seat price</p>
         </div>
         <div className="rule">
-          <h4>Builder seats</h4>
+          <h4>Builder and operator seats</h4>
           <p>
-            Enterprise only · {formatUsd(BUILDER_SEAT_MONTHLY)}/mo · viewers
-            free
+            Enterprise only · builders {formatUsd(BUILDER_SEAT_MONTHLY)}/mo ·
+            operators {formatUsd(OPERATOR_SEAT_MONTHLY)}/mo
           </p>
         </div>
         <div className="rule">

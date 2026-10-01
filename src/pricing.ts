@@ -155,9 +155,9 @@ export function getPlan(planId: PlanId): Plan {
   return PLANS.find((p) => p.id === planId) ?? PLANS[0]
 }
 
-/** Builder and viewer seats are Enterprise only. Builders are $50/mo. Viewers are free. */
+/** Builder and operator seats are Enterprise only. Builders are $50/mo. Operators are $10/mo. */
 export const BUILDER_SEAT_MONTHLY = 50
-export const VIEWER_SEAT_MONTHLY = 0
+export const OPERATOR_SEAT_MONTHLY = 10
 
 export interface VolumeTier {
   minSeats: number
@@ -286,12 +286,12 @@ export function isAddonAvailable(addon: Addon, plan: Plan): boolean {
 export interface SeatCounts {
   developer: number
   builder: number
-  viewer: number
+  operator: number
 }
 
 export function clampSeats(plan: Plan, seats: SeatCounts): SeatCounts {
   if (!plan.isEnterprise) {
-    return { developer: 0, builder: 0, viewer: 0 }
+    return { developer: 0, builder: 0, operator: 0 }
   }
 
   const maxDev = plan.maxDeveloperSeats
@@ -303,8 +303,8 @@ export function clampSeats(plan: Plan, seats: SeatCounts): SeatCounts {
   }
 
   const builder = Math.max(0, Math.floor(seats.builder))
-  const viewer = Math.max(0, Math.floor(seats.viewer))
-  return { developer, builder, viewer }
+  const operator = Math.max(0, Math.floor(seats.operator))
+  return { developer, builder, operator }
 }
 
 export interface SeatPricing {
@@ -314,8 +314,8 @@ export interface SeatPricing {
   extraDeveloperSeats: number
   extraDeveloperAnnual: number
   builderAnnual: number
-  viewerAnnual: number
-  /** Developer + builder annual before plan minimum floor. */
+  operatorAnnual: number
+  /** Extra developer, builder, and operator annual before the plan floor. */
   seatContractRaw: number
   /** Billed plan/seat annual (max of minimum and seat math). */
   planAnnual: number
@@ -334,7 +334,7 @@ export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
       extraDeveloperSeats: 0,
       extraDeveloperAnnual: 0,
       builderAnnual: 0,
-      viewerAnnual: 0,
+      operatorAnnual: 0,
       seatContractRaw: 0,
       planAnnual: 0,
       seatContract: 0,
@@ -350,7 +350,7 @@ export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
       extraDeveloperSeats: 0,
       extraDeveloperAnnual: 0,
       builderAnnual: 0,
-      viewerAnnual: 0,
+      operatorAnnual: 0,
       seatContractRaw: planAnnual,
       planAnnual,
       seatContract: planAnnual,
@@ -365,16 +365,20 @@ export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
   )
   const extraDeveloperAnnual = extraDeveloperSeats * rate * 12
   const builderAnnual = clamped.builder * BUILDER_SEAT_MONTHLY * 12
+  const operatorAnnual = clamped.operator * OPERATOR_SEAT_MONTHLY * 12
   const planAnnual =
-    plan.annualMinimum + extraDeveloperAnnual + builderAnnual
+    plan.annualMinimum +
+    extraDeveloperAnnual +
+    builderAnnual +
+    operatorAnnual
   return {
     developerMonthlyRate: rate,
     developerAnnual: extraDeveloperAnnual,
     extraDeveloperSeats,
     extraDeveloperAnnual,
     builderAnnual,
-    viewerAnnual: 0,
-    seatContractRaw: extraDeveloperAnnual + builderAnnual,
+    operatorAnnual,
+    seatContractRaw: extraDeveloperAnnual + builderAnnual + operatorAnnual,
     planAnnual,
     seatContract: planAnnual,
     minimumApplied: false,
@@ -394,7 +398,10 @@ function priceProgramSeats(annualFee: number, seats: SeatCounts): SeatPricing {
   const extraDeveloperAnnual =
     extraDeveloperSeats * DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY * 12
   const builderAnnual = extraBuilderSeats * BUILDER_SEAT_MONTHLY * 12
-  const planAnnual = annualFee + extraDeveloperAnnual + builderAnnual
+  const operatorAnnual =
+    Math.max(0, Math.floor(seats.operator)) * OPERATOR_SEAT_MONTHLY * 12
+  const planAnnual =
+    annualFee + extraDeveloperAnnual + builderAnnual + operatorAnnual
   return {
     developerMonthlyRate:
       extraDeveloperSeats > 0 ? DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY : 0,
@@ -402,8 +409,8 @@ function priceProgramSeats(annualFee: number, seats: SeatCounts): SeatPricing {
     extraDeveloperSeats,
     extraDeveloperAnnual,
     builderAnnual,
-    viewerAnnual: 0,
-    seatContractRaw: extraDeveloperAnnual + builderAnnual,
+    operatorAnnual,
+    seatContractRaw: extraDeveloperAnnual + builderAnnual + operatorAnnual,
     planAnnual,
     seatContract: planAnnual,
     minimumApplied: false,
@@ -811,7 +818,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     : {
         developer: Math.max(0, Math.floor(input.seats.developer)),
         builder: Math.max(0, Math.floor(input.seats.builder)),
-        viewer: Math.max(0, Math.floor(input.seats.viewer)),
+        operator: Math.max(0, Math.floor(input.seats.operator)),
       }
 
   const emptySeatPricing: SeatPricing = {
@@ -820,7 +827,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     extraDeveloperSeats: 0,
     extraDeveloperAnnual: 0,
     builderAnnual: 0,
-    viewerAnnual: 0,
+    operatorAnnual: 0,
     seatContractRaw: 0,
     planAnnual: 0,
     seatContract: 0,
@@ -978,12 +985,15 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     }
   }
 
-  if (effectivePlan?.isEnterprise && seats.viewer > 0) {
+  if (
+    seats.operator > 0 &&
+    (effectivePlan?.isEnterprise || programSelected)
+  ) {
     productLines.push({
-      id: 'viewer-seats',
-      name: 'Viewer seats',
-      meta: `${seats.viewer} · free`,
-      annualAmount: 0,
+      id: 'operator-seats',
+      name: 'Operator seats',
+      meta: `${seats.operator} × ${formatUsd(OPERATOR_SEAT_MONTHLY)}/mo`,
+      annualAmount: seatPricing.operatorAnnual,
       period: '/ yr',
     })
   }
