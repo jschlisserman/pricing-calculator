@@ -26,30 +26,23 @@ For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastra
 | --- | --- | --- |
 | Free | $0 | Unlimited users · bounded usage grant |
 | Teams | $250/month | No seats |
-| Enterprise (Platform) | $8,000/yr minimum | 5 developer included, $100/seat/mo |
-| Enterprise Self-Hosted | $10,000/yr minimum | 5 included, $125/seat/mo |
-| BYO VPC | $30,000/yr minimum | 10 included, $150/seat/mo |
-| Private Cloud | $50,000/yr minimum | 10 included, $150/seat/mo |
-| BYOC | $100,000/yr minimum | 10 included, $200/seat/mo |
+| Enterprise (Platform) | $10,000/yr minimum | 5 developer included, $150/seat/mo |
+| Enterprise Self-Hosted | $15,000/yr minimum | 5 included, $175/seat/mo |
+| BYO VPC | $30,000/yr minimum | 10 included, $200/seat/mo |
+| Private Cloud | $50,000/yr minimum | 10 included, $200/seat/mo |
+| BYOC | $100,000/yr minimum | 10 included, $250/seat/mo |
 
 Enterprise billed amount is the annual minimum, which includes the plan’s developer seats, plus additional developer seats and builder seats purchased on top.
 
 ### Seat types
 
-- **Developer** — Enterprise only. Included seats come with the plan floor. Additional seats are $100/seat/mo on Platform (volume tiers), $125 on Self-Hosted, $150 on BYO VPC and Private Cloud, and $200 on BYOC
+- **Developer** — Enterprise only. Included seats come with the plan floor. Additional seats are $150/seat/mo on Platform, $175 on Self-Hosted, $200 on BYO VPC and Private Cloud, and $250 on BYOC
 - **Builder** — Enterprise only. $50/mo flat (Agent Builder only; no CLI/deploy/admin)
 - **Viewer** — Enterprise only. $0 (read-only)
 
-### Developer volume tiers ($/seat/mo)
+### Developer seat prices
 
-| Seats | Platform |
-| --- | --- |
-| 1–50 | $100 |
-| 51–150 | $85 |
-| 151–400 | $70 |
-| 401+ | $55 |
-
-Only Enterprise Platform uses this ladder. Self-Hosted is $125/seat/mo, BYO VPC and Private Cloud are $150/seat/mo, and BYOC is $200/seat/mo.
+Additional developer seats are a fixed monthly price. Enterprise Platform is $150/seat/mo, Self-Hosted is $175/seat/mo, BYO VPC and Private Cloud are $200/seat/mo, and BYOC is $250/seat/mo.
 
 ### Add-ons
 

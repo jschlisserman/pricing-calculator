@@ -69,12 +69,13 @@ export const PLANS: Plan[] = [
       'Auth, SSO, RBAC, FGA, SLA, SOC 2 report, data residency. Annual invoice, usage drawn from a commit.',
     features: [
       '5 developer seats included',
-      '$100/seat/mo',
+      '$150/seat/mo',
     ],
-    annualMinimum: 8_000,
+    annualMinimum: 10_000,
     includedDeveloperSeats: 5,
     maxDeveloperSeats: null,
-    seatRateColumn: 'platform',
+    seatRateColumn: null,
+    flatDeveloperSeatMonthly: 150,
     flatMonthly: null,
     hasUsage: true,
     isEnterprise: true,
@@ -86,13 +87,13 @@ export const PLANS: Plan[] = [
       'Same as Enterprise. The uplift covers usage that cannot be metered.',
     features: [
       '5 developer seats included',
-      '$125/seat/mo',
+      '$175/seat/mo',
     ],
-    annualMinimum: 10_000,
+    annualMinimum: 15_000,
     includedDeveloperSeats: 5,
     maxDeveloperSeats: null,
     seatRateColumn: null,
-    flatDeveloperSeatMonthly: 125,
+    flatDeveloperSeatMonthly: 175,
     flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
@@ -100,17 +101,16 @@ export const PLANS: Plan[] = [
   {
     id: 'byovpc',
     name: 'BYO VPC',
-    description:
-      "Enterprise, with the data plane running inside the customer's own VPC. Mastra operates the control plane, so usage is still metered.",
+    description: 'Customer data plane; Mastra control plane.',
     features: [
       '10 developer seats included',
-      '$150/seat/mo',
+      '$200/seat/mo',
     ],
     annualMinimum: 30_000,
     includedDeveloperSeats: 10,
     maxDeveloperSeats: null,
     seatRateColumn: null,
-    flatDeveloperSeatMonthly: 150,
+    flatDeveloperSeatMonthly: 200,
     flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
@@ -118,17 +118,16 @@ export const PLANS: Plan[] = [
   {
     id: 'private-cloud',
     name: 'Private Cloud',
-    description:
-      'Enterprise, deployed into a dedicated single-tenant environment Mastra operates.',
+    description: 'Mastra-operated, dedicated environment.',
     features: [
       '10 developer seats included',
-      '$150/seat/mo',
+      '$200/seat/mo',
     ],
     annualMinimum: 50_000,
     includedDeveloperSeats: 10,
     maxDeveloperSeats: null,
     seatRateColumn: null,
-    flatDeveloperSeatMonthly: 150,
+    flatDeveloperSeatMonthly: 200,
     flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
@@ -136,16 +135,16 @@ export const PLANS: Plan[] = [
   {
     id: 'byoc',
     name: 'BYOC',
-    description: "Mastra-operated inside the customer's own cloud account",
+    description: "Mastra-operated in the customer's cloud account.",
     features: [
       '10 developer seats included',
-      '$200/seat/mo',
+      '$250/seat/mo',
     ],
     annualMinimum: 100_000,
     includedDeveloperSeats: 10,
     maxDeveloperSeats: null,
     seatRateColumn: null,
-    flatDeveloperSeatMonthly: 200,
+    flatDeveloperSeatMonthly: 250,
     flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
@@ -169,7 +168,7 @@ export interface VolumeTier {
   isolation: number
 }
 
-/** Developer seat volume tiers ($/seat/mo). Platform bills every seat at the matching tier. */
+/** Unused seat ladder. Every current plan bills additional developers at a flat monthly rate. */
 export const VOLUME_TIERS: VolumeTier[] = [
   {
     minSeats: 1,

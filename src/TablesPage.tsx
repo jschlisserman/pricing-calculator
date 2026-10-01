@@ -15,7 +15,6 @@ import {
   DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
   DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
   PLANS,
-  VOLUME_TIERS,
   formatPercent,
   formatUsd,
 } from './pricing'
@@ -25,7 +24,7 @@ export default function TablesPage() {
     <div className="tables-page animate-in delay-1">
       <section className="hero">
         <h1>Tables</h1>
-        <p>Seat-based plans, volume tiers, add-ons, and support packages.</p>
+        <p>Seat-based plans, add-ons, and support packages.</p>
       </section>
 
       <section className="rules">
@@ -35,7 +34,7 @@ export default function TablesPage() {
         </div>
         <div className="rule">
           <h4>Enterprise</h4>
-          <p>Annual minimum · fixed seat price, except Platform volume tiers</p>
+          <p>Annual minimum · fixed seat price</p>
         </div>
         <div className="rule">
           <h4>Builder seats</h4>
@@ -80,11 +79,11 @@ export default function TablesPage() {
                       ? 'Unlimited users'
                       : plan.id === 'teams'
                         ? 'None'
-                        : plan.flatDeveloperSeatMonthly != null
-                          ? `${plan.includedDeveloperSeats} developer included, ${formatUsd(plan.flatDeveloperSeatMonthly)}/seat/mo`
-                          : plan.id === 'enterprise-platform'
-                            ? `${plan.includedDeveloperSeats} developer included, $100/seat/mo`
-                            : `${plan.includedDeveloperSeats} developer included, then volume-tier $/seat/mo`}
+                        : `${plan.includedDeveloperSeats} developer included${
+                            plan.flatDeveloperSeatMonthly != null
+                              ? `, ${formatUsd(plan.flatDeveloperSeatMonthly)}/seat/mo`
+                              : ''
+                          }`}
                   </td>
                   <td>{plan.description}</td>
                 </tr>
@@ -96,35 +95,13 @@ export default function TablesPage() {
 
       <section className="band-table-section">
         <div className="panel-head">
-          <h2>Developer seat volume tiers</h2>
+          <h2>Additional developer seats</h2>
         </div>
         <p className="band-table-intro">
-          Enterprise Platform bills every developer seat at the rate for the
-          total seat count. Self-Hosted is $125/seat/mo, BYO VPC and Private
-          Cloud are $150/seat/mo, and BYOC is $200/seat/mo.
+          Fixed monthly price. Platform is $150/seat/mo, Self-Hosted is
+          $175/seat/mo, BYO VPC and Private Cloud are $200/seat/mo, and BYOC
+          is $250/seat/mo.
         </p>
-        <div className="band-table-wrap">
-          <table className="band-table">
-            <thead>
-              <tr>
-                <th>Developer seats</th>
-                <th>Platform</th>
-              </tr>
-            </thead>
-            <tbody>
-              {VOLUME_TIERS.map((tier) => (
-                <tr key={tier.minSeats}>
-                  <td>
-                    {tier.maxSeats == null
-                      ? `${tier.minSeats}+`
-                      : `${tier.minSeats}–${tier.maxSeats}`}
-                  </td>
-                  <td>{formatUsd(tier.platform)}/mo</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </section>
 
       <section className="band-table-section">
