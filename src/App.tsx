@@ -51,7 +51,6 @@ import {
   type PlatformPackageId,
   type SeatCounts,
 } from './pricing'
-import TablesPage from './TablesPage'
 import ReviewPage from './ReviewPage'
 import NumberField from './NumberField'
 import type { OrderLineSnapshot, OrderSnapshot } from './orderSnapshot'
@@ -83,7 +82,7 @@ function CloseIcon() {
   )
 }
 
-type AppPage = 'order' | 'tables' | 'review'
+type AppPage = 'order' | 'review'
 
 export default function App() {
   const [page, setPage] = useState<AppPage>('order')
@@ -477,20 +476,10 @@ export default function App() {
           >
             Order builder
           </button>
-          <button
-            type="button"
-            className={`nav-tab${page === 'tables' ? ' active' : ''}`}
-            onClick={() => setPage('tables')}
-            aria-current={page === 'tables' ? 'page' : undefined}
-          >
-            Tables
-          </button>
         </nav>
       </header>
 
-      {page === 'tables' ? (
-        <TablesPage />
-      ) : page === 'review' && reviewSnapshot ? (
+      {page === 'review' && reviewSnapshot ? (
         <ReviewPage
           order={reviewSnapshot}
           onBack={() => {
