@@ -1,8 +1,6 @@
 /** Mastra Pricing v5 — seat-based plans (primary table). */
 
 export type PlanId =
-  | 'free'
-  | 'teams'
   | 'enterprise-platform'
   | 'enterprise-self-hosted'
   | 'byovpc'
@@ -16,18 +14,16 @@ export interface Plan {
   name: string
   description: string
   features: string[]
-  /** Annual floor for Enterprise plans; 0 for Free / Teams. */
+  /** Annual floor for the plan. */
   annualMinimum: number
   /** Included developer seats in the plan commitment. */
   includedDeveloperSeats: number
   /** Max developer seats. null = unlimited. */
   maxDeveloperSeats: number | null
-  /** Monthly per-developer rate column for volume tiers. null = flat/free. */
+  /** Monthly per-developer rate column for volume tiers. null = flat rate. */
   seatRateColumn: SeatRateColumn | null
   /** Flat monthly developer seat rate. When set, volume tiers do not apply. */
   flatDeveloperSeatMonthly?: number
-  /** Flat monthly price (Teams). */
-  flatMonthly: number | null
   /** Hosted Platform — usage packages apply. */
   hasUsage: boolean
   isEnterprise: boolean
@@ -35,33 +31,6 @@ export interface Plan {
 }
 
 export const PLANS: Plan[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    description: 'Unlimited users. Bounded usage grant.',
-    features: ['Unlimited users', 'Bounded usage grant'],
-    annualMinimum: 0,
-    includedDeveloperSeats: 0,
-    maxDeveloperSeats: null,
-    seatRateColumn: null,
-    flatMonthly: 0,
-    hasUsage: false,
-    isEnterprise: false,
-  },
-  {
-    id: 'teams',
-    name: 'Teams',
-    description:
-      'SOC 2, data residency, reduced usage grants. Self-serve, monthly.',
-    features: ['SOC 2', 'Data residency', 'Self-serve, monthly'],
-    annualMinimum: 0,
-    includedDeveloperSeats: 0,
-    maxDeveloperSeats: null,
-    seatRateColumn: null,
-    flatMonthly: 250,
-    hasUsage: false,
-    isEnterprise: false,
-  },
   {
     id: 'enterprise-platform',
     name: 'Enterprise (Platform)',
@@ -76,7 +45,6 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: null,
     flatDeveloperSeatMonthly: 150,
-    flatMonthly: null,
     hasUsage: true,
     isEnterprise: true,
   },
@@ -94,7 +62,6 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: null,
     flatDeveloperSeatMonthly: 175,
-    flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -111,7 +78,6 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: null,
     flatDeveloperSeatMonthly: 200,
-    flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -128,7 +94,6 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: null,
     flatDeveloperSeatMonthly: 200,
-    flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -145,7 +110,6 @@ export const PLANS: Plan[] = [
     maxDeveloperSeats: null,
     seatRateColumn: null,
     flatDeveloperSeatMonthly: 250,
-    flatMonthly: null,
     hasUsage: false,
     isEnterprise: true,
   },
@@ -326,37 +290,6 @@ export interface SeatPricing {
 
 export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
   const clamped = clampSeats(plan, seats)
-
-  if (plan.id === 'free') {
-    return {
-      developerMonthlyRate: 0,
-      developerAnnual: 0,
-      extraDeveloperSeats: 0,
-      extraDeveloperAnnual: 0,
-      builderAnnual: 0,
-      operatorAnnual: 0,
-      seatContractRaw: 0,
-      planAnnual: 0,
-      seatContract: 0,
-      minimumApplied: false,
-    }
-  }
-
-  if (plan.flatMonthly != null) {
-    const planAnnual = plan.flatMonthly * 12
-    return {
-      developerMonthlyRate: 0,
-      developerAnnual: planAnnual,
-      extraDeveloperSeats: 0,
-      extraDeveloperAnnual: 0,
-      builderAnnual: 0,
-      operatorAnnual: 0,
-      seatContractRaw: planAnnual,
-      planAnnual,
-      seatContract: planAnnual,
-      minimumApplied: false,
-    }
-  }
 
   const rate = getDeveloperSeatMonthlyRate(plan, clamped.developer)
   const extraDeveloperSeats = Math.max(
@@ -929,22 +862,6 @@ export function buildQuote(input: BuildQuoteInput): Quote {
         period: '/ yr',
       })
     }
-  } else if (effectivePlan?.id === 'free') {
-    productLines.push({
-      id: 'plan',
-      name: 'Free',
-      meta: 'Unlimited users · bounded usage grant',
-      annualAmount: 0,
-      period: '/ yr',
-    })
-  } else if (effectivePlan?.id === 'teams') {
-    productLines.push({
-      id: 'plan',
-      name: 'Teams',
-      meta: 'Self-serve, monthly',
-      annualAmount: (effectivePlan.flatMonthly ?? 0) * 12,
-      period: '/ yr',
-    })
   } else if (effectivePlan) {
     const included = Math.min(
       seats.developer,

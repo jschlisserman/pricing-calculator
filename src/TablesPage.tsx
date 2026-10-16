@@ -30,10 +30,6 @@ export default function TablesPage() {
 
       <section className="rules">
         <div className="rule">
-          <h4>Teams</h4>
-          <p>$250/mo · no seats</p>
-        </div>
-        <div className="rule">
           <h4>Enterprise</h4>
           <p>Annual minimum · fixed seat price</p>
         </div>
@@ -68,23 +64,13 @@ export default function TablesPage() {
               {PLANS.map((plan) => (
                 <tr key={plan.id}>
                   <td>{plan.name}</td>
+                  <td>{`${formatUsd(plan.annualMinimum)}/yr minimum`}</td>
                   <td>
-                    {plan.id === 'free'
-                      ? '$0'
-                      : plan.flatMonthly != null
-                        ? `${formatUsd(plan.flatMonthly)}/month`
-                        : `${formatUsd(plan.annualMinimum)}/yr minimum`}
-                  </td>
-                  <td>
-                    {plan.id === 'free'
-                      ? 'Unlimited users'
-                      : plan.id === 'teams'
-                        ? 'None'
-                        : `${plan.includedDeveloperSeats} developer included${
-                            plan.flatDeveloperSeatMonthly != null
-                              ? `, ${formatUsd(plan.flatDeveloperSeatMonthly)}/seat/mo`
-                              : ''
-                          }`}
+                    {`${plan.includedDeveloperSeats} developer included${
+                      plan.flatDeveloperSeatMonthly != null
+                        ? `, ${formatUsd(plan.flatDeveloperSeatMonthly)}/seat/mo`
+                        : ''
+                    }`}
                   </td>
                   <td>{plan.description}</td>
                 </tr>

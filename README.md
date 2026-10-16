@@ -24,8 +24,6 @@ For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastra
 
 | Plan | Price | Seats |
 | --- | --- | --- |
-| Free | $0 | Unlimited users · bounded usage grant |
-| Teams | $250/month | No seats |
 | Enterprise (Platform) | $10,000/yr minimum | 5 developer included, $150/seat/mo |
 | Enterprise Self-Hosted | $15,000/yr minimum | 5 included, $175/seat/mo |
 | BYO VPC | $30,000/yr minimum | 10 included, $200/seat/mo |

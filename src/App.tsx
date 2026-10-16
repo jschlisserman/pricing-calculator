@@ -264,11 +264,7 @@ export default function App() {
           ? designPartner || agency
             ? `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.operator} operator`
             : 'No plan'
-          : quote.plan.id === 'free'
-            ? 'Unlimited users'
-            : quote.plan.isEnterprise
-              ? `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.operator} operator`
-              : 'No seats',
+          : `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.operator} operator`,
       programLabel: designPartner
         ? 'Design Partner'
         : agency
@@ -548,25 +544,9 @@ export default function App() {
                           )}
                         </span>
                         <span className="item-price">
-                          {p.id === 'free' ? (
-                            <>
-                              $0
-                              <br />
-                              / forever
-                            </>
-                          ) : p.flatMonthly != null ? (
-                            <>
-                              {formatUsd(p.flatMonthly)}
-                              <br />
-                              / month
-                            </>
-                          ) : (
-                            <>
-                              {formatUsd(p.annualMinimum)}
-                              <br />
-                              / yr min
-                            </>
-                          )}
+                          {formatUsd(p.annualMinimum)}
+                          <br />
+                          / yr min
                         </span>
                       </button>
 
