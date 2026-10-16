@@ -428,6 +428,38 @@ export default function App() {
 
           <div className="layout animate-in delay-2">
             <div className="panel">
+              <section className="category">
+                <div className="category-title">
+                  <h3>Agency mode</h3>
+                  <span className="category-meta">Optional</span>
+                </div>
+                <div className="items">
+                  <button
+                    type="button"
+                    className={`item${agencyMode ? ' selected' : ''}`}
+                    onClick={() => setAgencyMode((v) => !v)}
+                    aria-pressed={agencyMode}
+                  >
+                    <span className="check" aria-hidden="true">
+                      {agencyMode ? <CheckIcon /> : null}
+                    </span>
+                    <span className="item-body">
+                      <span className="item-name">Agency mode</span>
+                      <p className="item-desc">
+                        {formatPercent(AGENCY_MODE_DISCOUNT)} off plan, seats,
+                        and add-ons. Support and services are hidden while
+                        agency mode is on.
+                      </p>
+                    </span>
+                    <span className="item-price">
+                      −{formatPercent(AGENCY_MODE_DISCOUNT)}
+                      <br />
+                      subscription
+                    </span>
+                  </button>
+                </div>
+              </section>
+
               <div className="panel-head">
                 <h2>Plan</h2>
               </div>
@@ -699,38 +731,6 @@ export default function App() {
                       </button>
                     )
                   })}
-                </div>
-              </section>
-
-              <section className="category">
-                <div className="category-title">
-                  <h3>Agency mode</h3>
-                  <span className="category-meta">Optional</span>
-                </div>
-                <div className="items">
-                  <button
-                    type="button"
-                    className={`item${agencyMode ? ' selected' : ''}`}
-                    onClick={() => setAgencyMode((v) => !v)}
-                    aria-pressed={agencyMode}
-                  >
-                    <span className="check" aria-hidden="true">
-                      {agencyMode ? <CheckIcon /> : null}
-                    </span>
-                    <span className="item-body">
-                      <span className="item-name">Agency mode</span>
-                      <p className="item-desc">
-                        {formatPercent(AGENCY_MODE_DISCOUNT)} off plan, seats,
-                        and add-ons. Support and services are hidden while
-                        agency mode is on.
-                      </p>
-                    </span>
-                    <span className="item-price">
-                      −{formatPercent(AGENCY_MODE_DISCOUNT)}
-                      <br />
-                      subscription
-                    </span>
-                  </button>
                 </div>
               </section>
 
