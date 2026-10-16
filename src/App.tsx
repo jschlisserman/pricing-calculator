@@ -447,8 +447,7 @@ export default function App() {
                       <span className="item-name">Agency mode</span>
                       <p className="item-desc">
                         {formatPercent(AGENCY_MODE_DISCOUNT)} off plan, seats,
-                        and add-ons. Support and services are hidden while
-                        agency mode is on.
+                        and add-ons.
                       </p>
                     </span>
                     <span className="item-price">

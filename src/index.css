@@ -462,6 +462,12 @@ button {
   border-top: none;
 }
 
+.category + .panel-head {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
 .category-title {
   display: flex;
   align-items: center;
