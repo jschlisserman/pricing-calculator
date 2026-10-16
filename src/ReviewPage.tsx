@@ -20,8 +20,8 @@ function OrderLines({ order }: { order: OrderSnapshot }) {
             <div>
               <span className="order-line-name">{order.planLabel}</span>
               <span className="order-line-meta">{order.seatsLabel}</span>
-              {order.programLabel && (
-                <span className="order-line-meta">{order.programLabel}</span>
+              {order.agencyModeLabel && (
+                <span className="order-line-meta">{order.agencyModeLabel}</span>
               )}
             </div>
           </li>

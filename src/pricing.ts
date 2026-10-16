@@ -225,23 +225,8 @@ export const ADDONS: Addon[] = [
   },
 ]
 
-export const AGENCY_PROGRAM_ID = 'program-agency'
-export const DESIGN_PARTNER_ID = 'program-design-partner'
-
-export const AGENCY_ANNUAL_FEE = 10_000
-export const DESIGN_PARTNER_ANNUAL_FEE = 12_000
-export const DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS = 10
-export const DESIGN_PARTNER_INCLUDED_BUILDER_SEATS = 5
-/** Additional developer seats beyond the Design Partner grant. */
-export const DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY = 100
-/** Monthly credit toward Agent Learning under DPP. */
-export const DESIGN_PARTNER_AGENT_LEARNING_CREDIT_MONTHLY = 250
-
-/** DPP may choose Enterprise Platform or Self-Hosted only. */
-export const DPP_ALLOWED_PLANS: PlanId[] = [
-  'enterprise-platform',
-  'enterprise-self-hosted',
-]
+/** Agency mode: 30% off plan, seats, and add-ons (not usage overage). */
+export const AGENCY_MODE_DISCOUNT = 0.3
 
 export function isAddonAvailable(addon: Addon, plan: Plan): boolean {
   return plan.isEnterprise && addon.enterpriseOnly
@@ -306,38 +291,6 @@ export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
     operatorAnnual
   return {
     developerMonthlyRate: rate,
-    developerAnnual: extraDeveloperAnnual,
-    extraDeveloperSeats,
-    extraDeveloperAnnual,
-    builderAnnual,
-    operatorAnnual,
-    seatContractRaw: extraDeveloperAnnual + builderAnnual + operatorAnnual,
-    planAnnual,
-    seatContract: planAnnual,
-    minimumApplied: false,
-  }
-}
-
-/** Design Partner and Agency: included seats are inside the program fee. */
-function priceProgramSeats(annualFee: number, seats: SeatCounts): SeatPricing {
-  const extraDeveloperSeats = Math.max(
-    0,
-    seats.developer - DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
-  )
-  const extraBuilderSeats = Math.max(
-    0,
-    seats.builder - DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
-  )
-  const extraDeveloperAnnual =
-    extraDeveloperSeats * DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY * 12
-  const builderAnnual = extraBuilderSeats * BUILDER_SEAT_MONTHLY * 12
-  const operatorAnnual =
-    Math.max(0, Math.floor(seats.operator)) * OPERATOR_SEAT_MONTHLY * 12
-  const planAnnual =
-    annualFee + extraDeveloperAnnual + builderAnnual + operatorAnnual
-  return {
-    developerMonthlyRate:
-      extraDeveloperSeats > 0 ? DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY : 0,
     developerAnnual: extraDeveloperAnnual,
     extraDeveloperSeats,
     extraDeveloperAnnual,
@@ -709,10 +662,11 @@ export interface Quote {
   seats: SeatCounts
   seatPricing: SeatPricing
   addonPricing: AddonPricing
-  designPartner: boolean
-  agency: boolean
-  programAnnual: number
-  dppAgentLearningCredit: number
+  agencyMode: boolean
+  /** Pre-discount subscription annual (plan + seats + add-ons). */
+  subscriptionListAnnual: number
+  /** Agency 30% off subscription; 0 when agency mode is off. */
+  agencyDiscount: number
   platformPackageId: PlatformPackageId | null
   platformPackageName: string | null
   platformIncludes: PlatformUsageAmounts
@@ -726,28 +680,16 @@ export interface BuildQuoteInput {
   planId: PlanId | null
   seats: SeatCounts
   selectedAddonIds: AddonId[]
-  designPartner?: boolean
-  agency?: boolean
+  agencyMode?: boolean
   platformConfig?: PlatformConfig
 }
 
 export function buildQuote(input: BuildQuoteInput): Quote {
   const plan = input.planId == null ? null : getPlan(input.planId)
-  const designPartner = Boolean(input.designPartner)
-  const agency = Boolean(input.agency) && !designPartner
+  const agencyMode = Boolean(input.agencyMode)
 
-  let effectivePlan = plan
-  const programSelected = designPartner || agency
-  if (
-    programSelected &&
-    effectivePlan != null &&
-    !DPP_ALLOWED_PLANS.includes(effectivePlan.id)
-  ) {
-    effectivePlan = getPlan('enterprise-platform')
-  }
-
-  const seats = effectivePlan
-    ? clampSeats(effectivePlan, input.seats)
+  const seats = plan
+    ? clampSeats(plan, input.seats)
     : {
         developer: Math.max(0, Math.floor(input.seats.developer)),
         builder: Math.max(0, Math.floor(input.seats.builder)),
@@ -767,50 +709,20 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     minimumApplied: false,
   }
 
-  let seatPricing: SeatPricing
-  let programAnnual = 0
-  let dppAgentLearningCredit = 0
+  const seatPricing = plan ? priceSeats(plan, seats) : emptySeatPricing
 
-  if (designPartner) {
-    programAnnual = DESIGN_PARTNER_ANNUAL_FEE
-    seatPricing = priceProgramSeats(DESIGN_PARTNER_ANNUAL_FEE, seats)
-  } else if (agency) {
-    programAnnual = AGENCY_ANNUAL_FEE
-    seatPricing = priceProgramSeats(AGENCY_ANNUAL_FEE, seats)
-  } else if (effectivePlan) {
-    seatPricing = priceSeats(effectivePlan, seats)
-  } else {
-    seatPricing = emptySeatPricing
-  }
-
-  const addonPlan =
-    effectivePlan ?? (programSelected ? getPlan('enterprise-platform') : null)
-  const addonIds = addonPlan
+  const addonIds = plan
     ? input.selectedAddonIds.filter((id) => {
         const addon = ADDONS.find((a) => a.id === id)
-        return addon != null && isAddonAvailable(addon, addonPlan)
+        return addon != null && isAddonAvailable(addon, plan)
       })
     : []
 
-  let addonPricing = addonPlan
-    ? priceAddons(addonPlan, seatPricing.seatContract, addonIds)
+  const addonPricing = plan
+    ? priceAddons(plan, seatPricing.seatContract, addonIds)
     : { lines: [], total: 0 }
 
-  if (designPartner && addonIds.includes('agent-learning')) {
-    dppAgentLearningCredit =
-      DESIGN_PARTNER_AGENT_LEARNING_CREDIT_MONTHLY * 12
-    const lines = addonPricing.lines.map((line) => {
-      if (line.addon.id !== 'agent-learning') return line
-      const billed = Math.max(0, line.billedAmount - dppAgentLearningCredit)
-      return { ...line, billedAmount: billed }
-    })
-    addonPricing = {
-      lines,
-      total: lines.reduce((sum, line) => sum + line.billedAmount, 0),
-    }
-  }
-
-  const platformSelected = Boolean(effectivePlan?.hasUsage) && !designPartner
+  const platformSelected = Boolean(plan?.hasUsage)
   const platformConfig = input.platformConfig ?? defaultPlatformConfig(0)
   const platformUsageLines = platformSelected
     ? buildPlatformUsageLines(platformConfig.additional)
@@ -825,53 +737,13 @@ export function buildQuote(input: BuildQuoteInput): Quote {
 
   const productLines: QuoteLine[] = []
 
-  if (designPartner || agency) {
-    const programFee = designPartner
-      ? DESIGN_PARTNER_ANNUAL_FEE
-      : AGENCY_ANNUAL_FEE
-    productLines.push({
-      id: designPartner ? DESIGN_PARTNER_ID : AGENCY_PROGRAM_ID,
-      name: designPartner
-        ? 'Mastra Design Partner Program'
-        : 'Mastra Agency Partner Program',
-      meta: effectivePlan
-        ? `${effectivePlan.name} · includes ${DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS} developer seats and ${DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder seats`
-        : `Includes ${DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS} developer seats and ${DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder seats`,
-      annualAmount: programFee,
-      period: '/ yr',
-    })
-    if (seatPricing.extraDeveloperSeats > 0) {
-      productLines.push({
-        id: 'developer-seats',
-        name: 'Additional developer seats',
-        meta: `${seatPricing.extraDeveloperSeats} × ${formatUsd(DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY)}/seat/mo`,
-        annualAmount: seatPricing.extraDeveloperAnnual,
-        period: '/ yr',
-      })
-    }
-    const extraBuilderSeats = Math.max(
-      0,
-      seats.builder - DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
-    )
-    if (extraBuilderSeats > 0) {
-      productLines.push({
-        id: 'builder-seats',
-        name: 'Additional builder seats',
-        meta: `${extraBuilderSeats} × ${formatUsd(BUILDER_SEAT_MONTHLY)}/seat/mo`,
-        annualAmount: seatPricing.builderAnnual,
-        period: '/ yr',
-      })
-    }
-  } else if (effectivePlan) {
-    const included = Math.min(
-      seats.developer,
-      effectivePlan.includedDeveloperSeats,
-    )
+  if (plan) {
+    const included = Math.min(seats.developer, plan.includedDeveloperSeats)
     productLines.push({
       id: 'plan',
-      name: effectivePlan.name,
+      name: plan.name,
       meta: `Includes ${included} developer seat${included === 1 ? '' : 's'}`,
-      annualAmount: effectivePlan.annualMinimum,
+      annualAmount: plan.annualMinimum,
       period: '/ yr',
     })
     productLines.push({
@@ -902,10 +774,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     }
   }
 
-  if (
-    seats.operator > 0 &&
-    (effectivePlan?.isEnterprise || programSelected)
-  ) {
+  if (seats.operator > 0 && plan?.isEnterprise) {
     productLines.push({
       id: 'operator-seats',
       name: 'Operator seats',
@@ -924,15 +793,26 @@ export function buildQuote(input: BuildQuoteInput): Quote {
         line.addon.annualMinimum > 0
           ? `${formatUsd(line.addon.annualMinimum)} min`
           : null,
-        designPartner &&
-        line.addon.id === 'agent-learning' &&
-        dppAgentLearningCredit > 0
-          ? `${formatUsd(dppAgentLearningCredit)} DPP credit`
-          : null,
       ]
         .filter(Boolean)
         .join(' · '),
       annualAmount: line.billedAmount,
+      period: '/ yr',
+    })
+  }
+
+  const subscriptionListAnnual = seatPricing.planAnnual + addonPricing.total
+  const agencyDiscount =
+    agencyMode && subscriptionListAnnual > 0
+      ? Math.round(subscriptionListAnnual * AGENCY_MODE_DISCOUNT)
+      : 0
+
+  if (agencyDiscount > 0) {
+    productLines.push({
+      id: 'agency-discount',
+      name: 'Agency discount',
+      meta: `${formatPercent(AGENCY_MODE_DISCOUNT)} off plan, seats, and add-ons`,
+      annualAmount: -agencyDiscount,
       period: '/ yr',
     })
   }
@@ -948,17 +828,16 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   }
 
   const annualTotal =
-    seatPricing.planAnnual + addonPricing.total + platformOverageTotal
+    subscriptionListAnnual - agencyDiscount + platformOverageTotal
 
   return {
-    plan: effectivePlan,
+    plan,
     seats,
     seatPricing,
     addonPricing,
-    designPartner,
-    agency,
-    programAnnual,
-    dppAgentLearningCredit,
+    agencyMode,
+    subscriptionListAnnual,
+    agencyDiscount,
     platformPackageId: platformSelected ? platformConfig.packageId : null,
     platformPackageName: platformSelected
       ? getPlatformPackageName(platformConfig.packageId)

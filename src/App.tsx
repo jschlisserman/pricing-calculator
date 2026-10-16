@@ -25,12 +25,9 @@ import {
 } from './concierge'
 import {
   ADDONS,
+  AGENCY_MODE_DISCOUNT,
   BUILDER_SEAT_MONTHLY,
   OPERATOR_SEAT_MONTHLY,
-  DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY,
-  DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
-  DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
-  DPP_ALLOWED_PLANS,
   PLANS,
   PLATFORM_PACKAGES,
   PLATFORM_USAGE_METRICS,
@@ -96,8 +93,7 @@ export default function App() {
     operator: 0,
   })
   const [selectedAddons, setSelectedAddons] = useState<AddonId[]>([])
-  const [designPartner, setDesignPartner] = useState(false)
-  const [agency, setAgency] = useState(false)
+  const [agencyMode, setAgencyMode] = useState(false)
   const [supportIds, setSupportIds] = useState<string[]>([])
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(() =>
     defaultPlatformConfig(0),
@@ -120,11 +116,11 @@ export default function App() {
         return addon != null && isAddonAvailable(addon, nextPlan)
       }),
     )
-    if (!DPP_ALLOWED_PLANS.includes(planId)) {
-      if (designPartner) setDesignPartner(false)
-      if (agency) setAgency(false)
-    }
-  }, [planId, designPartner])
+  }, [planId])
+
+  useEffect(() => {
+    if (agencyMode) setSupportIds([])
+  }, [agencyMode])
 
   const quote = useMemo(
     () =>
@@ -132,22 +128,22 @@ export default function App() {
         planId,
         seats,
         selectedAddonIds: selectedAddons,
-        designPartner,
-        agency,
+        agencyMode,
         platformConfig,
       }),
-    [planId, seats, selectedAddons, designPartner, agency, platformConfig],
+    [planId, seats, selectedAddons, agencyMode, platformConfig],
   )
 
-  const usageScaleAnnual = quote.annualTotal - quote.platformOverageTotal
+  const usageScaleAnnual =
+    quote.subscriptionListAnnual - quote.agencyDiscount
 
   useEffect(() => {
-    if (!quote.plan?.hasUsage || designPartner) return
+    if (!quote.plan?.hasUsage) return
     setPlatformConfig((prev) => {
       const scaled = platformConfigFromPackage(prev.packageId, usageScaleAnnual)
       return { ...scaled, additional: prev.additional }
     })
-  }, [usageScaleAnnual, quote.plan?.hasUsage, designPartner])
+  }, [usageScaleAnnual, quote.plan?.hasUsage])
 
   const support = useMemo(
     () =>
@@ -172,7 +168,7 @@ export default function App() {
     [support, engineerCostPerHour],
   )
 
-  const showUsage = Boolean(quote.plan?.hasUsage) && !designPartner
+  const showUsage = Boolean(quote.plan?.hasUsage)
 
   const platformMargin = useMemo(() => {
     if (!showUsage) return null
@@ -192,7 +188,10 @@ export default function App() {
   const auditSelected = supportIds.includes(AUDIT_ID)
   const auditFee = getAuditFee()
   const hasSupport =
-    support.path1 != null || support.path2.length > 0 || support.audit != null
+    !agencyMode &&
+    (support.path1 != null ||
+      support.path2.length > 0 ||
+      support.audit != null)
   const hasProducts = quote.productLines.length > 0
   const hasOrder = hasProducts || hasSupport
 
@@ -211,75 +210,60 @@ export default function App() {
       }),
     )
 
-    // Restore list amount when DPP Agent Learning credit applies
-    for (const addonLine of quote.addonPricing.lines) {
-      if (
-        !(designPartner && addonLine.addon.id === 'agent-learning') ||
-        addonLine.listAmount === addonLine.billedAmount
-      ) {
-        continue
-      }
-      const snap = productLines.find((l) => l.name === addonLine.addon.name)
-      if (snap) {
-        snap.listAmount = addonLine.listAmount
-        snap.billedAmount = addonLine.billedAmount
-      }
-    }
-
     const supportLines: OrderLineSnapshot[] = []
-    if (support.path1) {
-      supportLines.push({
-        name: `Support Path 1 · ${support.path1.tier.name}`,
-        meta: `${support.path1.tier.hoursPerWeek} hrs/wk · ${
-          support.path1.billingPeriod === 'year' ? 'Annual' : 'Quarterly'
-        }`,
-        listAmount: support.path1.listAmount,
-        billedAmount: support.path1.billedAmount,
-        period: support.path1.periodLabel,
-      })
-    }
-    for (const line of support.path2) {
-      supportLines.push({
-        name: `Support Path 2 · ${line.package.name}`,
-        meta: `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
-        listAmount: line.listAmount > 0 ? line.listAmount : null,
-        billedAmount: line.listAmount > 0 ? line.billedAmount : null,
-        period: '/ one-time',
-      })
-    }
-    if (support.audit) {
-      supportLines.push({
-        name: 'Mastra Audit',
-        listAmount: support.audit.listAmount,
-        billedAmount: support.audit.billedAmount,
-        period: '/ one-time',
-      })
+    if (!agencyMode) {
+      if (support.path1) {
+        supportLines.push({
+          name: `Support Path 1 · ${support.path1.tier.name}`,
+          meta: `${support.path1.tier.hoursPerWeek} hrs/wk · ${
+            support.path1.billingPeriod === 'year' ? 'Annual' : 'Quarterly'
+          }`,
+          listAmount: support.path1.listAmount,
+          billedAmount: support.path1.billedAmount,
+          period: support.path1.periodLabel,
+        })
+      }
+      for (const line of support.path2) {
+        supportLines.push({
+          name: `Support Path 2 · ${line.package.name}`,
+          meta: `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
+          listAmount: line.listAmount > 0 ? line.listAmount : null,
+          billedAmount: line.listAmount > 0 ? line.billedAmount : null,
+          period: '/ one-time',
+        })
+      }
+      if (support.audit) {
+        supportLines.push({
+          name: 'Mastra Audit',
+          listAmount: support.audit.listAmount,
+          billedAmount: support.audit.billedAmount,
+          period: '/ one-time',
+        })
+      }
     }
 
     return {
       planLabel: quote.plan?.name ?? 'No plan',
       seatsLabel:
         quote.plan == null
-          ? designPartner || agency
-            ? `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.operator} operator`
-            : 'No plan'
+          ? 'No plan'
           : `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.operator} operator`,
-      programLabel: designPartner
-        ? 'Design Partner'
-        : agency
-          ? 'Agency Partner'
-          : null,
+      agencyModeLabel: agencyMode
+        ? `Agency mode (${formatPercent(AGENCY_MODE_DISCOUNT)} off subscription)`
+        : null,
       productLines,
       productTotal: quote.annualTotal,
       supportLines,
-      supportPath1Total: support.path1 ? support.path1Total : null,
-      supportPath1Period: support.path1 ? support.path1.periodLabel : null,
+      supportPath1Total:
+        !agencyMode && support.path1 ? support.path1Total : null,
+      supportPath1Period:
+        !agencyMode && support.path1 ? support.path1.periodLabel : null,
       supportOneTimeTotal:
-        support.path2.length > 0 || support.audit
+        !agencyMode && (support.path2.length > 0 || support.audit)
           ? support.oneTimeTotal
           : null,
     }
-  }, [hasOrder, quote, support, designPartner, agency])
+  }, [hasOrder, quote, support, agencyMode])
 
   function setSeatCount(key: keyof SeatCounts, count: number) {
     const nextCount = Math.max(0, Math.floor(count))
@@ -296,7 +280,6 @@ export default function App() {
   }
 
   function selectPlan(id: PlanId) {
-    if (programActive) return
     setPlanId(id)
     const nextPlan = getPlan(id)
     setSeats(
@@ -385,8 +368,7 @@ export default function App() {
     setPlanId(null)
     setSeats({ developer: 0, builder: 0, operator: 0 })
     setSelectedAddons([])
-    setDesignPartner(false)
-    setAgency(false)
+    setAgencyMode(false)
     setSupportIds([])
     setPlatformConfig(defaultPlatformConfig(0))
     setPath2Hours({})
@@ -395,56 +377,6 @@ export default function App() {
   }
 
   const maxDev = plan?.maxDeveloperSeats ?? null
-  const programActive = designPartner || agency
-  const programPlanOk = planId == null || DPP_ALLOWED_PLANS.includes(planId)
-
-  function renderProgramSeats(idPrefix: string) {
-    return (
-      <div className="plan-seats">
-        <div className="size-row seats-row">
-          <div className="field">
-            <label htmlFor={`${idPrefix}-developer-seats`}>Developer</label>
-            <NumberField
-              id={`${idPrefix}-developer-seats`}
-              value={seats.developer}
-              min={DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS}
-              onCommit={(next) => setSeatCount('developer', next ?? 0)}
-            />
-            <span className="field-hint">
-              {DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS} included ·{' '}
-              {formatUsd(DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY)}/seat/mo after
-            </span>
-          </div>
-          <div className="field">
-            <label htmlFor={`${idPrefix}-builder-seats`}>
-              Builder ({formatUsd(BUILDER_SEAT_MONTHLY)}/mo)
-            </label>
-            <NumberField
-              id={`${idPrefix}-builder-seats`}
-              value={seats.builder}
-              min={DESIGN_PARTNER_INCLUDED_BUILDER_SEATS}
-              onCommit={(next) => setSeatCount('builder', next ?? 0)}
-            />
-            <span className="field-hint">
-              {DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} included ·{' '}
-              {formatUsd(BUILDER_SEAT_MONTHLY)}/seat/mo after
-            </span>
-          </div>
-          <div className="field">
-            <label htmlFor={`${idPrefix}-operator-seats`}>
-              Operator ({formatUsd(OPERATOR_SEAT_MONTHLY)}/mo)
-            </label>
-            <NumberField
-              id={`${idPrefix}-operator-seats`}
-              value={seats.operator}
-              min={0}
-              onCommit={(next) => setSeatCount('operator', next ?? 0)}
-            />
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="app">
@@ -502,7 +434,6 @@ export default function App() {
               <div className="items">
                 {PLANS.map((p) => {
                   const selected = planId === p.id
-                  const planBlocked = programActive
                   return (
                     <div
                       key={p.id}
@@ -510,13 +441,9 @@ export default function App() {
                     >
                       <button
                         type="button"
-                        className={`item radio${selected ? ' selected' : ''}${planBlocked && !selected ? ' unavailable' : ''}`}
-                        onClick={() => {
-                          if (planBlocked) return
-                          selectPlan(p.id)
-                        }}
+                        className={`item radio${selected ? ' selected' : ''}`}
+                        onClick={() => selectPlan(p.id)}
                         aria-pressed={selected}
-                        disabled={planBlocked}
                       >
                         <span className="check" aria-hidden="true" />
                         <span className="item-body">
@@ -539,7 +466,7 @@ export default function App() {
                         </span>
                       </button>
 
-                      {selected && plan != null && plan.isEnterprise && !programActive && (
+                      {selected && plan != null && plan.isEnterprise && (
                         <div className="plan-seats">
                           <div className="size-row seats-row">
                             <div className="field">
@@ -547,32 +474,16 @@ export default function App() {
                               <NumberField
                                 id="developer-seats"
                                 value={seats.developer}
-                                min={
-                                  programActive
-                                    ? DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS
-                                    : plan.includedDeveloperSeats
-                                }
+                                min={plan.includedDeveloperSeats}
                                 max={maxDev ?? undefined}
                                 onCommit={(next) =>
                                   setSeatCount('developer', next ?? 0)
                                 }
                               />
-                              {programActive ? (
-                                <span className="field-hint">
-                                  {DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS}{' '}
-                                  included ·{' '}
-                                  {formatUsd(
-                                    DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY,
-                                  )}
-                                  /seat/mo after
-                                </span>
-                              ) : (
-                                <span className="field-hint">
-                                  Min {plan.includedDeveloperSeats} included
-                                </span>
-                              )}
-                              {!programActive &&
-                                quote.seatPricing.developerMonthlyRate > 0 && (
+                              <span className="field-hint">
+                                Min {plan.includedDeveloperSeats} included
+                              </span>
+                              {quote.seatPricing.developerMonthlyRate > 0 && (
                                 <span className="field-hint seat-rate-hint">
                                   Developer rate:{' '}
                                   <strong>
@@ -595,22 +506,11 @@ export default function App() {
                               <NumberField
                                 id="builder-seats"
                                 value={seats.builder}
-                                min={
-                                  programActive
-                                    ? DESIGN_PARTNER_INCLUDED_BUILDER_SEATS
-                                    : 0
-                                }
+                                min={0}
                                 onCommit={(next) =>
                                   setSeatCount('builder', next ?? 0)
                                 }
                               />
-                              {programActive && (
-                                <span className="field-hint">
-                                  {DESIGN_PARTNER_INCLUDED_BUILDER_SEATS}{' '}
-                                  included · {formatUsd(BUILDER_SEAT_MONTHLY)}
-                                  /seat/mo after
-                                </span>
-                              )}
                             </div>
                             <div className="field">
                               <label htmlFor="operator-seats">
@@ -804,123 +704,37 @@ export default function App() {
 
               <section className="category">
                 <div className="category-title">
-                  <h3>Programs</h3>
+                  <h3>Agency mode</h3>
                   <span className="category-meta">Optional</span>
                 </div>
                 <div className="items">
-                  <div className={`item-wrap${agency ? ' open' : ''}`}>
                   <button
                     type="button"
-                    className={`item${agency ? ' selected' : ''}${
-                      designPartner || (!programPlanOk && !agency)
-                        ? ' unavailable'
-                        : ''
-                    }`}
-                    onClick={() => {
-                      if (designPartner || (!programPlanOk && !agency)) return
-                      setAgency((v) => {
-                        const next = !v
-                        if (next) {
-                          setDesignPartner(false)
-                          setSeats({
-                            developer: DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
-                            builder: DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
-                            operator: seats.operator,
-                          })
-                        }
-                        return next
-                      })
-                    }}
-                    aria-pressed={agency}
-                    disabled={designPartner || (!programPlanOk && !agency)}
+                    className={`item${agencyMode ? ' selected' : ''}`}
+                    onClick={() => setAgencyMode((v) => !v)}
+                    aria-pressed={agencyMode}
                   >
                     <span className="check" aria-hidden="true">
-                      {agency ? <CheckIcon /> : null}
+                      {agencyMode ? <CheckIcon /> : null}
                     </span>
                     <span className="item-body">
-                      <span className="item-name">
-                        Mastra Agency Partner Program
-                        {!programPlanOk && !agency && (
-                          <span className="pill">Platform or Self-Hosted</span>
-                        )}
-                      </span>
+                      <span className="item-name">Agency mode</span>
                       <p className="item-desc">
-                        Includes {DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS}{' '}
-                        developer seats and{' '}
-                        {DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder seats,
-                        then {formatUsd(DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY)}
-                        /developer seat/mo and {formatUsd(BUILDER_SEAT_MONTHLY)}
-                        /builder seat/mo. Client pass-through pricing is
-                        unpublished. Not available with BYOC, BYO VPC, or
-                        Private Cloud.
+                        {formatPercent(AGENCY_MODE_DISCOUNT)} off plan, seats,
+                        and add-ons. Support and services are hidden while
+                        agency mode is on.
                       </p>
                     </span>
                     <span className="item-price">
-                      {formatUsd(10_000)}
+                      −{formatPercent(AGENCY_MODE_DISCOUNT)}
                       <br />
-                      / year
+                      subscription
                     </span>
                   </button>
-                  {agency && renderProgramSeats('agency')}
-                  </div>
-                  <div className={`item-wrap${designPartner ? ' open' : ''}`}>
-                  <button
-                    type="button"
-                    className={`item${designPartner ? ' selected' : ''}${
-                      agency || (!programPlanOk && !designPartner)
-                        ? ' unavailable'
-                        : ''
-                    }`}
-                    onClick={() => {
-                      if (agency || (!programPlanOk && !designPartner)) return
-                      setDesignPartner((v) => {
-                        const next = !v
-                        if (next) {
-                          setAgency(false)
-                          setSeats({
-                            developer: DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS,
-                            builder: DESIGN_PARTNER_INCLUDED_BUILDER_SEATS,
-                            operator: seats.operator,
-                          })
-                        }
-                        return next
-                      })
-                    }}
-                    aria-pressed={designPartner}
-                    disabled={agency || (!programPlanOk && !designPartner)}
-                  >
-                    <span className="check" aria-hidden="true">
-                      {designPartner ? <CheckIcon /> : null}
-                    </span>
-                    <span className="item-body">
-                      <span className="item-name">
-                        Design Partner Program
-                        {!programPlanOk && !designPartner && (
-                          <span className="pill">Platform or Self-Hosted</span>
-                        )}
-                      </span>
-                      <p className="item-desc">
-                        Includes {DESIGN_PARTNER_INCLUDED_DEVELOPER_SEATS}{' '}
-                        developer seats and{' '}
-                        {DESIGN_PARTNER_INCLUDED_BUILDER_SEATS} builder seats,
-                        then {formatUsd(DESIGN_PARTNER_EXTRA_DEVELOPER_MONTHLY)}
-                        /developer seat/mo and {formatUsd(BUILDER_SEAT_MONTHLY)}
-                        /builder seat/mo. $250/mo Agent Learning credit, one
-                        quarter Small support. Not available with BYOC, BYO
-                        VPC, or Private Cloud.
-                      </p>
-                    </span>
-                    <span className="item-price">
-                      {formatUsd(12_000)}
-                      <br />
-                      / year
-                    </span>
-                  </button>
-                  {designPartner && renderProgramSeats('design-partner')}
-                  </div>
                 </div>
               </section>
 
+              {!agencyMode && (
               <section className="category concierge-section">
                 <div className="category-title">
                   <h3>Support</h3>
@@ -1149,6 +963,7 @@ export default function App() {
                   </button>
                 </div>
               </section>
+              )}
             </div>
 
             <aside className="panel summary">
@@ -1200,23 +1015,13 @@ export default function App() {
                               </span>
                               {(line.id === 'agent-learning' ||
                                 line.id === 'compliance' ||
-                                line.id === 'premium-on-call' ||
-                                line.id === 'program-agency' ||
-                                line.id === 'program-design-partner') && (
+                                line.id === 'premium-on-call') && (
                                 <button
                                   type="button"
                                   className="remove"
-                                  onClick={() => {
-                                    if (line.id === 'program-agency') {
-                                      setAgency(false)
-                                    } else if (
-                                      line.id === 'program-design-partner'
-                                    ) {
-                                      setDesignPartner(false)
-                                    } else {
-                                      toggleAddon(line.id as AddonId)
-                                    }
-                                  }}
+                                  onClick={() =>
+                                    toggleAddon(line.id as AddonId)
+                                  }
                                   aria-label={`Remove ${line.name}`}
                                 >
                                   <CloseIcon />

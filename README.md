@@ -52,12 +52,13 @@ Additional developer seats are a fixed monthly price. Enterprise Platform is $15
 
 Enterprise Platform only. Usage packages scale includes from the product total per year, excluding additional usage. Additional volume bills at 50% of list unit cost.
 
-### Programs
+### Agency mode
 
-- **Agency Partner** — $10,000/yr; Platform or Self-Hosted only; includes 10 developer seats and 5 builder seats, then $100/developer seat/mo and $50/builder seat/mo; client pass-through unpublished
-- **Design Partner** — $12,000/yr; Platform or Self-Hosted only; includes 10 developer seats and 5 builder seats, then $100/developer seat/mo and $50/builder seat/mo; $250/mo Agent Learning credit; one quarter Small support
+Optional toggle on the order builder. Applies **30% off** plan, seats, and add-ons. Platform usage overage is not discounted. While agency mode is on, Support / services are hidden.
 
 ### Support
+
+Hidden while agency mode is on.
 
 - **Path 1** — Small / Medium / Large; choose quarterly ($9k / $24k / $70k) or annual package ($32k / $86k / $250k, ~10% off)
 - **Path 2** — Evals / Integrations / Infrastructure / Custom; price = engineer $/hr × hours ÷ (1 − margin)
