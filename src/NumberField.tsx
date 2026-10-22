@@ -19,6 +19,20 @@ interface NumberFieldProps {
  * Text-mode numeric input that allows clearing mid-edit.
  * Commits on blur / Enter; selects contents on focus for easy replace.
  */
+/** Group the integer part of a raw numeric string with commas (1,000,000). */
+function groupNumeric(raw: string): string {
+  if (raw === '' || raw === '-') return raw
+  const negative = raw.startsWith('-')
+  const body = negative ? raw.slice(1) : raw
+  const [intPart, ...decimalParts] = body.split('.')
+  const groupedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return (
+    (negative ? '-' : '') +
+    groupedInt +
+    (decimalParts.length > 0 ? `.${decimalParts.join('.')}` : '')
+  )
+}
+
 export default function NumberField({
   id,
   value,
@@ -33,8 +47,10 @@ export default function NumberField({
 }: NumberFieldProps) {
   const [draft, setDraft] = useState<string | null>(null)
   const fallbackEmpty = emptyValue !== undefined ? emptyValue : (min ?? 0)
-  const display =
-    draft ?? (value == null || (value === 0 && placeholder) ? '' : String(value))
+  const display = groupNumeric(
+    draft ??
+      (value == null || (value === 0 && placeholder) ? '' : String(value)),
+  )
 
   function clamp(n: number): number {
     let next = n
@@ -76,7 +92,7 @@ export default function NumberField({
         e.currentTarget.select()
       }}
       onChange={(e) => {
-        const next = e.target.value
+        const next = e.target.value.replace(/,/g, '')
         if (next === '' || /^-?\d*\.?\d*$/.test(next)) {
           setDraft(next)
         }

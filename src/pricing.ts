@@ -1,4 +1,4 @@
-/** Mastra Pricing v5 — seat-based plans (primary table). */
+/** Deployment plans — fixed annual subscription fee per plan. */
 
 export type PlanId =
   | 'enterprise-platform'
@@ -7,26 +7,15 @@ export type PlanId =
   | 'private-cloud'
   | 'byoc'
 
-export type SeatRateColumn = 'platform' | 'selfHosted' | 'isolation'
-
 export interface Plan {
   id: PlanId
   name: string
   description: string
   features: string[]
-  /** Annual floor for the plan. */
-  annualMinimum: number
-  /** Included developer seats in the plan commitment. */
-  includedDeveloperSeats: number
-  /** Max developer seats. null = unlimited. */
-  maxDeveloperSeats: number | null
-  /** Monthly per-developer rate column for volume tiers. null = flat rate. */
-  seatRateColumn: SeatRateColumn | null
-  /** Flat monthly developer seat rate. When set, volume tiers do not apply. */
-  flatDeveloperSeatMonthly?: number
+  /** Fixed annual subscription fee. */
+  annualFee: number
   /** Hosted Platform — usage packages apply. */
   hasUsage: boolean
-  isEnterprise: boolean
   future?: boolean
 }
 
@@ -36,151 +25,47 @@ export const PLANS: Plan[] = [
     name: 'Enterprise (Platform)',
     description:
       'Auth, SSO, RBAC, FGA, SLA, SOC 2 report, data residency. Annual invoice, usage drawn from a commit.',
-    features: [
-      '5 developer seats included',
-      '$150/seat/mo',
-    ],
-    annualMinimum: 10_000,
-    includedDeveloperSeats: 5,
-    maxDeveloperSeats: null,
-    seatRateColumn: null,
-    flatDeveloperSeatMonthly: 150,
+    features: [],
+    annualFee: 10_000,
     hasUsage: true,
-    isEnterprise: true,
   },
   {
     id: 'enterprise-self-hosted',
     name: 'Enterprise Self-Hosted (Helm Chart)',
     description:
       'Same as Enterprise. The uplift covers usage that cannot be metered.',
-    features: [
-      '5 developer seats included',
-      '$175/seat/mo',
-    ],
-    annualMinimum: 15_000,
-    includedDeveloperSeats: 5,
-    maxDeveloperSeats: null,
-    seatRateColumn: null,
-    flatDeveloperSeatMonthly: 175,
+    features: [],
+    annualFee: 15_000,
     hasUsage: false,
-    isEnterprise: true,
   },
   {
     id: 'byovpc',
     name: 'BYO VPC',
     description: 'Customer data plane; Mastra control plane.',
-    features: [
-      '10 developer seats included',
-      '$200/seat/mo',
-    ],
-    annualMinimum: 30_000,
-    includedDeveloperSeats: 10,
-    maxDeveloperSeats: null,
-    seatRateColumn: null,
-    flatDeveloperSeatMonthly: 200,
+    features: [],
+    annualFee: 40_000,
     hasUsage: false,
-    isEnterprise: true,
   },
   {
     id: 'private-cloud',
     name: 'Private Cloud',
     description: 'Mastra-operated, dedicated environment.',
-    features: [
-      '10 developer seats included',
-      '$200/seat/mo',
-    ],
-    annualMinimum: 50_000,
-    includedDeveloperSeats: 10,
-    maxDeveloperSeats: null,
-    seatRateColumn: null,
-    flatDeveloperSeatMonthly: 200,
+    features: [],
+    annualFee: 60_000,
     hasUsage: false,
-    isEnterprise: true,
   },
   {
     id: 'byoc',
     name: 'BYOC',
     description: "Mastra-operated in the customer's cloud account.",
-    features: [
-      '10 developer seats included',
-      '$250/seat/mo',
-    ],
-    annualMinimum: 100_000,
-    includedDeveloperSeats: 10,
-    maxDeveloperSeats: null,
-    seatRateColumn: null,
-    flatDeveloperSeatMonthly: 250,
+    features: [],
+    annualFee: 120_000,
     hasUsage: false,
-    isEnterprise: true,
   },
 ]
 
 export function getPlan(planId: PlanId): Plan {
   return PLANS.find((p) => p.id === planId) ?? PLANS[0]
-}
-
-/** Builder and operator seats are Enterprise only. Builders are $50/mo. Operators are $10/mo. */
-export const BUILDER_SEAT_MONTHLY = 50
-export const OPERATOR_SEAT_MONTHLY = 10
-
-export interface VolumeTier {
-  minSeats: number
-  /** Inclusive upper bound; null = no upper bound. */
-  maxSeats: number | null
-  platform: number
-  selfHosted: number
-  isolation: number
-}
-
-/** Unused seat ladder. Every current plan bills additional developers at a flat monthly rate. */
-export const VOLUME_TIERS: VolumeTier[] = [
-  {
-    minSeats: 1,
-    maxSeats: 50,
-    platform: 100,
-    selfHosted: 125,
-    isolation: 150,
-  },
-  {
-    minSeats: 51,
-    maxSeats: 150,
-    platform: 85,
-    selfHosted: 105,
-    isolation: 125,
-  },
-  {
-    minSeats: 151,
-    maxSeats: 400,
-    platform: 70,
-    selfHosted: 85,
-    isolation: 105,
-  },
-  {
-    minSeats: 401,
-    maxSeats: null,
-    platform: 55,
-    selfHosted: 65,
-    isolation: 80,
-  },
-]
-
-export function getVolumeTier(developerSeats: number): VolumeTier {
-  const seats = Math.max(1, developerSeats)
-  for (const tier of VOLUME_TIERS) {
-    const withinMax = tier.maxSeats === null || seats <= tier.maxSeats
-    if (seats >= tier.minSeats && withinMax) return tier
-  }
-  return VOLUME_TIERS[VOLUME_TIERS.length - 1]
-}
-
-export function getDeveloperSeatMonthlyRate(
-  plan: Plan,
-  developerSeats: number,
-): number {
-  if (plan.flatDeveloperSeatMonthly != null) return plan.flatDeveloperSeatMonthly
-  if (plan.seatRateColumn == null) return 0
-  const tier = getVolumeTier(developerSeats)
-  return tier[plan.seatRateColumn]
 }
 
 export type AddonId = 'agent-learning' | 'compliance' | 'premium-on-call'
@@ -189,10 +74,14 @@ export interface Addon {
   id: AddonId
   name: string
   description: string
-  /** Fraction of seat contract. */
-  rate: number
+  /** Fraction of the plan subscription; null when flat-priced. */
+  rate: number | null
   /** Annual floor; 0 = no floor. */
   annualMinimum: number
+  /** Flat annual subscription fee; when set, rate/minimum do not apply. */
+  flatAnnual?: number
+  /** Plans this add-on can be purchased with; undefined = all plans. */
+  allowedPlanIds?: PlanId[]
   /** Enterprise only. */
   enterpriseOnly: boolean
 }
@@ -201,17 +90,20 @@ export const ADDONS: Addon[] = [
   {
     id: 'agent-learning',
     name: 'Agent Learning',
-    description: 'Trace Intelligence, Custom Signals',
-    rate: 0.5,
-    annualMinimum: 10_000,
+    description:
+      'Trace Intelligence, Custom Signals · 10k analyzed traces/mo included',
+    rate: null,
+    annualMinimum: 0,
     enterpriseOnly: true,
   },
   {
     id: 'compliance',
     name: 'Compliance',
     description: 'BAA, HIPAA, and audit logging.',
-    rate: 0.2,
-    annualMinimum: 5_000,
+    rate: null,
+    annualMinimum: 0,
+    flatAnnual: 5_000,
+    allowedPlanIds: ['enterprise-platform'],
     enterpriseOnly: true,
   },
   {
@@ -219,92 +111,64 @@ export const ADDONS: Addon[] = [
     name: 'Premium on-call support',
     description:
       'Slack escalation and response commitments beyond the standard SLA.',
-    rate: 0.3,
-    annualMinimum: 10_000,
+    rate: null,
+    annualMinimum: 0,
+    flatAnnual: 10_000,
+    allowedPlanIds: ['enterprise-platform', 'enterprise-self-hosted'],
     enterpriseOnly: true,
   },
 ]
 
-/** Agency mode: 30% off plan, seats, and add-ons (not usage overage). */
+export interface TraceIntelligencePool {
+  monthlyPool: string
+  ratePer1k: string
+  price: string
+}
+
+/** Trace Intelligence pools shown on Agent Learning (Enterprise terms). */
+export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] = [
+  { monthlyPool: '1M', ratePer1k: '$5.00', price: '$5,000/mo · $60,000/yr' },
+  { monthlyPool: '5M', ratePer1k: 'Custom', price: 'Annual commit' },
+  { monthlyPool: '10M+', ratePer1k: '~$2.10', price: 'Annual commit' },
+]
+
+/** Analyzed traces included each month before an add-on pool is purchased. */
+export const TRACE_INCLUDED_MONTHLY = 10_000
+
+/** Default add-on pool (analyzed traces/mo) when Agent Learning is selected. */
+export const DEFAULT_AGENT_LEARNING_POOL_MONTHLY = 1_000_000
+
+/**
+ * Add-on pool rate per 1k analyzed traces: $5.00 at 1M/mo, declining
+ * linearly to ~$2.10 at 10M/mo and flat above that.
+ */
+export function getTraceIntelligenceRatePer1k(poolMonthly: number): number {
+  const pool = Math.max(0, poolMonthly)
+  if (pool <= 1_000_000) return 5
+  if (pool >= 10_000_000) return 2.1
+  const fraction = (pool - 1_000_000) / 9_000_000
+  return 5 - fraction * (5 - 2.1)
+}
+
+/** Monthly cost of an Agent Learning add-on pool (analyzed traces/mo). */
+export function getAgentLearningMonthly(poolMonthly: number): number {
+  const pool = Math.max(0, poolMonthly)
+  return (pool / 1_000) * getTraceIntelligenceRatePer1k(pool)
+}
+
+/** Annual cost of an Agent Learning add-on pool (monthly pool × 12). */
+export function getAgentLearningAnnual(poolMonthly: number): number {
+  return Math.round(getAgentLearningMonthly(poolMonthly) * 12)
+}
+
+/** Agency mode: 30% off plan and add-ons (not usage overage). */
 export const AGENCY_MODE_DISCOUNT = 0.3
 
-export function isAddonAvailable(addon: Addon, plan: Plan): boolean {
-  // Agent Learning is Enterprise Platform only.
-  if (addon.id === 'agent-learning') {
-    return plan.id === 'enterprise-platform'
-  }
-  return plan.isEnterprise && addon.enterpriseOnly
-}
-
-export interface SeatCounts {
-  developer: number
-  builder: number
-  operator: number
-}
-
-export function clampSeats(plan: Plan, seats: SeatCounts): SeatCounts {
-  if (!plan.isEnterprise) {
-    return { developer: 0, builder: 0, operator: 0 }
-  }
-
-  const maxDev = plan.maxDeveloperSeats
-  let developer = Math.max(0, Math.floor(seats.developer))
-  if (maxDev != null) {
-    developer = Math.min(maxDev, developer)
-  } else {
-    developer = Math.max(plan.includedDeveloperSeats, developer)
-  }
-
-  const builder = Math.max(0, Math.floor(seats.builder))
-  const operator = Math.max(0, Math.floor(seats.operator))
-  return { developer, builder, operator }
-}
-
-export interface SeatPricing {
-  developerMonthlyRate: number
-  developerAnnual: number
-  /** Developer seats billed above the included block. */
-  extraDeveloperSeats: number
-  extraDeveloperAnnual: number
-  builderAnnual: number
-  operatorAnnual: number
-  /** Extra developer, builder, and operator annual before the plan floor. */
-  seatContractRaw: number
-  /** Billed plan/seat annual (max of minimum and seat math). */
-  planAnnual: number
-  /** Seat contract used for add-on % — billed plan annual. */
-  seatContract: number
-  minimumApplied: boolean
-}
-
-export function priceSeats(plan: Plan, seats: SeatCounts): SeatPricing {
-  const clamped = clampSeats(plan, seats)
-
-  const rate = getDeveloperSeatMonthlyRate(plan, clamped.developer)
-  const extraDeveloperSeats = Math.max(
-    0,
-    clamped.developer - plan.includedDeveloperSeats,
-  )
-  const extraDeveloperAnnual = extraDeveloperSeats * rate * 12
-  const builderAnnual = clamped.builder * BUILDER_SEAT_MONTHLY * 12
-  const operatorAnnual = clamped.operator * OPERATOR_SEAT_MONTHLY * 12
-  const planAnnual =
-    plan.annualMinimum +
-    extraDeveloperAnnual +
-    builderAnnual +
-    operatorAnnual
-  return {
-    developerMonthlyRate: rate,
-    developerAnnual: extraDeveloperAnnual,
-    extraDeveloperSeats,
-    extraDeveloperAnnual,
-    builderAnnual,
-    operatorAnnual,
-    seatContractRaw: extraDeveloperAnnual + builderAnnual + operatorAnnual,
-    planAnnual,
-    seatContract: planAnnual,
-    minimumApplied: false,
-  }
+export function isAddonAvailable(addon: Addon, plan: Plan | null): boolean {
+  // Premium on-call support can also be purchased without a plan selected.
+  if (!plan) return addon.id === 'premium-on-call'
+  if (addon.allowedPlanIds) return addon.allowedPlanIds.includes(plan.id)
+  return addon.enterpriseOnly
 }
 
 export interface AddonLine {
@@ -318,10 +182,10 @@ export interface AddonPricing {
   total: number
 }
 
-/** Each add-on bills independently: max(rate × seat contract, annual minimum). */
+/** Each add-on bills independently: flat fee, or max(rate × plan fee, annual minimum). */
 export function priceAddons(
-  plan: Plan,
-  seatContract: number,
+  plan: Plan | null,
+  subscriptionAnnual: number,
   selectedAddonIds: AddonId[],
 ): AddonPricing {
   const available = ADDONS.filter(
@@ -330,8 +194,9 @@ export function priceAddons(
   )
 
   const lines: AddonLine[] = available.map((addon) => {
-    const fromRate = seatContract * addon.rate
-    const listAmount = Math.max(addon.annualMinimum, fromRate)
+    const listAmount =
+      addon.flatAnnual ??
+      Math.max(addon.annualMinimum, subscriptionAnnual * (addon.rate ?? 0))
     return {
       addon,
       listAmount,
@@ -663,11 +528,13 @@ export interface QuoteLine {
 
 export interface Quote {
   plan: Plan | null
-  seats: SeatCounts
-  seatPricing: SeatPricing
+  /** Fixed annual subscription fee for the selected plan (0 if none). */
+  planAnnual: number
+  /** Agent Learning add-on pool (analyzed traces/mo) used for pool pricing. */
+  agentLearningPoolMonthly: number
   addonPricing: AddonPricing
   agencyMode: boolean
-  /** Pre-discount subscription annual (plan + seats + add-ons). */
+  /** Pre-discount subscription annual (plan fee + add-ons). */
   subscriptionListAnnual: number
   /** Agency 30% off subscription; 0 when agency mode is off. */
   agencyDiscount: number
@@ -682,8 +549,9 @@ export interface Quote {
 
 export interface BuildQuoteInput {
   planId: PlanId | null
-  seats: SeatCounts
   selectedAddonIds: AddonId[]
+  /** Agent Learning add-on pool (analyzed traces/mo). */
+  agentLearningPoolMonthly?: number
   agencyMode?: boolean
   platformConfig?: PlatformConfig
 }
@@ -692,39 +560,41 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   const plan = input.planId == null ? null : getPlan(input.planId)
   const agencyMode = Boolean(input.agencyMode)
 
-  const seats = plan
-    ? clampSeats(plan, input.seats)
-    : {
-        developer: Math.max(0, Math.floor(input.seats.developer)),
-        builder: Math.max(0, Math.floor(input.seats.builder)),
-        operator: Math.max(0, Math.floor(input.seats.operator)),
-      }
+  const planAnnual = plan ? plan.annualFee : 0
+  const agentLearningPoolMonthly = Math.max(
+    0,
+    input.agentLearningPoolMonthly ?? DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
+  )
 
-  const emptySeatPricing: SeatPricing = {
-    developerMonthlyRate: 0,
-    developerAnnual: 0,
-    extraDeveloperSeats: 0,
-    extraDeveloperAnnual: 0,
-    builderAnnual: 0,
-    operatorAnnual: 0,
-    seatContractRaw: 0,
-    planAnnual: 0,
-    seatContract: 0,
-    minimumApplied: false,
+  const addonIds = input.selectedAddonIds.filter((id) => {
+    const addon = ADDONS.find((a) => a.id === id)
+    return addon != null && isAddonAvailable(addon, plan)
+  })
+
+  const baseAddonPricing = priceAddons(
+    plan,
+    planAnnual,
+    addonIds.filter((id) => id !== 'agent-learning'),
+  )
+
+  const agentLearningAddon = ADDONS.find((a) => a.id === 'agent-learning')!
+  const agentLearningLines: AddonLine[] =
+    addonIds.includes('agent-learning')
+      ? [
+          {
+            addon: agentLearningAddon,
+            listAmount: getAgentLearningAnnual(agentLearningPoolMonthly),
+            billedAmount: getAgentLearningAnnual(agentLearningPoolMonthly),
+          },
+        ]
+      : []
+
+  const addonPricing: AddonPricing = {
+    lines: [...baseAddonPricing.lines, ...agentLearningLines],
+    total:
+      baseAddonPricing.total +
+      agentLearningLines.reduce((sum, line) => sum + line.billedAmount, 0),
   }
-
-  const seatPricing = plan ? priceSeats(plan, seats) : emptySeatPricing
-
-  const addonIds = plan
-    ? input.selectedAddonIds.filter((id) => {
-        const addon = ADDONS.find((a) => a.id === id)
-        return addon != null && isAddonAvailable(addon, plan)
-      })
-    : []
-
-  const addonPricing = plan
-    ? priceAddons(plan, seatPricing.seatContract, addonIds)
-    : { lines: [], total: 0 }
 
   const platformSelected = Boolean(plan?.hasUsage)
   const platformConfig = input.platformConfig ?? defaultPlatformConfig(0)
@@ -742,48 +612,11 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   const productLines: QuoteLine[] = []
 
   if (plan) {
-    const included = Math.min(seats.developer, plan.includedDeveloperSeats)
     productLines.push({
       id: 'plan',
       name: plan.name,
-      meta: `Includes ${included} developer seat${included === 1 ? '' : 's'}`,
-      annualAmount: plan.annualMinimum,
-      period: '/ yr',
-    })
-    productLines.push({
-      id: 'included-developer-seats',
-      name: 'Developer seats',
-      meta: `${included} included`,
-      annualAmount: 0,
-      period: '/ yr',
-      included: true,
-    })
-    if (seatPricing.extraDeveloperSeats > 0) {
-      productLines.push({
-        id: 'developer-seats',
-        name: 'Additional developer seats',
-        meta: `${seatPricing.extraDeveloperSeats} × ${formatUsd(seatPricing.developerMonthlyRate)}/seat/mo`,
-        annualAmount: seatPricing.extraDeveloperAnnual,
-        period: '/ yr',
-      })
-    }
-    if (seats.builder > 0) {
-      productLines.push({
-        id: 'builder-seats',
-        name: 'Builder seats',
-        meta: `${seats.builder} × ${formatUsd(BUILDER_SEAT_MONTHLY)}/mo`,
-        annualAmount: seatPricing.builderAnnual,
-        period: '/ yr',
-      })
-    }
-  }
-
-  if (seats.operator > 0 && plan?.isEnterprise) {
-    productLines.push({
-      id: 'operator-seats',
-      name: 'Operator seats',
-      meta: `${seats.operator} × ${formatUsd(OPERATOR_SEAT_MONTHLY)}/mo`,
-      annualAmount: seatPricing.operatorAnnual,
+      meta: 'Fixed annual subscription',
+      annualAmount: plan.annualFee,
       period: '/ yr',
     })
   }
@@ -792,20 +625,25 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     productLines.push({
       id: line.addon.id,
       name: line.addon.name,
-      meta: [
-        `${formatPercent(line.addon.rate)} of seat contract`,
-        line.addon.annualMinimum > 0
-          ? `${formatUsd(line.addon.annualMinimum)} min`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' · '),
+      meta:
+        line.addon.id === 'agent-learning'
+          ? `${agentLearningPoolMonthly.toLocaleString('en-US')} analyzed traces/mo add-on · ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included`
+          : [
+              line.addon.flatAnnual != null
+                ? 'Fixed annual subscription'
+                : `${formatPercent(line.addon.rate ?? 0)} of subscription`,
+              line.addon.annualMinimum > 0
+                ? `${formatUsd(line.addon.annualMinimum)} min`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · '),
       annualAmount: line.billedAmount,
       period: '/ yr',
     })
   }
 
-  const subscriptionListAnnual = seatPricing.planAnnual + addonPricing.total
+  const subscriptionListAnnual = planAnnual + addonPricing.total
   const agencyDiscount =
     agencyMode && subscriptionListAnnual > 0
       ? Math.round(subscriptionListAnnual * AGENCY_MODE_DISCOUNT)
@@ -815,7 +653,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     productLines.push({
       id: 'agency-discount',
       name: 'Agency discount',
-      meta: `${formatPercent(AGENCY_MODE_DISCOUNT)} off plan, seats, and add-ons`,
+      meta: `${formatPercent(AGENCY_MODE_DISCOUNT)} off plan and add-ons`,
       annualAmount: -agencyDiscount,
       period: '/ yr',
     })
@@ -836,8 +674,8 @@ export function buildQuote(input: BuildQuoteInput): Quote {
 
   return {
     plan,
-    seats,
-    seatPricing,
+    planAnnual,
+    agentLearningPoolMonthly,
     addonPricing,
     agencyMode,
     subscriptionListAnnual,

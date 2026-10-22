@@ -384,22 +384,11 @@ button {
   align-items: end;
 }
 
-.size-row.seats-row {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: start;
-}
-
 .field-hint {
   display: block;
   margin-top: 0.35rem;
   font-size: 0.72rem;
   color: var(--text-dim);
-}
-
-@media (max-width: 720px) {
-  .size-row.seats-row {
-    grid-template-columns: 1fr;
-  }
 }
 
 .field label {
@@ -501,25 +490,6 @@ button {
   gap: 0.55rem;
 }
 
-.plan-seats {
-  margin: 0 0 0.25rem 0.35rem;
-  padding: 0.85rem 0.9rem;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--green) 28%, var(--border));
-  background: color-mix(in srgb, var(--green) 5%, var(--surface-2));
-}
-
-.plan-seats .field-hint.seat-rate-hint {
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  line-height: 1.4;
-}
-
-.plan-seats .field-hint.seat-rate-hint strong {
-  color: var(--text);
-  font-weight: 600;
-}
-
 .platform-usage {
   margin: 0 0 0.25rem 0.35rem;
   padding: 0.85rem 0.9rem;
@@ -543,6 +513,85 @@ button {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text);
+}
+
+.ti-panel {
+  margin: 0 0 0.25rem 0.35rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--green) 28%, var(--border));
+  background: color-mix(in srgb, var(--green) 5%, var(--surface-2));
+}
+
+.ti-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.ti-input-row input {
+  width: 9.5rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--text);
+  outline: none;
+}
+
+.ti-input-row input:focus {
+  border-color: color-mix(in srgb, var(--green) 55%, var(--border-strong));
+  box-shadow: 0 0 0 3px var(--green-dim);
+}
+
+.ti-computed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.ti-table {
+  display: grid;
+}
+
+.ti-row {
+  display: grid;
+  grid-template-columns: 1.1fr 0.8fr 1.4fr;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.ti-row:last-child {
+  border-bottom: 0;
+}
+
+.ti-head {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.ti-note {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-muted);
 }
 
 .platform-package-toggles {

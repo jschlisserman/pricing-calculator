@@ -18,35 +18,27 @@ Submit order opens a review page (line items), then account details. Confirm ema
 
 For Netlify, set `RESEND_API_KEY` and `RESEND_FROM=Mastra Pricing <orders@mastrapricing.ai>` in site env vars (verified root domain).
 
-## Pricing logic (v5 — seat-based)
+## Pricing logic — fixed annual subscription
 
 ### Plans
 
-| Plan | Price | Seats |
-| --- | --- | --- |
-| Enterprise (Platform) | $10,000/yr minimum | 5 developer included, $150/seat/mo |
-| Enterprise Self-Hosted | $15,000/yr minimum | 5 included, $175/seat/mo |
-| BYO VPC | $30,000/yr minimum | 10 included, $200/seat/mo |
-| Private Cloud | $50,000/yr minimum | 10 included, $200/seat/mo |
-| BYOC | $100,000/yr minimum | 10 included, $250/seat/mo |
+Each deployment plan is a fixed annual subscription fee. There is no seat-based pricing.
 
-Enterprise billed amount is the annual minimum, which includes the plan’s developer seats, plus additional developer seats, builder seats, and operator seats purchased on top.
-
-### Seat types
-
-- **Developer** — Enterprise only. Included seats come with the plan floor. Additional seats are $150/seat/mo on Platform, $175 on Self-Hosted, $200 on BYO VPC and Private Cloud, and $250 on BYOC
-- **Builder** — Enterprise only. $50/mo flat (Agent Builder only; no CLI/deploy/admin)
-- **Operator** — Enterprise only. $10/mo
-
-### Developer seat prices
-
-Additional developer seats are a fixed monthly price. Enterprise Platform is $150/seat/mo, Self-Hosted is $175/seat/mo, BYO VPC and Private Cloud are $200/seat/mo, and BYOC is $250/seat/mo.
+| Plan | Fixed annual fee |
+| --- | --- |
+| Enterprise (Platform) | $10,000/yr |
+| Enterprise Self-Hosted | $15,000/yr |
+| BYO VPC | $40,000/yr |
+| Private Cloud | $60,000/yr |
+| BYOC | $120,000/yr |
 
 ### Add-ons
 
-- **Agent Learning** — 50% of seat contract, $10k/yr minimum (Enterprise Platform only)
-- **Compliance** — 20% of seat contract, $5k/yr minimum (Enterprise only)
-- **Premium on-call** — 30% of seat contract, $10k/yr minimum (Enterprise only)
+Priced as a percentage of the plan subscription, subject to an annual minimum.
+
+- **Agent Learning** — Trace Intelligence pool pricing (all plans): 10k analyzed traces/mo included, then an add-on pool you enter in traces/mo at $5.00/1k, declining to ~$2.10/1k at 10M/mo, billed annually (pool × rate × 12)
+- **Compliance** — fixed $5,000/yr (Enterprise Platform only)
+- **Premium on-call support** — fixed $10,000/yr (Enterprise plans: Enterprise Platform, Enterprise Self-Hosted; also available without a plan selected)
 
 ### Platform usage
 
@@ -54,14 +46,14 @@ Enterprise Platform only. Usage packages scale includes from the product total p
 
 ### Agency mode
 
-Optional toggle on the order builder. Applies **30% off** plan, seats, and add-ons. Platform usage overage is not discounted. While agency mode is on, Support / services are hidden.
+Optional toggle on the order builder. Applies **30% off** plan and add-ons. Platform usage overage is not discounted. While agency mode is on, Support / services are hidden.
 
 ### Support
 
 Hidden while agency mode is on.
 
 - **Path 1** — Small / Medium / Large; choose quarterly ($9k / $24k / $70k) or annual package ($32k / $86k / $250k, ~10% off)
-- **Path 2** — Evals / Integrations / Infrastructure / Custom; price = engineer $/hr × hours ÷ (1 − margin)
+- **Path 2** — Evals is a flat $5,000 one-time payment. Integrations / Infrastructure / Custom: price = engineer $/hr × hours ÷ (1 − margin)
 - **Mastra Audit** — $500 one-time
 
 No purchase-count or support package discounts.

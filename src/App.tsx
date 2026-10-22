@@ -4,6 +4,7 @@ import {
   DEFAULT_ENGINEER_COST_PER_HOUR,
   DEFAULT_PATH2_MARGIN,
   PATH1_TIERS,
+  PATH2_EVALS_ID,
   PATH2_MARGIN_OPTIONS,
   PATH2_PACKAGES,
   buildSupportMargin,
@@ -26,27 +27,28 @@ import {
 import {
   ADDONS,
   AGENCY_MODE_DISCOUNT,
-  BUILDER_SEAT_MONTHLY,
-  OPERATOR_SEAT_MONTHLY,
+  DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
   PLANS,
   PLATFORM_PACKAGES,
   PLATFORM_USAGE_METRICS,
+  TRACE_INTELLIGENCE_POOLS,
   buildPlatformMargin,
   buildQuote,
-  clampSeats,
   defaultPlatformConfig,
   formatPercent,
   formatUnitCost,
   formatUsd,
   getAdditionalUsageUnitPrice,
+  getAgentLearningAnnual,
+  getAgentLearningMonthly,
   getPlan,
+  getTraceIntelligenceRatePer1k,
   isAddonAvailable,
   platformConfigFromPackage,
   type AddonId,
   type PlanId,
   type PlatformConfig,
   type PlatformPackageId,
-  type SeatCounts,
 } from './pricing'
 import ReviewPage from './ReviewPage'
 import NumberField from './NumberField'
@@ -87,12 +89,10 @@ export default function App() {
     null,
   )
   const [planId, setPlanId] = useState<PlanId | null>(null)
-  const [seats, setSeats] = useState<SeatCounts>({
-    developer: 0,
-    builder: 0,
-    operator: 0,
-  })
   const [selectedAddons, setSelectedAddons] = useState<AddonId[]>([])
+  const [agentLearningPoolMonthly, setAgentLearningPoolMonthly] = useState(
+    DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
+  )
   const [agencyMode, setAgencyMode] = useState(false)
   const [supportIds, setSupportIds] = useState<string[]>([])
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(() =>
@@ -109,7 +109,6 @@ export default function App() {
   useEffect(() => {
     if (planId == null) return
     const nextPlan = getPlan(planId)
-    setSeats((prev) => clampSeats(nextPlan, prev))
     setSelectedAddons((prev) =>
       prev.filter((id) => {
         const addon = ADDONS.find((a) => a.id === id)
@@ -126,12 +125,12 @@ export default function App() {
     () =>
       buildQuote({
         planId,
-        seats,
         selectedAddonIds: selectedAddons,
+        agentLearningPoolMonthly,
         agencyMode,
         platformConfig,
       }),
-    [planId, seats, selectedAddons, agencyMode, platformConfig],
+    [planId, selectedAddons, agentLearningPoolMonthly, agencyMode, platformConfig],
   )
 
   const usageScaleAnnual =
@@ -226,7 +225,10 @@ export default function App() {
       for (const line of support.path2) {
         supportLines.push({
           name: `Support Path 2 · ${line.package.name}`,
-          meta: `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
+          meta:
+            line.flatPrice != null
+              ? 'Flat one-time'
+              : `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
           listAmount: line.listAmount > 0 ? line.listAmount : null,
           billedAmount: line.listAmount > 0 ? line.billedAmount : null,
           period: '/ one-time',
@@ -244,10 +246,6 @@ export default function App() {
 
     return {
       planLabel: quote.plan?.name ?? 'No plan',
-      seatsLabel:
-        quote.plan == null
-          ? 'No plan'
-          : `${quote.seats.developer} developer · ${quote.seats.builder} builder · ${quote.seats.operator} operator`,
       agencyModeLabel: agencyMode
         ? `Agency mode (${formatPercent(AGENCY_MODE_DISCOUNT)} off subscription)`
         : null,
@@ -265,30 +263,8 @@ export default function App() {
     }
   }, [hasOrder, quote, support, agencyMode])
 
-  function setSeatCount(key: keyof SeatCounts, count: number) {
-    const nextCount = Math.max(0, Math.floor(count))
-    if (plan == null) {
-      setSeats({ ...seats, [key]: nextCount })
-      return
-    }
-    setSeats(
-      clampSeats(plan, {
-        ...seats,
-        [key]: nextCount,
-      }),
-    )
-  }
-
   function selectPlan(id: PlanId) {
     setPlanId(id)
-    const nextPlan = getPlan(id)
-    setSeats(
-      clampSeats(nextPlan, {
-        developer: nextPlan.includedDeveloperSeats,
-        builder: seats.builder,
-        operator: seats.operator,
-      }),
-    )
   }
 
   function toggleAddon(id: AddonId) {
@@ -302,6 +278,8 @@ export default function App() {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
       if (isPath1Id(id)) return withoutOtherPath1Tiers([...prev, id], id)
       if (isPath2Id(id)) {
+        // Evals does not auto-include the Mastra Audit.
+        if (id === PATH2_EVALS_ID) return [...prev, id]
         return prev.includes(AUDIT_ID) ? [...prev, id] : [...prev, id, AUDIT_ID]
       }
       return [...prev, id]
@@ -366,8 +344,8 @@ export default function App() {
 
   function clearOrder() {
     setPlanId(null)
-    setSeats({ developer: 0, builder: 0, operator: 0 })
     setSelectedAddons([])
+    setAgentLearningPoolMonthly(DEFAULT_AGENT_LEARNING_POOL_MONTHLY)
     setAgencyMode(false)
     setSupportIds([])
     setPlatformConfig(defaultPlatformConfig(0))
@@ -375,8 +353,6 @@ export default function App() {
     setPath2Margins({})
     setPath1BillingPeriod('quarter')
   }
-
-  const maxDev = plan?.maxDeveloperSeats ?? null
 
   return (
     <div className="app">
@@ -446,8 +422,8 @@ export default function App() {
                     <span className="item-body">
                       <span className="item-name">Agency mode</span>
                       <p className="item-desc">
-                        {formatPercent(AGENCY_MODE_DISCOUNT)} off plan, seats,
-                        and add-ons.
+                        {formatPercent(AGENCY_MODE_DISCOUNT)} off plan and
+                        add-ons.
                       </p>
                     </span>
                     <span className="item-price">
@@ -491,74 +467,11 @@ export default function App() {
                           )}
                         </span>
                         <span className="item-price">
-                          {formatUsd(p.annualMinimum)}
+                          {formatUsd(p.annualFee)}
                           <br />
-                          / yr min
+                          / yr
                         </span>
                       </button>
-
-                      {selected && plan != null && plan.isEnterprise && (
-                        <div className="plan-seats">
-                          <div className="size-row seats-row">
-                            <div className="field">
-                              <label htmlFor="developer-seats">Developer</label>
-                              <NumberField
-                                id="developer-seats"
-                                value={seats.developer}
-                                min={plan.includedDeveloperSeats}
-                                max={maxDev ?? undefined}
-                                onCommit={(next) =>
-                                  setSeatCount('developer', next ?? 0)
-                                }
-                              />
-                              <span className="field-hint">
-                                Min {plan.includedDeveloperSeats} included
-                              </span>
-                              {quote.seatPricing.developerMonthlyRate > 0 && (
-                                <span className="field-hint seat-rate-hint">
-                                  Developer rate:{' '}
-                                  <strong>
-                                    {formatUsd(
-                                      quote.seatPricing.developerMonthlyRate,
-                                    )}
-                                    /seat/mo
-                                  </strong>{' '}
-                                  at {quote.seats.developer} seats
-                                  {quote.seatPricing.minimumApplied
-                                    ? ` · ${formatUsd(plan.annualMinimum)}/yr min binds`
-                                    : ''}
-                                </span>
-                              )}
-                            </div>
-                            <div className="field">
-                              <label htmlFor="builder-seats">
-                                Builder ({formatUsd(BUILDER_SEAT_MONTHLY)}/mo)
-                              </label>
-                              <NumberField
-                                id="builder-seats"
-                                value={seats.builder}
-                                min={0}
-                                onCommit={(next) =>
-                                  setSeatCount('builder', next ?? 0)
-                                }
-                              />
-                            </div>
-                            <div className="field">
-                              <label htmlFor="operator-seats">
-                                Operator ({formatUsd(OPERATOR_SEAT_MONTHLY)}/mo)
-                              </label>
-                              <NumberField
-                                id="operator-seats"
-                                value={seats.operator}
-                                min={0}
-                                onCommit={(next) =>
-                                  setSeatCount('operator', next ?? 0)
-                                }
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
                       {selected && p.hasUsage && showUsage && (
                             <div className="platform-usage">
@@ -672,21 +585,21 @@ export default function App() {
               <section className="category">
                 <div className="category-title">
                   <h3>Add-ons</h3>
-                  <span className="category-meta">
-                    % of seat contract
-                  </span>
+                  <span className="category-meta">Optional</span>
                 </div>
                 <div className="items">
                   {ADDONS.map((addon) => {
-                    const allowed =
-                      plan != null && isAddonAvailable(addon, plan)
+                    const allowed = isAddonAvailable(addon, plan)
                     const selected = selectedAddons.includes(addon.id)
                     const priced = quote.addonPricing.lines.find(
                       (l) => l.addon.id === addon.id,
                     )
                     return (
-                      <button
+                      <div
                         key={addon.id}
+                        className={`item-wrap${selected ? ' open' : ''}`}
+                      >
+                      <button
                         type="button"
                         className={`item${selected ? ' selected' : ''}${!allowed ? ' unavailable' : ''}`}
                         onClick={() => {
@@ -704,7 +617,7 @@ export default function App() {
                             {addon.name}
                             {!allowed && (
                               <span className="pill">
-                                {addon.id === 'agent-learning'
+                                {addon.id === 'compliance'
                                   ? 'Enterprise Platform only'
                                   : 'Enterprise only'}
                               </span>
@@ -721,9 +634,21 @@ export default function App() {
                               <br />
                               / year
                             </>
+                          ) : addon.id === 'agent-learning' ? (
+                            <>
+                              $5.00
+                              <br />
+                              / 1k traces
+                            </>
+                          ) : addon.flatAnnual != null ? (
+                            <>
+                              {formatUsd(addon.flatAnnual)}
+                              <br />
+                              / year
+                            </>
                           ) : (
                             <>
-                              {formatPercent(addon.rate)}
+                              {formatPercent(addon.rate ?? 0)}
                               <br />
                               {addon.annualMinimum > 0
                                 ? `${formatUsd(addon.annualMinimum)} min`
@@ -732,6 +657,77 @@ export default function App() {
                           )}
                         </span>
                       </button>
+
+                      {selected && addon.id === 'agent-learning' && (
+                        <div className="ti-panel">
+                          <div className="platform-usage-intro">
+                            <strong>Trace Intelligence</strong>
+                            <span>Analyzed traces / month</span>
+                          </div>
+                          <div className="ti-input-row">
+                            <label htmlFor="agent-learning-pool">
+                              Add-on pool (analyzed traces/mo)
+                            </label>
+                            <NumberField
+                              id="agent-learning-pool"
+                              value={agentLearningPoolMonthly}
+                              min={0}
+                              onCommit={(next) =>
+                                setAgentLearningPoolMonthly(next ?? 0)
+                              }
+                              aria-label="Agent Learning add-on pool, analyzed traces per month"
+                            />
+                          </div>
+                          <div className="ti-computed">
+                            <span>
+                              Rate{' '}
+                              {formatUsd(
+                                getTraceIntelligenceRatePer1k(
+                                  agentLearningPoolMonthly,
+                                ),
+                              )}
+                              /1k
+                            </span>
+                            <span>
+                              {formatUsd(
+                                getAgentLearningMonthly(
+                                  agentLearningPoolMonthly,
+                                ),
+                              )}
+                              /mo
+                            </span>
+                            <span>
+                              {formatUsd(
+                                getAgentLearningAnnual(
+                                  agentLearningPoolMonthly,
+                                ),
+                              )}
+                              /yr
+                            </span>
+                          </div>
+                          <div className="ti-table">
+                            <div className="ti-row ti-head">
+                              <span>Monthly pool</span>
+                              <span>Rate / 1k</span>
+                              <span>Price</span>
+                            </div>
+                            {TRACE_INTELLIGENCE_POOLS.map((pool) => (
+                              <div className="ti-row" key={pool.monthlyPool}>
+                                <span>{pool.monthlyPool}</span>
+                                <span>{pool.ratePer1k}</span>
+                                <span>{pool.price}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="ti-note">
+                            Pool resets monthly. Enterprise pools are committed
+                            annually; overage true-up at 1.25×. TI pauses when
+                            the pool runs out. Bring-your-own model: same price.
+                            Self-hosted / air-gapped: +50%.
+                          </p>
+                        </div>
+                      )}
+                      </div>
                     )
                   })}
                 </div>
@@ -830,15 +826,18 @@ export default function App() {
                 <div className="items">
                   {PATH2_PACKAGES.map((pkg) => {
                     const selected = supportIds.includes(pkg.id)
+                    const isFlat = pkg.flatPrice != null
                     const hours = path2Hours[pkg.id] ?? 0
                     const targetMargin =
                       path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
                     const cost = getPath2Cost(hours, engineerCostPerHour)
-                    const listPrice = getPath2ListPrice(
-                      hours,
-                      targetMargin,
-                      engineerCostPerHour,
-                    )
+                    const listPrice =
+                      pkg.flatPrice ??
+                      getPath2ListPrice(
+                        hours,
+                        targetMargin,
+                        engineerCostPerHour,
+                      )
                     return (
                       <div
                         key={pkg.id}
@@ -875,7 +874,7 @@ export default function App() {
                             )}
                           </span>
                         </button>
-                        {selected && (
+                        {selected && !isFlat && (
                           <div className="path2-pricing">
                             <label
                               className="scoped-price"
@@ -1096,8 +1095,9 @@ export default function App() {
                                 Path 2 · {line.package.name}
                               </span>
                               <span className="order-line-meta">
-                                {line.hours} hrs ·{' '}
-                                {formatPercent(line.targetMarginRate)} target
+                                {line.flatPrice != null
+                                  ? 'Flat one-time'
+                                  : `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`}
                               </span>
                             </div>
                             <span className="order-line-price">
@@ -1205,7 +1205,7 @@ export default function App() {
                 </>
               ) : (
                 <p className="summary-empty">
-                  Select a plan and seats to build an order.
+                  Select a plan to build an order.
                 </p>
               )}
             </aside>

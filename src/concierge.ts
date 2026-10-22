@@ -59,10 +59,14 @@ export const PATH1_TIERS: Path1Tier[] = [
 export interface Path2Package {
   id: Path2PackageId
   name: string
+  /** Flat one-time price; when set, hours × margin pricing does not apply. */
+  flatPrice?: number
 }
 
+export const PATH2_EVALS_ID: Path2PackageId = 'support-path2-evals'
+
 export const PATH2_PACKAGES: Path2Package[] = [
-  { id: 'support-path2-evals', name: 'Evals' },
+  { id: PATH2_EVALS_ID, name: 'Evals', flatPrice: 5_000 },
   { id: 'support-path2-integrations', name: 'Integrations' },
   { id: 'support-path2-infrastructure', name: 'Infrastructure' },
   { id: 'support-path2-custom', name: 'Custom' },
@@ -191,6 +195,8 @@ export interface SupportPath2Line {
   engineerCostPerHour: number
   cost: number
   targetMarginRate: Path2MarginRate
+  /** Flat one-time price when the package is not priced by hours × margin. */
+  flatPrice: number | null
   listAmount: number
   billedAmount: number
 }
@@ -250,16 +256,19 @@ export function buildSupportQuote(
   const path2: SupportPath2Line[] = PATH2_PACKAGES.filter((pkg) =>
     selectedIds.includes(pkg.id),
   ).map((pkg) => {
-    const hours = Math.max(0, path2Hours[pkg.id] ?? 0)
+    const flatPrice = pkg.flatPrice ?? null
+    const hours = flatPrice != null ? 0 : Math.max(0, path2Hours[pkg.id] ?? 0)
     const targetMarginRate = path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
-    const cost = getPath2Cost(hours, rate)
-    const listAmount = getPath2PriceFromMargin(cost, targetMarginRate)
+    const cost = flatPrice != null ? 0 : getPath2Cost(hours, rate)
+    const listAmount =
+      flatPrice ?? getPath2PriceFromMargin(cost, targetMarginRate)
     return {
       package: pkg,
       hours,
       engineerCostPerHour: rate,
       cost,
       targetMarginRate,
+      flatPrice,
       listAmount,
       billedAmount: listAmount,
     }
