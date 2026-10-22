@@ -70,10 +70,10 @@ export function formatOrderEmailText(
     'New pricing calculator order',
     '',
     'Account details',
-    `Account owner: ${displayOrNone(contact.accountOwner)}`,
-    `Lead company: ${contact.leadCompanyName}`,
-    `Point of contact: ${displayOrNone(contact.pointOfContactName)}`,
-    `Point of contact email: ${displayOrNone(contact.pointOfContactEmail)}`,
+    `Submission by: ${displayOrNone(contact.accountOwner)}`,
+    `Customer name: ${contact.leadCompanyName}`,
+    `Point of contact name: ${displayOrNone(contact.pointOfContactName)}`,
+    `Point of contact email address: ${displayOrNone(contact.pointOfContactEmail)}`,
     notes ? `Notes: ${notes}` : 'Notes: (none)',
     '',
     'Order details',
@@ -180,10 +180,10 @@ export function formatOrderEmailHtml(
   <body style="font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;color:#111;line-height:1.45;max-width:640px;margin:0 auto;padding:24px">
     <h1 style="font-size:22px;margin:0 0 16px">New pricing calculator order</h1>
     <h2 style="font-size:16px;margin:0 0 8px">Account details</h2>
-    <p><strong>Account owner:</strong> ${contact.accountOwner.trim() ? esc(contact.accountOwner.trim()) : '<span style="color:#888">(none)</span>'}</p>
-    <p><strong>Lead company:</strong> ${esc(contact.leadCompanyName)}</p>
-    <p><strong>Point of contact:</strong> ${contact.pointOfContactName.trim() ? esc(contact.pointOfContactName.trim()) : '<span style="color:#888">(none)</span>'}</p>
-    <p><strong>Point of contact email:</strong> ${contact.pointOfContactEmail.trim() ? esc(contact.pointOfContactEmail.trim()) : '<span style="color:#888">(none)</span>'}</p>
+    <p><strong>Submission by:</strong> ${contact.accountOwner.trim() ? esc(contact.accountOwner.trim()) : '<span style="color:#888">(none)</span>'}</p>
+    <p><strong>Customer name:</strong> ${esc(contact.leadCompanyName)}</p>
+    <p><strong>Point of contact name:</strong> ${contact.pointOfContactName.trim() ? esc(contact.pointOfContactName.trim()) : '<span style="color:#888">(none)</span>'}</p>
+    <p><strong>Point of contact email address:</strong> ${contact.pointOfContactEmail.trim() ? esc(contact.pointOfContactEmail.trim()) : '<span style="color:#888">(none)</span>'}</p>
     <p><strong>Notes:</strong> ${notes ? esc(notes) : '<span style="color:#888">(none)</span>'}</p>
     <h2 style="font-size:16px;margin:24px 0 8px">Order details</h2>
     <p><strong>Plan:</strong> ${esc(order.planLabel)}</p>

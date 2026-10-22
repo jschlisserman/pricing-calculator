@@ -229,6 +229,10 @@ export const ADDONS: Addon[] = [
 export const AGENCY_MODE_DISCOUNT = 0.3
 
 export function isAddonAvailable(addon: Addon, plan: Plan): boolean {
+  // Agent Learning is Enterprise Platform only.
+  if (addon.id === 'agent-learning') {
+    return plan.id === 'enterprise-platform'
+  }
   return plan.isEnterprise && addon.enterpriseOnly
 }
 

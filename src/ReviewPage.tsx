@@ -151,7 +151,7 @@ export default function ReviewPage({
     const owner = accountOwner.trim()
     const company = leadCompanyName.trim()
     if (!owner || !company) {
-      setError('Account owner and lead company name are required.')
+      setError('Submission by and customer name are required.')
       return
     }
 
@@ -226,12 +226,12 @@ export default function ReviewPage({
 
           <div className="review-form review-form-standalone">
             <label className="review-field" htmlFor="account-owner">
-              Account owner <span className="required">Required</span>
+              Submission by <span className="required">Required</span>
               <input
                 id="account-owner"
                 type="text"
                 autoComplete="name"
-                placeholder="Name"
+                placeholder="First Name, Last Name"
                 value={accountOwner}
                 onChange={(e) => setAccountOwner(e.target.value)}
                 required
@@ -239,12 +239,12 @@ export default function ReviewPage({
             </label>
 
             <label className="review-field" htmlFor="lead-company-name">
-              Lead company name <span className="required">Required</span>
+              Customer name <span className="required">Required</span>
               <input
                 id="lead-company-name"
                 type="text"
                 autoComplete="organization"
-                placeholder="Company name"
+                placeholder="Company Name"
                 value={leadCompanyName}
                 onChange={(e) => setLeadCompanyName(e.target.value)}
                 required
@@ -252,20 +252,19 @@ export default function ReviewPage({
             </label>
 
             <label className="review-field" htmlFor="poc-name">
-              Point of contact name <span className="optional">Optional</span>
+              Point of contact name
               <input
                 id="poc-name"
                 type="text"
                 autoComplete="name"
-                placeholder="Contact name"
+                placeholder="First Name, Last Name"
                 value={pointOfContactName}
                 onChange={(e) => setPointOfContactName(e.target.value)}
               />
             </label>
 
             <label className="review-field" htmlFor="poc-email">
-              Point of contact email address{' '}
-              <span className="optional">Optional</span>
+              Point of contact email address
               <input
                 id="poc-email"
                 type="email"
@@ -277,11 +276,11 @@ export default function ReviewPage({
             </label>
 
             <label className="review-field" htmlFor="order-notes">
-              Notes <span className="optional">Optional</span>
+              Notes
               <textarea
                 id="order-notes"
                 rows={4}
-                placeholder="Context for the deal, timeline, exceptions…"
+                placeholder="Notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />

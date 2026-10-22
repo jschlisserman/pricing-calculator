@@ -44,7 +44,7 @@ Additional developer seats are a fixed monthly price. Enterprise Platform is $15
 
 ### Add-ons
 
-- **Agent Learning** — 50% of seat contract, $10k/yr minimum (Enterprise only)
+- **Agent Learning** — 50% of seat contract, $10k/yr minimum (Enterprise Platform only)
 - **Compliance** — 20% of seat contract, $5k/yr minimum (Enterprise only)
 - **Premium on-call** — 30% of seat contract, $10k/yr minimum (Enterprise only)
 

@@ -36,8 +36,8 @@ export async function sendOrderEmail({
   from = process.env.RESEND_FROM || 'Mastra Pricing <onboarding@resend.dev>',
 }: SendOrderEmailInput): Promise<{ id: string }> {
   const contact: OrderContactDetails = {
-    accountOwner: requireField('Account owner', accountOwner),
-    leadCompanyName: requireField('Lead company name', leadCompanyName),
+    accountOwner: requireField('Submission by', accountOwner),
+    leadCompanyName: requireField('Customer name', leadCompanyName),
     pointOfContactName: optionalField(pointOfContactName),
     pointOfContactEmail: optionalField(pointOfContactEmail),
     notes,

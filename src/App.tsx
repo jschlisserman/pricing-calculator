@@ -703,7 +703,11 @@ export default function App() {
                           <span className="item-name">
                             {addon.name}
                             {!allowed && (
-                              <span className="pill">Enterprise only</span>
+                              <span className="pill">
+                                {addon.id === 'agent-learning'
+                                  ? 'Enterprise Platform only'
+                                  : 'Enterprise only'}
+                              </span>
                             )}
                           </span>
                           <p className="item-desc">{addon.description}</p>
