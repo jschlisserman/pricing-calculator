@@ -151,7 +151,7 @@ export default function App() {
   )
 
   const usageScaleAnnual =
-    quote.subscriptionListAnnual - quote.agencyDiscount
+    quote.subscriptionListAnnual - quote.agencyDiscount - quote.bundleDiscount
 
   useEffect(() => {
     if (!quote.plan?.hasUsage) return

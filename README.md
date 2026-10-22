@@ -59,6 +59,10 @@ Enter the customer's company headcount on the order builder. It maps to a band (
 
 Enterprise Platform only. Usage packages scale includes from the product total per year, excluding additional usage. Additional volume bills at 50% of list unit cost.
 
+### Bundle discount
+
+When a plan is bundled with any add-on, the plan + add-ons subscription gets **20% off**. Platform usage overage is not discounted. The bundle discount does **not** stack with the agency discount — while agency mode is on, only the 30% agency discount applies.
+
 ### Agency mode
 
 Optional toggle on the order builder. Applies **30% off** plan and add-ons. Platform usage overage is not discounted. While agency mode is on, Support / services are hidden.

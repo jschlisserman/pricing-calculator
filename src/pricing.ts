@@ -296,6 +296,12 @@ export function getAgentLearningAnnual(poolMonthly: number): number {
 /** Agency mode: 30% off plan and add-ons (not usage overage). */
 export const AGENCY_MODE_DISCOUNT = 0.3
 
+/**
+ * Plan bundled with any add-on: 20% off plan + add-ons (not usage overage).
+ * Does not stack with the agency discount — agency mode supersedes it.
+ */
+export const BUNDLE_DISCOUNT = 0.2
+
 export function isAddonAvailable(addon: Addon, plan: Plan | null): boolean {
   // Premium on-call support can also be purchased without a plan selected.
   if (!plan) return addon.id === 'premium-on-call'
@@ -684,6 +690,8 @@ export interface Quote {
   subscriptionListAnnual: number
   /** Agency 30% off subscription; 0 when agency mode is off. */
   agencyDiscount: number
+  /** Plan + any add-on bundled: 20% off subscription; 0 when not bundled. */
+  bundleDiscount: number
   platformPackageId: PlatformPackageId | null
   platformPackageName: string | null
   platformIncludes: PlatformUsageAmounts
@@ -817,6 +825,25 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     })
   }
 
+  // Bundle and agency discounts do not stack: agency mode supersedes.
+  const bundleDiscount =
+    !agencyMode &&
+    plan &&
+    addonPricing.lines.length > 0 &&
+    subscriptionListAnnual > 0
+      ? Math.round(subscriptionListAnnual * BUNDLE_DISCOUNT)
+      : 0
+
+  if (bundleDiscount > 0) {
+    productLines.push({
+      id: 'bundle-discount',
+      name: 'Bundle discount',
+      meta: `${formatPercent(BUNDLE_DISCOUNT)} off plan and add-ons when bundled`,
+      annualAmount: -bundleDiscount,
+      period: '/ yr',
+    })
+  }
+
   if (platformOverageTotal > 0) {
     productLines.push({
       id: 'platform-usage',
@@ -828,7 +855,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   }
 
   const annualTotal =
-    subscriptionListAnnual - agencyDiscount + platformOverageTotal
+    subscriptionListAnnual - agencyDiscount - bundleDiscount + platformOverageTotal
 
   return {
     plan,
@@ -842,6 +869,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     agencyMode,
     subscriptionListAnnual,
     agencyDiscount,
+    bundleDiscount,
     platformPackageId: platformSelected ? platformConfig.packageId : null,
     platformPackageName: platformSelected
       ? getPlatformPackageName(platformConfig.packageId)
