@@ -38,10 +38,15 @@ import {
   formatPercent,
   formatUnitCost,
   formatUsd,
+  formatMultiplier,
   getAdditionalUsageUnitPrice,
+  getAddonMultiplier,
   getAgentLearningAnnual,
   getAgentLearningMonthly,
+  getEvalsMultiplier,
+  getHeadcountBand,
   getPlan,
+  getPlanMultiplier,
   getTraceIntelligenceRatePer1k,
   isAddonAvailable,
   platformConfigFromPackage,
@@ -50,6 +55,7 @@ import {
   type PlatformConfig,
   type PlatformPackageId,
 } from './pricing'
+import MatricesPage from './MatricesPage'
 import ReviewPage from './ReviewPage'
 import NumberField from './NumberField'
 import type { OrderLineSnapshot, OrderSnapshot } from './orderSnapshot'
@@ -81,7 +87,7 @@ function CloseIcon() {
   )
 }
 
-type AppPage = 'order' | 'review'
+type AppPage = 'order' | 'review' | 'matrices'
 
 export default function App() {
   const [page, setPage] = useState<AppPage>('order')
@@ -93,6 +99,9 @@ export default function App() {
   const [agentLearningPoolMonthly, setAgentLearningPoolMonthly] = useState(
     DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
   )
+  const [headcount, setHeadcount] = useState<number | null>(null)
+  const headcountBand = getHeadcountBand(headcount)
+  const evalsMultiplier = getEvalsMultiplier(headcount)
   const [agencyMode, setAgencyMode] = useState(false)
   const [supportIds, setSupportIds] = useState<string[]>([])
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(() =>
@@ -126,11 +135,19 @@ export default function App() {
       buildQuote({
         planId,
         selectedAddonIds: selectedAddons,
+        headcount,
         agentLearningPoolMonthly,
         agencyMode,
         platformConfig,
       }),
-    [planId, selectedAddons, agentLearningPoolMonthly, agencyMode, platformConfig],
+    [
+      planId,
+      selectedAddons,
+      headcount,
+      agentLearningPoolMonthly,
+      agencyMode,
+      platformConfig,
+    ],
   )
 
   const usageScaleAnnual =
@@ -152,6 +169,7 @@ export default function App() {
         path2Margins,
         engineerCostPerHour,
         path1BillingPeriod,
+        evalsMultiplier,
       ),
     [
       supportIds,
@@ -159,6 +177,7 @@ export default function App() {
       path2Margins,
       engineerCostPerHour,
       path1BillingPeriod,
+      evalsMultiplier,
     ],
   )
 
@@ -227,7 +246,9 @@ export default function App() {
           name: `Support Path 2 · ${line.package.name}`,
           meta:
             line.flatPrice != null
-              ? 'Flat one-time'
+              ? line.flatMultiplier !== 1 && headcountBand
+                ? `${formatUsd(line.flatPrice)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(line.flatMultiplier)} · Flat one-time`
+                : 'Flat one-time'
               : `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
           listAmount: line.listAmount > 0 ? line.listAmount : null,
           billedAmount: line.listAmount > 0 ? line.billedAmount : null,
@@ -246,6 +267,10 @@ export default function App() {
 
     return {
       planLabel: quote.plan?.name ?? 'No plan',
+      headcountLabel:
+        quote.headcountBand && quote.headcount != null
+          ? `${quote.headcount.toLocaleString('en-US')} employees · ${quote.headcountBand.name} (${quote.headcountBand.rangeLabel})`
+          : null,
       agencyModeLabel: agencyMode
         ? `Agency mode (${formatPercent(AGENCY_MODE_DISCOUNT)} off subscription)`
         : null,
@@ -345,6 +370,7 @@ export default function App() {
   function clearOrder() {
     setPlanId(null)
     setSelectedAddons([])
+    setHeadcount(null)
     setAgentLearningPoolMonthly(DEFAULT_AGENT_LEARNING_POOL_MONTHLY)
     setAgencyMode(false)
     setSupportIds([])
@@ -384,6 +410,14 @@ export default function App() {
           >
             Order builder
           </button>
+          <button
+            type="button"
+            className={`nav-tab${page === 'matrices' ? ' active' : ''}`}
+            onClick={() => setPage('matrices')}
+            aria-current={page === 'matrices' ? 'page' : undefined}
+          >
+            Pricing matrix
+          </button>
         </nav>
       </header>
 
@@ -396,6 +430,8 @@ export default function App() {
           }}
           onSubmitted={clearOrder}
         />
+      ) : page === 'matrices' ? (
+        <MatricesPage />
       ) : (
         <>
           <section className="hero animate-in delay-1">
@@ -404,6 +440,32 @@ export default function App() {
 
           <div className="layout animate-in delay-2">
             <div className="panel">
+              <section className="category">
+                <div className="category-title">
+                  <h3>Company headcount</h3>
+                  <span className="category-meta">
+                    {headcountBand ? headcountBand.name : 'Size multiplier'}
+                  </span>
+                </div>
+                <div className="ti-input-row">
+                  <label htmlFor="company-headcount">Employees</label>
+                  <NumberField
+                    id="company-headcount"
+                    value={headcount}
+                    min={0}
+                    emptyValue={null}
+                    placeholder="e.g. 500"
+                    onCommit={(next) => setHeadcount(next)}
+                    aria-label="Company headcount (employees)"
+                  />
+                </div>
+                <p className="item-desc">
+                  {headcountBand
+                    ? `${headcountBand.name} (${headcountBand.rangeLabel} employees) — multipliers apply to the plan, Compliance, Premium On-Call, and Evals.`
+                    : 'Enter headcount to apply size multipliers to the plan, Compliance, Premium On-Call, and Evals. Defaults to 1.0×.'}
+                </p>
+              </section>
+
               <section className="category">
                 <div className="category-title">
                   <h3>Agency mode</h3>
@@ -441,6 +503,8 @@ export default function App() {
               <div className="items">
                 {PLANS.map((p) => {
                   const selected = planId === p.id
+                  const planMultiplier = getPlanMultiplier(p.id, headcount)
+                  const planPrice = Math.round(p.annualFee * planMultiplier)
                   return (
                     <div
                       key={p.id}
@@ -467,7 +531,7 @@ export default function App() {
                           )}
                         </span>
                         <span className="item-price">
-                          {formatUsd(p.annualFee)}
+                          {formatUsd(planPrice)}
                           <br />
                           / yr
                         </span>
@@ -594,6 +658,14 @@ export default function App() {
                     const priced = quote.addonPricing.lines.find(
                       (l) => l.addon.id === addon.id,
                     )
+                    const addonMultiplier = getAddonMultiplier(
+                      addon.id,
+                      headcount,
+                    )
+                    const displayedFlat =
+                      addon.flatAnnual != null
+                        ? Math.round(addon.flatAnnual * addonMultiplier)
+                        : null
                     return (
                       <div
                         key={addon.id}
@@ -640,9 +712,9 @@ export default function App() {
                               <br />
                               / 1k traces
                             </>
-                          ) : addon.flatAnnual != null ? (
+                          ) : displayedFlat != null ? (
                             <>
-                              {formatUsd(addon.flatAnnual)}
+                              {formatUsd(displayedFlat)}
                               <br />
                               / year
                             </>
@@ -832,12 +904,13 @@ export default function App() {
                       path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
                     const cost = getPath2Cost(hours, engineerCostPerHour)
                     const listPrice =
-                      pkg.flatPrice ??
-                      getPath2ListPrice(
-                        hours,
-                        targetMargin,
-                        engineerCostPerHour,
-                      )
+                      pkg.flatPrice != null
+                        ? pkg.flatPrice * evalsMultiplier
+                        : getPath2ListPrice(
+                            hours,
+                            targetMargin,
+                            engineerCostPerHour,
+                          )
                     return (
                       <div
                         key={pkg.id}
@@ -1096,7 +1169,9 @@ export default function App() {
                               </span>
                               <span className="order-line-meta">
                                 {line.flatPrice != null
-                                  ? 'Flat one-time'
+                                  ? line.flatMultiplier !== 1 && headcountBand
+                                    ? `${formatUsd(line.flatPrice)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(line.flatMultiplier)} · Flat one-time`
+                                    : 'Flat one-time'
                                   : `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`}
                               </span>
                             </div>

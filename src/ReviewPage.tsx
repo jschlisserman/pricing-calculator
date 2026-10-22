@@ -19,6 +19,11 @@ function OrderLines({ order }: { order: OrderSnapshot }) {
           <li className="order-line review-line">
             <div>
               <span className="order-line-name">{order.planLabel}</span>
+              {order.headcountLabel && (
+                <span className="order-line-meta">
+                  Headcount: {order.headcountLabel}
+                </span>
+              )}
               {order.agencyModeLabel && (
                 <span className="order-line-meta">{order.agencyModeLabel}</span>
               )}

@@ -197,6 +197,8 @@ export interface SupportPath2Line {
   targetMarginRate: Path2MarginRate
   /** Flat one-time price when the package is not priced by hours × margin. */
   flatPrice: number | null
+  /** Headcount multiplier applied to the flat price (Evals). */
+  flatMultiplier: number
   listAmount: number
   billedAmount: number
 }
@@ -227,6 +229,8 @@ export function buildSupportQuote(
   path2Margins: Path2Margins = {},
   engineerCostPerHour = DEFAULT_ENGINEER_COST_PER_HOUR,
   path1BillingPeriod: Path1BillingPeriod = 'quarter',
+  /** Headcount multiplier applied to flat-priced packages (Evals). */
+  evalsMultiplier = 1,
 ): SupportQuote {
   const rate = Math.max(0, engineerCostPerHour)
 
@@ -257,11 +261,14 @@ export function buildSupportQuote(
     selectedIds.includes(pkg.id),
   ).map((pkg) => {
     const flatPrice = pkg.flatPrice ?? null
+    const flatMultiplier = flatPrice != null ? Math.max(0, evalsMultiplier) : 1
     const hours = flatPrice != null ? 0 : Math.max(0, path2Hours[pkg.id] ?? 0)
     const targetMarginRate = path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
     const cost = flatPrice != null ? 0 : getPath2Cost(hours, rate)
     const listAmount =
-      flatPrice ?? getPath2PriceFromMargin(cost, targetMarginRate)
+      flatPrice != null
+        ? Math.round(flatPrice * flatMultiplier)
+        : getPath2PriceFromMargin(cost, targetMarginRate)
     return {
       package: pkg,
       hours,
@@ -269,6 +276,7 @@ export function buildSupportQuote(
       cost,
       targetMarginRate,
       flatPrice,
+      flatMultiplier,
       listAmount,
       billedAmount: listAmount,
     }

@@ -32,13 +32,28 @@ Each deployment plan is a fixed annual subscription fee. There is no seat-based 
 | Private Cloud | $60,000/yr |
 | BYOC | $120,000/yr |
 
+Fees above are the base (1.0×) price before the headcount multiplier below.
+
+### Headcount multipliers
+
+Enter the customer's company headcount on the order builder. It maps to a band (Startup 1–24, SMB 25–99, Growth 100–249, Venture 250–499, Enterprise 500–999, Enterprise+ 1,000–4,999, Global 5,000–9,999, Global+ 10,000+) and multiplies the plan fee, Compliance, and Premium On-Call. No headcount entered = 1.0×. Agent Learning pool pricing is not multiplied.
+
+| Band | Platform / Self-Hosted | BYO VPC / Private Cloud | BYOC / Compliance / Premium On-Call |
+| --- | --- | --- | --- |
+| Startup | 0.6× | 0.6× | 0.6× |
+| SMB | 1.0× | 1.0× | 1.0× |
+| Growth | 1.5× | 1.5× | 1.25× |
+| Venture | 2.0× | 2.0× | 1.5× |
+| Enterprise | 2.5× | 2.5× | 1.75× |
+| Enterprise+ | 3.0× | 3.0× | 2.0× |
+| Global | 4.0× | 3.5× | 2.25× |
+| Global+ | 5.0× | 4.0× | 2.5× |
+
 ### Add-ons
 
-Priced as a percentage of the plan subscription, subject to an annual minimum.
-
 - **Agent Learning** — Trace Intelligence pool pricing (all plans): 10k analyzed traces/mo included, then an add-on pool you enter in traces/mo at $5.00/1k, declining to ~$2.10/1k at 10M/mo, billed annually (pool × rate × 12)
-- **Compliance** — fixed $5,000/yr (Enterprise Platform only)
-- **Premium on-call support** — fixed $10,000/yr (Enterprise plans: Enterprise Platform, Enterprise Self-Hosted; also available without a plan selected)
+- **Compliance** — fixed $5,000/yr base (Enterprise Platform only), scaled by the headcount multiplier
+- **Premium on-call support** — fixed $10,000/yr base (Enterprise plans: Enterprise Platform, Enterprise Self-Hosted; also available without a plan selected), scaled by the headcount multiplier
 
 ### Platform usage
 
@@ -53,7 +68,7 @@ Optional toggle on the order builder. Applies **30% off** plan and add-ons. Plat
 Hidden while agency mode is on.
 
 - **Path 1** — Small / Medium / Large; choose quarterly ($9k / $24k / $70k) or annual package ($32k / $86k / $250k, ~10% off)
-- **Path 2** — Evals is a flat $5,000 one-time payment. Integrations / Infrastructure / Custom: price = engineer $/hr × hours ÷ (1 − margin)
+- **Path 2** — Evals is a flat $5,000 one-time payment, scaled by the headcount multiplier (same curve as BYOC / Compliance / Premium On-Call). Integrations / Infrastructure / Custom: price = engineer $/hr × hours ÷ (1 − margin)
 - **Mastra Audit** — $500 one-time
 
 No purchase-count or support package discounts.

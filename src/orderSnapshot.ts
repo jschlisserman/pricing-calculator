@@ -12,6 +12,7 @@ export interface OrderLineSnapshot {
 
 export interface OrderSnapshot {
   planLabel: string
+  headcountLabel: string | null
   agencyModeLabel: string | null
   productLines: OrderLineSnapshot[]
   productTotal: number
@@ -79,6 +80,9 @@ export function formatOrderEmailText(
     `Plan: ${order.planLabel}`,
   ]
 
+  if (order.headcountLabel) {
+    sections.push(`Company headcount: ${order.headcountLabel}`)
+  }
   if (order.agencyModeLabel) {
     sections.push(order.agencyModeLabel)
   }
@@ -185,6 +189,7 @@ export function formatOrderEmailHtml(
     <p><strong>Notes:</strong> ${notes ? esc(notes) : '<span style="color:#888">(none)</span>'}</p>
     <h2 style="font-size:16px;margin:24px 0 8px">Order details</h2>
     <p><strong>Plan:</strong> ${esc(order.planLabel)}</p>
+    ${order.headcountLabel ? `<p><strong>Company headcount:</strong> ${esc(order.headcountLabel)}</p>` : ''}
     ${order.agencyModeLabel ? `<p><strong>${esc(order.agencyModeLabel)}</strong></p>` : ''}
     ${productBlock}
     ${supportBlock}

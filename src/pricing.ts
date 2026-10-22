@@ -68,6 +68,138 @@ export function getPlan(planId: PlanId): Plan {
   return PLANS.find((p) => p.id === planId) ?? PLANS[0]
 }
 
+// —— Headcount multipliers ——
+
+export type HeadcountBandId =
+  | 'startup'
+  | 'smb'
+  | 'growth'
+  | 'venture'
+  | 'enterprise'
+  | 'enterprise-plus'
+  | 'global'
+  | 'global-plus'
+
+export interface HeadcountBand {
+  id: HeadcountBandId
+  name: string
+  min: number
+  max: number | null
+  /** Display range, e.g. "100–249" or "10,000+". */
+  rangeLabel: string
+}
+
+export const HEADCOUNT_BANDS: HeadcountBand[] = [
+  { id: 'startup', name: 'Startup', min: 1, max: 24, rangeLabel: '1–24' },
+  { id: 'smb', name: 'SMB', min: 25, max: 99, rangeLabel: '25–99' },
+  { id: 'growth', name: 'Growth', min: 100, max: 249, rangeLabel: '100–249' },
+  { id: 'venture', name: 'Venture', min: 250, max: 499, rangeLabel: '250–499' },
+  { id: 'enterprise', name: 'Enterprise', min: 500, max: 999, rangeLabel: '500–999' },
+  { id: 'enterprise-plus', name: 'Enterprise+', min: 1000, max: 4999, rangeLabel: '1,000–4,999' },
+  { id: 'global', name: 'Global', min: 5000, max: 9999, rangeLabel: '5,000–9,999' },
+  { id: 'global-plus', name: 'Global+', min: 10000, max: null, rangeLabel: '10,000+' },
+]
+
+/** Band for a company headcount; null when no headcount is entered. */
+export function getHeadcountBand(
+  headcount: number | null | undefined,
+): HeadcountBand | null {
+  if (headcount == null || !Number.isFinite(headcount) || headcount < 1) {
+    return null
+  }
+  return (
+    HEADCOUNT_BANDS.find(
+      (band) =>
+        headcount >= band.min && (band.max == null || headcount <= band.max),
+    ) ?? null
+  )
+}
+
+export function formatMultiplier(multiplier: number): string {
+  return Number.isInteger(multiplier)
+    ? `${multiplier}.0×`
+    : `${multiplier}×`
+}
+
+type BandMultipliers = Record<HeadcountBandId, number>
+
+const STANDARD_PLAN_MULTIPLIERS: BandMultipliers = {
+  startup: 0.6,
+  smb: 1,
+  growth: 1.5,
+  venture: 2,
+  enterprise: 2.5,
+  'enterprise-plus': 3,
+  global: 4,
+  'global-plus': 5,
+}
+
+const VPC_PLAN_MULTIPLIERS: BandMultipliers = {
+  startup: 0.6,
+  smb: 1,
+  growth: 1.5,
+  venture: 2,
+  enterprise: 2.5,
+  'enterprise-plus': 3,
+  global: 3.5,
+  'global-plus': 4,
+}
+
+const BYOC_MULTIPLIERS: BandMultipliers = {
+  startup: 0.6,
+  smb: 1,
+  growth: 1.25,
+  venture: 1.5,
+  enterprise: 1.75,
+  'enterprise-plus': 2,
+  global: 2.25,
+  'global-plus': 2.5,
+}
+
+/** Headcount multiplier applied to each plan's annual subscription fee. */
+export const PLAN_HEADCOUNT_MULTIPLIERS: Record<PlanId, BandMultipliers> = {
+  'enterprise-platform': STANDARD_PLAN_MULTIPLIERS,
+  'enterprise-self-hosted': STANDARD_PLAN_MULTIPLIERS,
+  byovpc: VPC_PLAN_MULTIPLIERS,
+  'private-cloud': VPC_PLAN_MULTIPLIERS,
+  byoc: BYOC_MULTIPLIERS,
+}
+
+/** Headcount multiplier applied to flat-fee add-ons (Agent Learning excluded). */
+export const ADDON_HEADCOUNT_MULTIPLIERS: Partial<
+  Record<AddonId, BandMultipliers>
+> = {
+  compliance: BYOC_MULTIPLIERS,
+  'premium-on-call': BYOC_MULTIPLIERS,
+}
+
+export function getPlanMultiplier(
+  planId: PlanId,
+  headcount: number | null | undefined,
+): number {
+  const band = getHeadcountBand(headcount)
+  return band ? PLAN_HEADCOUNT_MULTIPLIERS[planId][band.id] : 1
+}
+
+export function getAddonMultiplier(
+  addonId: AddonId,
+  headcount: number | null | undefined,
+): number {
+  const band = getHeadcountBand(headcount)
+  if (!band) return 1
+  return ADDON_HEADCOUNT_MULTIPLIERS[addonId]?.[band.id] ?? 1
+}
+
+/** Headcount multipliers for Path 2 Evals — same curve as Compliance / Premium On-Call. */
+export const EVALS_HEADCOUNT_MULTIPLIERS: BandMultipliers = BYOC_MULTIPLIERS
+
+export function getEvalsMultiplier(
+  headcount: number | null | undefined,
+): number {
+  const band = getHeadcountBand(headcount)
+  return band ? EVALS_HEADCOUNT_MULTIPLIERS[band.id] : 1
+}
+
 export type AddonId = 'agent-learning' | 'compliance' | 'premium-on-call'
 
 export interface Addon {
@@ -182,11 +314,16 @@ export interface AddonPricing {
   total: number
 }
 
-/** Each add-on bills independently: flat fee, or max(rate × plan fee, annual minimum). */
+/**
+ * Each add-on bills independently: flat fee, or max(rate × plan fee, annual
+ * minimum). Flat fees for Compliance / Premium On-Call are scaled by the
+ * headcount multiplier for their add-on.
+ */
 export function priceAddons(
   plan: Plan | null,
   subscriptionAnnual: number,
   selectedAddonIds: AddonId[],
+  headcount?: number | null,
 ): AddonPricing {
   const available = ADDONS.filter(
     (addon) =>
@@ -195,8 +332,9 @@ export function priceAddons(
 
   const lines: AddonLine[] = available.map((addon) => {
     const listAmount =
-      addon.flatAnnual ??
-      Math.max(addon.annualMinimum, subscriptionAnnual * (addon.rate ?? 0))
+      addon.flatAnnual != null
+        ? Math.round(addon.flatAnnual * getAddonMultiplier(addon.id, headcount))
+        : Math.max(addon.annualMinimum, subscriptionAnnual * (addon.rate ?? 0))
     return {
       addon,
       listAmount,
@@ -528,7 +666,15 @@ export interface QuoteLine {
 
 export interface Quote {
   plan: Plan | null
-  /** Fixed annual subscription fee for the selected plan (0 if none). */
+  /** Company headcount entered for size multipliers; null when not set. */
+  headcount: number | null
+  /** Headcount band for the entered headcount; null when not set. */
+  headcountBand: HeadcountBand | null
+  /** Multiplier applied to the plan's base annual fee (1 when no band). */
+  planMultiplier: number
+  /** Plan annual fee before the headcount multiplier (0 if no plan). */
+  planBaseAnnual: number
+  /** Plan annual fee after the headcount multiplier (0 if no plan). */
   planAnnual: number
   /** Agent Learning add-on pool (analyzed traces/mo) used for pool pricing. */
   agentLearningPoolMonthly: number
@@ -550,6 +696,8 @@ export interface Quote {
 export interface BuildQuoteInput {
   planId: PlanId | null
   selectedAddonIds: AddonId[]
+  /** Company headcount for size multipliers; null/undefined = 1.0×. */
+  headcount?: number | null
   /** Agent Learning add-on pool (analyzed traces/mo). */
   agentLearningPoolMonthly?: number
   agencyMode?: boolean
@@ -560,7 +708,11 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   const plan = input.planId == null ? null : getPlan(input.planId)
   const agencyMode = Boolean(input.agencyMode)
 
-  const planAnnual = plan ? plan.annualFee : 0
+  const headcount = input.headcount ?? null
+  const headcountBand = getHeadcountBand(headcount)
+  const planMultiplier = plan ? getPlanMultiplier(plan.id, headcount) : 1
+  const planBaseAnnual = plan ? plan.annualFee : 0
+  const planAnnual = Math.round(planBaseAnnual * planMultiplier)
   const agentLearningPoolMonthly = Math.max(
     0,
     input.agentLearningPoolMonthly ?? DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
@@ -575,6 +727,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     plan,
     planAnnual,
     addonIds.filter((id) => id !== 'agent-learning'),
+    headcount,
   )
 
   const agentLearningAddon = ADDONS.find((a) => a.id === 'agent-learning')!
@@ -615,13 +768,16 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     productLines.push({
       id: 'plan',
       name: plan.name,
-      meta: 'Fixed annual subscription',
-      annualAmount: plan.annualFee,
+      meta: headcountBand
+        ? `${formatUsd(planBaseAnnual)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(planMultiplier)}`
+        : 'Fixed annual subscription',
+      annualAmount: planAnnual,
       period: '/ yr',
     })
   }
 
   for (const line of addonPricing.lines) {
+    const addonMultiplier = getAddonMultiplier(line.addon.id, headcount)
     productLines.push({
       id: line.addon.id,
       name: line.addon.name,
@@ -630,7 +786,9 @@ export function buildQuote(input: BuildQuoteInput): Quote {
           ? `${agentLearningPoolMonthly.toLocaleString('en-US')} analyzed traces/mo add-on · ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included`
           : [
               line.addon.flatAnnual != null
-                ? 'Fixed annual subscription'
+                ? headcountBand && addonMultiplier !== 1
+                  ? `${formatUsd(line.addon.flatAnnual)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(addonMultiplier)}`
+                  : 'Fixed annual subscription'
                 : `${formatPercent(line.addon.rate ?? 0)} of subscription`,
               line.addon.annualMinimum > 0
                 ? `${formatUsd(line.addon.annualMinimum)} min`
@@ -674,6 +832,10 @@ export function buildQuote(input: BuildQuoteInput): Quote {
 
   return {
     plan,
+    headcount,
+    headcountBand,
+    planMultiplier,
+    planBaseAnnual,
     planAnnual,
     agentLearningPoolMonthly,
     addonPricing,

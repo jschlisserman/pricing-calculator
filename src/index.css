@@ -542,6 +542,7 @@ button {
   font-family: var(--mono);
   font-size: 0.8rem;
   color: var(--text);
+  text-align: right;
   outline: none;
 }
 
@@ -589,6 +590,99 @@ button {
 
 .ti-note {
   margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.matrix-sub {
+  max-width: 44rem;
+}
+
+.matrix-stack {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.matrix-card {
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  padding: 1.25rem;
+  backdrop-filter: blur(8px);
+}
+
+.matrix-card h2 {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.matrix-wrap {
+  overflow-x: auto;
+}
+
+.matrix-table {
+  width: 100%;
+  min-width: 62rem;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.matrix-table th,
+.matrix-table td {
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.matrix-table thead th {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  border-bottom-color: var(--border-strong);
+}
+
+.matrix-table tbody th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.matrix-table tbody td {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.matrix-table tbody tr:last-child th,
+.matrix-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.matrix-band-range {
+  display: block;
+  margin-top: 0.2rem;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-dim);
+}
+
+.matrix-row-note {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.matrix-note {
+  margin: 1rem 0 0;
   font-size: 0.8rem;
   line-height: 1.45;
   color: var(--text-muted);
