@@ -30,6 +30,7 @@ import {
   DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
   PLANS,
   PLATFORM_PACKAGES,
+  PROGRAMS,
   PLATFORM_USAGE_METRICS,
   TRACE_INTELLIGENCE_POOLS,
   buildPlatformMargin,
@@ -52,6 +53,7 @@ import {
   platformConfigFromPackage,
   type AddonId,
   type PlanId,
+  type ProgramId,
   type PlatformConfig,
   type PlatformPackageId,
 } from './pricing'
@@ -99,6 +101,7 @@ export default function App() {
   const [agentLearningPoolMonthly, setAgentLearningPoolMonthly] = useState(
     DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
   )
+  const [selectedPrograms, setSelectedPrograms] = useState<ProgramId[]>([])
   const [headcount, setHeadcount] = useState<number | null>(null)
   const headcountBand = getHeadcountBand(headcount)
   const evalsMultiplier = getEvalsMultiplier(headcount)
@@ -127,7 +130,10 @@ export default function App() {
   }, [planId])
 
   useEffect(() => {
-    if (agencyMode) setSupportIds([])
+    if (agencyMode) {
+      setSupportIds([])
+      setSelectedPrograms([])
+    }
   }, [agencyMode])
 
   const quote = useMemo(
@@ -135,6 +141,7 @@ export default function App() {
       buildQuote({
         planId,
         selectedAddonIds: selectedAddons,
+        selectedProgramIds: selectedPrograms,
         headcount,
         agentLearningPoolMonthly,
         agencyMode,
@@ -143,6 +150,7 @@ export default function App() {
     [
       planId,
       selectedAddons,
+      selectedPrograms,
       headcount,
       agentLearningPoolMonthly,
       agencyMode,
@@ -298,6 +306,12 @@ export default function App() {
     )
   }
 
+  function toggleProgram(id: ProgramId) {
+    setSelectedPrograms((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
+  }
+
   function toggleSupport(id: string) {
     setSupportIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
@@ -370,6 +384,7 @@ export default function App() {
   function clearOrder() {
     setPlanId(null)
     setSelectedAddons([])
+    setSelectedPrograms([])
     setHeadcount(null)
     setAgentLearningPoolMonthly(DEFAULT_AGENT_LEARNING_POOL_MONTHLY)
     setAgencyMode(false)
@@ -461,8 +476,8 @@ export default function App() {
                 </div>
                 <p className="item-desc">
                   {headcountBand
-                    ? `${headcountBand.name} (${headcountBand.rangeLabel} employees) — multipliers apply to the plan, Compliance, Premium On-Call, and Evals.`
-                    : 'Enter headcount to apply size multipliers to the plan, Compliance, Premium On-Call, and Evals. Defaults to 1.0×.'}
+                    ? `${headcountBand.name} (${headcountBand.rangeLabel} employees) — multipliers apply to the plan, Agent Builder, Compliance, Premium On-Call, and Evals.`
+                    : 'Enter headcount to apply size multipliers to the plan, Agent Builder, Compliance, Premium On-Call, and Evals. Defaults to 1.0×.'}
                 </p>
               </section>
 
@@ -806,6 +821,42 @@ export default function App() {
               </section>
 
               {!agencyMode && (
+                <section className="category">
+                  <div className="category-title">
+                    <h3>Programs</h3>
+                    <span className="category-meta">Annual</span>
+                  </div>
+                  <div className="items">
+                    {PROGRAMS.map((program) => {
+                      const selected = selectedPrograms.includes(program.id)
+                      return (
+                        <button
+                          key={program.id}
+                          type="button"
+                          className={`item${selected ? ' selected' : ''}`}
+                          onClick={() => toggleProgram(program.id)}
+                          aria-pressed={selected}
+                        >
+                          <span className="check" aria-hidden="true">
+                            {selected ? <CheckIcon /> : null}
+                          </span>
+                          <span className="item-body">
+                            <span className="item-name">{program.name}</span>
+                            <p className="item-desc">{program.description}</p>
+                          </span>
+                          <span className="item-price">
+                            {formatUsd(program.annualFee)}
+                            <br />
+                            / year
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {!agencyMode && (
               <section className="category concierge-section">
                 <div className="category-title">
                   <h3>Support</h3>
@@ -1089,6 +1140,7 @@ export default function App() {
                                 )}
                               </span>
                               {(line.id === 'agent-learning' ||
+                                line.id === 'agent-builder' ||
                                 line.id === 'compliance' ||
                                 line.id === 'premium-on-call') && (
                                 <button
@@ -1096,6 +1148,19 @@ export default function App() {
                                   className="remove"
                                   onClick={() =>
                                     toggleAddon(line.id as AddonId)
+                                  }
+                                  aria-label={`Remove ${line.name}`}
+                                >
+                                  <CloseIcon />
+                                </button>
+                              )}
+                              {(line.id === 'agency-program' ||
+                                line.id === 'design-partner-program') && (
+                                <button
+                                  type="button"
+                                  className="remove"
+                                  onClick={() =>
+                                    toggleProgram(line.id as ProgramId)
                                   }
                                   aria-label={`Remove ${line.name}`}
                                 >

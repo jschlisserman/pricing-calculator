@@ -35,6 +35,7 @@ const ROWS: MatrixRow[] = [
     baseAnnual: plan.annualFee,
     multipliers: PLAN_HEADCOUNT_MULTIPLIERS[plan.id],
   })),
+  addonRow('agent-builder', 'Add-on · All plans'),
   addonRow('compliance', 'Add-on · Enterprise Platform only'),
   addonRow(
     'premium-on-call',

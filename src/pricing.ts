@@ -169,6 +169,7 @@ export const PLAN_HEADCOUNT_MULTIPLIERS: Record<PlanId, BandMultipliers> = {
 export const ADDON_HEADCOUNT_MULTIPLIERS: Partial<
   Record<AddonId, BandMultipliers>
 > = {
+  'agent-builder': VPC_PLAN_MULTIPLIERS,
   compliance: BYOC_MULTIPLIERS,
   'premium-on-call': BYOC_MULTIPLIERS,
 }
@@ -200,7 +201,11 @@ export function getEvalsMultiplier(
   return band ? EVALS_HEADCOUNT_MULTIPLIERS[band.id] : 1
 }
 
-export type AddonId = 'agent-learning' | 'compliance' | 'premium-on-call'
+export type AddonId =
+  | 'agent-learning'
+  | 'agent-builder'
+  | 'compliance'
+  | 'premium-on-call'
 
 export interface Addon {
   id: AddonId
@@ -226,6 +231,15 @@ export const ADDONS: Addon[] = [
       'Trace Intelligence, Custom Signals · 10k analyzed traces/mo included',
     rate: null,
     annualMinimum: 0,
+    enterpriseOnly: true,
+  },
+  {
+    id: 'agent-builder',
+    name: 'Agent Builder',
+    description: 'Agent Builder add-on. Fixed annual subscription.',
+    rate: null,
+    annualMinimum: 0,
+    flatAnnual: 6_000,
     enterpriseOnly: true,
   },
   {
@@ -292,6 +306,33 @@ export function getAgentLearningMonthly(poolMonthly: number): number {
 export function getAgentLearningAnnual(poolMonthly: number): number {
   return Math.round(getAgentLearningMonthly(poolMonthly) * 12)
 }
+
+// —— Programs (annual, not discounted, hidden in agency mode) ——
+
+export type ProgramId = 'agency-program' | 'design-partner-program'
+
+export interface Program {
+  id: ProgramId
+  name: string
+  description: string
+  /** Fixed annual program fee. */
+  annualFee: number
+}
+
+export const PROGRAMS: Program[] = [
+  {
+    id: 'agency-program',
+    name: 'Mastra Agency Program',
+    description: 'Annual program for agency partners building on Mastra.',
+    annualFee: 10_000,
+  },
+  {
+    id: 'design-partner-program',
+    name: 'Design Partner Program',
+    description: 'Annual design partner program with the Mastra team.',
+    annualFee: 12_000,
+  },
+]
 
 /** Agency mode: 30% off plan and add-ons (not usage overage). */
 export const AGENCY_MODE_DISCOUNT = 0.3
@@ -692,6 +733,10 @@ export interface Quote {
   agencyDiscount: number
   /** Plan + any add-on bundled: 20% off subscription; 0 when not bundled. */
   bundleDiscount: number
+  /** Selected annual programs (excluded in agency mode). */
+  programs: Program[]
+  /** Total annual program fees. */
+  programTotal: number
   platformPackageId: PlatformPackageId | null
   platformPackageName: string | null
   platformIncludes: PlatformUsageAmounts
@@ -704,6 +749,7 @@ export interface Quote {
 export interface BuildQuoteInput {
   planId: PlanId | null
   selectedAddonIds: AddonId[]
+  selectedProgramIds?: ProgramId[]
   /** Company headcount for size multipliers; null/undefined = 1.0×. */
   headcount?: number | null
   /** Agent Learning add-on pool (analyzed traces/mo). */
@@ -844,6 +890,21 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     })
   }
 
+  const programs = agencyMode
+    ? []
+    : PROGRAMS.filter((p) => input.selectedProgramIds?.includes(p.id))
+  const programTotal = programs.reduce((sum, p) => sum + p.annualFee, 0)
+
+  for (const program of programs) {
+    productLines.push({
+      id: program.id,
+      name: program.name,
+      meta: 'Program · Fixed annual subscription',
+      annualAmount: program.annualFee,
+      period: '/ yr',
+    })
+  }
+
   if (platformOverageTotal > 0) {
     productLines.push({
       id: 'platform-usage',
@@ -855,7 +916,11 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   }
 
   const annualTotal =
-    subscriptionListAnnual - agencyDiscount - bundleDiscount + platformOverageTotal
+    subscriptionListAnnual -
+    agencyDiscount -
+    bundleDiscount +
+    platformOverageTotal +
+    programTotal
 
   return {
     plan,
@@ -870,6 +935,8 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     subscriptionListAnnual,
     agencyDiscount,
     bundleDiscount,
+    programs,
+    programTotal,
     platformPackageId: platformSelected ? platformConfig.packageId : null,
     platformPackageName: platformSelected
       ? getPlatformPackageName(platformConfig.packageId)
