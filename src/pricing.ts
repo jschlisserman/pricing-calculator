@@ -344,8 +344,10 @@ export const AGENCY_MODE_DISCOUNT = 0.3
 export const BUNDLE_DISCOUNT = 0.2
 
 export function isAddonAvailable(addon: Addon, plan: Plan | null): boolean {
-  // Premium on-call support can also be purchased without a plan selected.
-  if (!plan) return addon.id === 'premium-on-call'
+  // Agent Learning and Premium on-call can also be purchased without a plan.
+  if (!plan) {
+    return addon.id === 'agent-learning' || addon.id === 'premium-on-call'
+  }
   if (addon.allowedPlanIds) return addon.allowedPlanIds.includes(plan.id)
   return addon.enterpriseOnly
 }
