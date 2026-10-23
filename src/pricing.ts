@@ -271,28 +271,16 @@ export interface TraceIntelligencePool {
   price: string
 }
 
-/** Base Trace Intelligence rate: $10 per 1,000 analyzed traces ($0.01/trace). */
+/**
+ * Trace Intelligence list rate: $10 per 1,000 analyzed traces ($0.01/trace)
+ * through 1M/mo, declining linearly to $5.00/1k at 10M/mo (50% volume
+ * discount) and flat above that. Floor keeps monthly spend rising with volume.
+ */
 export const TRACE_RATE_PER_1K = 10
+export const TRACE_RATE_PER_1K_HIGH_VOLUME = 5
+export const TRACE_VOLUME_DISCOUNT_START = 1_000_000
+export const TRACE_VOLUME_DISCOUNT_END = 10_000_000
 export const TRACE_RATE_PER_TRACE = TRACE_RATE_PER_1K / 1_000
-
-/** Trace Intelligence pools shown on Agent Learning (Enterprise terms). */
-export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] = [
-  {
-    monthlyPool: '1M',
-    ratePer1k: '$10.00',
-    price: '$10,000/mo · $120,000/yr',
-  },
-  {
-    monthlyPool: '5M',
-    ratePer1k: '$10.00',
-    price: '$50,000/mo · $600,000/yr',
-  },
-  {
-    monthlyPool: '10M+',
-    ratePer1k: '$10.00',
-    price: '$100,000/mo · $1,200,000/yr',
-  },
-]
 
 /** Analyzed traces included each month before an add-on pool is purchased. */
 export const TRACE_INCLUDED_MONTHLY = 10_000
@@ -300,21 +288,62 @@ export const TRACE_INCLUDED_MONTHLY = 10_000
 /** Default add-on pool (analyzed traces/mo) when Agent Learning is selected. */
 export const DEFAULT_AGENT_LEARNING_POOL_MONTHLY = 100_000
 
-/** Add-on pool rate per 1k analyzed traces (base list rate). */
-export function getTraceIntelligenceRatePer1k(_poolMonthly?: number): number {
-  return TRACE_RATE_PER_1K
+/**
+ * Add-on pool rate per 1k analyzed traces with volume discount.
+ * $10.00 through 1M/mo → $5.00 at 10M/mo+.
+ */
+export function getTraceIntelligenceRatePer1k(poolMonthly: number): number {
+  const pool = Math.max(0, poolMonthly)
+  if (pool <= TRACE_VOLUME_DISCOUNT_START) return TRACE_RATE_PER_1K
+  if (pool >= TRACE_VOLUME_DISCOUNT_END) return TRACE_RATE_PER_1K_HIGH_VOLUME
+  const fraction =
+    (pool - TRACE_VOLUME_DISCOUNT_START) /
+    (TRACE_VOLUME_DISCOUNT_END - TRACE_VOLUME_DISCOUNT_START)
+  return (
+    TRACE_RATE_PER_1K -
+    fraction * (TRACE_RATE_PER_1K - TRACE_RATE_PER_1K_HIGH_VOLUME)
+  )
 }
 
 /** Monthly cost of an Agent Learning add-on pool (analyzed traces/mo). */
 export function getAgentLearningMonthly(poolMonthly: number): number {
   const pool = Math.max(0, poolMonthly)
-  return pool * TRACE_RATE_PER_TRACE
+  return (pool / 1_000) * getTraceIntelligenceRatePer1k(pool)
 }
 
 /** Annual cost of an Agent Learning add-on pool (monthly pool × 12). */
 export function getAgentLearningAnnual(poolMonthly: number): number {
   return Math.round(getAgentLearningMonthly(poolMonthly) * 12)
 }
+
+function formatTraceRatePer1k(rate: number): string {
+  return `$${rate.toFixed(2)}`
+}
+
+function formatTracePoolPrice(poolMonthly: number): string {
+  const monthly = getAgentLearningMonthly(poolMonthly)
+  const annual = getAgentLearningAnnual(poolMonthly)
+  return `${formatUsd(monthly)}/mo · ${formatUsd(annual)}/yr`
+}
+
+/** Trace Intelligence pools shown on Agent Learning (Enterprise terms). */
+export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] = [
+  {
+    monthlyPool: '1M',
+    ratePer1k: formatTraceRatePer1k(getTraceIntelligenceRatePer1k(1_000_000)),
+    price: formatTracePoolPrice(1_000_000),
+  },
+  {
+    monthlyPool: '5M',
+    ratePer1k: formatTraceRatePer1k(getTraceIntelligenceRatePer1k(5_000_000)),
+    price: formatTracePoolPrice(5_000_000),
+  },
+  {
+    monthlyPool: '10M+',
+    ratePer1k: formatTraceRatePer1k(getTraceIntelligenceRatePer1k(10_000_000)),
+    price: formatTracePoolPrice(10_000_000),
+  },
+]
 
 // —— Programs (annual, not discounted, hidden in agency mode) ——
 
