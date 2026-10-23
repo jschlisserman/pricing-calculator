@@ -271,9 +271,6 @@ export interface TraceIntelligencePool {
   price: string
 }
 
-/** Annual base fee for Trace Intelligence (Agent Learning), before pool usage. */
-export const TRACE_BASE_ANNUAL = 5_000
-
 /**
  * Volume rate anchors ($/1k analyzed traces) for the monthly pool.
  * Rates between anchors are linearly interpolated; below 25k uses $16,
@@ -321,14 +318,9 @@ export function getAgentLearningMonthly(poolMonthly: number): number {
   return (pool / 1_000) * getTraceIntelligenceRatePer1k(pool)
 }
 
-/**
- * Annual Agent Learning total: $5,000 Trace Intelligence base +
- * annualized pool (monthly pool cost × 12).
- */
+/** Annual Agent Learning total: annualized pool (monthly pool cost × 12). */
 export function getAgentLearningAnnual(poolMonthly: number): number {
-  return (
-    TRACE_BASE_ANNUAL + Math.round(getAgentLearningMonthly(poolMonthly) * 12)
-  )
+  return Math.round(getAgentLearningMonthly(poolMonthly) * 12)
 }
 
 function formatTraceRatePer1k(rate: number): string {
@@ -338,7 +330,7 @@ function formatTraceRatePer1k(rate: number): string {
 function formatTracePoolPrice(poolMonthly: number): string {
   const monthly = getAgentLearningMonthly(poolMonthly)
   const annual = getAgentLearningAnnual(poolMonthly)
-  return `${formatUsd(monthly)}/mo traces · ${formatUsd(annual)}/yr`
+  return `${formatUsd(monthly)}/mo · ${formatUsd(annual)}/yr`
 }
 
 /** Trace Intelligence pools shown on Agent Learning (Enterprise terms). */
@@ -884,7 +876,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
       name: line.addon.name,
       meta:
         line.addon.id === 'agent-learning'
-          ? `${formatUsd(TRACE_BASE_ANNUAL)} base · ${agentLearningPoolMonthly.toLocaleString('en-US')} traces/mo @ ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included`
+          ? `${agentLearningPoolMonthly.toLocaleString('en-US')} traces/mo @ ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included`
           : [
               line.addon.flatAnnual != null
                 ? headcountBand && addonMultiplier !== 1
