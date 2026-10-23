@@ -51,7 +51,7 @@ Enter the customer's company headcount on the order builder. It maps to a band (
 
 ### Add-ons
 
-- **Agent Learning** — Trace Intelligence pool pricing (all plans; also available without a plan selected): 10k analyzed traces/mo included, then an add-on pool you enter in traces/mo at $5.00/1k, declining to ~$2.10/1k at 10M/mo, billed annually (pool × rate × 12)
+- **Agent Learning** — Trace Intelligence pool pricing (all plans; also available without a plan selected): 10k analyzed traces/mo included, then an add-on pool you enter in traces/mo at $10.00/1k ($0.01/trace), billed annually (pool × rate × 12)
 - **Agent Builder** — fixed $6,000/yr base (all plans), scaled by the headcount multiplier (same curve as BYO VPC / Private Cloud)
 - **Compliance** — fixed $5,000/yr base (Enterprise Platform only), scaled by the headcount multiplier
 - **Premium on-call support** — fixed $10,000/yr base (Enterprise plans: Enterprise Platform, Enterprise Self-Hosted; also available without a plan selected), scaled by the headcount multiplier

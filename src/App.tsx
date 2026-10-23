@@ -723,7 +723,7 @@ export default function App() {
                             </>
                           ) : addon.id === 'agent-learning' ? (
                             <>
-                              $5.00
+                              $10.00
                               <br />
                               / 1k traces
                             </>

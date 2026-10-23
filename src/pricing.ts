@@ -271,35 +271,44 @@ export interface TraceIntelligencePool {
   price: string
 }
 
+/** Base Trace Intelligence rate: $10 per 1,000 analyzed traces ($0.01/trace). */
+export const TRACE_RATE_PER_1K = 10
+export const TRACE_RATE_PER_TRACE = TRACE_RATE_PER_1K / 1_000
+
 /** Trace Intelligence pools shown on Agent Learning (Enterprise terms). */
 export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] = [
-  { monthlyPool: '1M', ratePer1k: '$5.00', price: '$5,000/mo · $60,000/yr' },
-  { monthlyPool: '5M', ratePer1k: 'Custom', price: 'Annual commit' },
-  { monthlyPool: '10M+', ratePer1k: '~$2.10', price: 'Annual commit' },
+  {
+    monthlyPool: '1M',
+    ratePer1k: '$10.00',
+    price: '$10,000/mo · $120,000/yr',
+  },
+  {
+    monthlyPool: '5M',
+    ratePer1k: '$10.00',
+    price: '$50,000/mo · $600,000/yr',
+  },
+  {
+    monthlyPool: '10M+',
+    ratePer1k: '$10.00',
+    price: '$100,000/mo · $1,200,000/yr',
+  },
 ]
 
 /** Analyzed traces included each month before an add-on pool is purchased. */
 export const TRACE_INCLUDED_MONTHLY = 10_000
 
 /** Default add-on pool (analyzed traces/mo) when Agent Learning is selected. */
-export const DEFAULT_AGENT_LEARNING_POOL_MONTHLY = 1_000_000
+export const DEFAULT_AGENT_LEARNING_POOL_MONTHLY = 100_000
 
-/**
- * Add-on pool rate per 1k analyzed traces: $5.00 at 1M/mo, declining
- * linearly to ~$2.10 at 10M/mo and flat above that.
- */
-export function getTraceIntelligenceRatePer1k(poolMonthly: number): number {
-  const pool = Math.max(0, poolMonthly)
-  if (pool <= 1_000_000) return 5
-  if (pool >= 10_000_000) return 2.1
-  const fraction = (pool - 1_000_000) / 9_000_000
-  return 5 - fraction * (5 - 2.1)
+/** Add-on pool rate per 1k analyzed traces (base list rate). */
+export function getTraceIntelligenceRatePer1k(_poolMonthly?: number): number {
+  return TRACE_RATE_PER_1K
 }
 
 /** Monthly cost of an Agent Learning add-on pool (analyzed traces/mo). */
 export function getAgentLearningMonthly(poolMonthly: number): number {
   const pool = Math.max(0, poolMonthly)
-  return (pool / 1_000) * getTraceIntelligenceRatePer1k(pool)
+  return pool * TRACE_RATE_PER_TRACE
 }
 
 /** Annual cost of an Agent Learning add-on pool (monthly pool × 12). */
