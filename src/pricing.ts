@@ -271,16 +271,24 @@ export interface TraceIntelligencePool {
   price: string
 }
 
+/** Annual base fee for Trace Intelligence (Agent Learning), before pool usage. */
+export const TRACE_BASE_ANNUAL = 5_000
+
 /**
- * Trace Intelligence list rate: $10 per 1,000 analyzed traces ($0.01/trace)
- * through 1M/mo, declining linearly to $5.00/1k at 10M/mo (50% volume
- * discount) and flat above that. Floor keeps monthly spend rising with volume.
+ * Volume rate anchors ($/1k analyzed traces) for the monthly pool.
+ * Rates between anchors are linearly interpolated; below 25k uses $16,
+ * above 10M uses $2.
  */
-export const TRACE_RATE_PER_1K = 10
-export const TRACE_RATE_PER_1K_HIGH_VOLUME = 5
-export const TRACE_VOLUME_DISCOUNT_START = 1_000_000
-export const TRACE_VOLUME_DISCOUNT_END = 10_000_000
-export const TRACE_RATE_PER_TRACE = TRACE_RATE_PER_1K / 1_000
+export const TRACE_RATE_TIERS: ReadonlyArray<{ pool: number; ratePer1k: number }> =
+  [
+    { pool: 25_000, ratePer1k: 16 },
+    { pool: 100_000, ratePer1k: 7.5 },
+    { pool: 250_000, ratePer1k: 6 },
+    { pool: 500_000, ratePer1k: 5 },
+    { pool: 1_000_000, ratePer1k: 4 },
+    { pool: 5_000_000, ratePer1k: 3 },
+    { pool: 10_000_000, ratePer1k: 2 },
+  ]
 
 /** Analyzed traces included each month before an add-on pool is purchased. */
 export const TRACE_INCLUDED_MONTHLY = 10_000
@@ -288,32 +296,39 @@ export const TRACE_INCLUDED_MONTHLY = 10_000
 /** Default add-on pool (analyzed traces/mo) when Agent Learning is selected. */
 export const DEFAULT_AGENT_LEARNING_POOL_MONTHLY = 100_000
 
-/**
- * Add-on pool rate per 1k analyzed traces with volume discount.
- * $10.00 through 1M/mo → $5.00 at 10M/mo+.
- */
+/** Add-on pool rate per 1k analyzed traces from the volume tier table. */
 export function getTraceIntelligenceRatePer1k(poolMonthly: number): number {
   const pool = Math.max(0, poolMonthly)
-  if (pool <= TRACE_VOLUME_DISCOUNT_START) return TRACE_RATE_PER_1K
-  if (pool >= TRACE_VOLUME_DISCOUNT_END) return TRACE_RATE_PER_1K_HIGH_VOLUME
-  const fraction =
-    (pool - TRACE_VOLUME_DISCOUNT_START) /
-    (TRACE_VOLUME_DISCOUNT_END - TRACE_VOLUME_DISCOUNT_START)
-  return (
-    TRACE_RATE_PER_1K -
-    fraction * (TRACE_RATE_PER_1K - TRACE_RATE_PER_1K_HIGH_VOLUME)
-  )
+  const tiers = TRACE_RATE_TIERS
+  if (pool <= tiers[0].pool) return tiers[0].ratePer1k
+  if (pool >= tiers[tiers.length - 1].pool) {
+    return tiers[tiers.length - 1].ratePer1k
+  }
+  for (let i = 0; i < tiers.length - 1; i++) {
+    const lo = tiers[i]
+    const hi = tiers[i + 1]
+    if (pool >= lo.pool && pool <= hi.pool) {
+      const fraction = (pool - lo.pool) / (hi.pool - lo.pool)
+      return lo.ratePer1k + fraction * (hi.ratePer1k - lo.ratePer1k)
+    }
+  }
+  return tiers[tiers.length - 1].ratePer1k
 }
 
-/** Monthly cost of an Agent Learning add-on pool (analyzed traces/mo). */
+/** Monthly cost of the analyzed-traces pool only (excludes annual base). */
 export function getAgentLearningMonthly(poolMonthly: number): number {
   const pool = Math.max(0, poolMonthly)
   return (pool / 1_000) * getTraceIntelligenceRatePer1k(pool)
 }
 
-/** Annual cost of an Agent Learning add-on pool (monthly pool × 12). */
+/**
+ * Annual Agent Learning total: $5,000 Trace Intelligence base +
+ * annualized pool (monthly pool cost × 12).
+ */
 export function getAgentLearningAnnual(poolMonthly: number): number {
-  return Math.round(getAgentLearningMonthly(poolMonthly) * 12)
+  return (
+    TRACE_BASE_ANNUAL + Math.round(getAgentLearningMonthly(poolMonthly) * 12)
+  )
 }
 
 function formatTraceRatePer1k(rate: number): string {
@@ -323,27 +338,19 @@ function formatTraceRatePer1k(rate: number): string {
 function formatTracePoolPrice(poolMonthly: number): string {
   const monthly = getAgentLearningMonthly(poolMonthly)
   const annual = getAgentLearningAnnual(poolMonthly)
-  return `${formatUsd(monthly)}/mo · ${formatUsd(annual)}/yr`
+  return `${formatUsd(monthly)}/mo traces · ${formatUsd(annual)}/yr`
 }
 
 /** Trace Intelligence pools shown on Agent Learning (Enterprise terms). */
-export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] = [
-  {
-    monthlyPool: '1M',
-    ratePer1k: formatTraceRatePer1k(getTraceIntelligenceRatePer1k(1_000_000)),
-    price: formatTracePoolPrice(1_000_000),
-  },
-  {
-    monthlyPool: '5M',
-    ratePer1k: formatTraceRatePer1k(getTraceIntelligenceRatePer1k(5_000_000)),
-    price: formatTracePoolPrice(5_000_000),
-  },
-  {
-    monthlyPool: '10M+',
-    ratePer1k: formatTraceRatePer1k(getTraceIntelligenceRatePer1k(10_000_000)),
-    price: formatTracePoolPrice(10_000_000),
-  },
-]
+export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] =
+  TRACE_RATE_TIERS.map((tier) => ({
+    monthlyPool:
+      tier.pool >= 1_000_000
+        ? `${tier.pool / 1_000_000}M`
+        : `${tier.pool / 1_000}K`,
+    ratePer1k: formatTraceRatePer1k(tier.ratePer1k),
+    price: formatTracePoolPrice(tier.pool),
+  }))
 
 // —— Programs (annual, not discounted, hidden in agency mode) ——
 
@@ -877,7 +884,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
       name: line.addon.name,
       meta:
         line.addon.id === 'agent-learning'
-          ? `${agentLearningPoolMonthly.toLocaleString('en-US')} analyzed traces/mo add-on · ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included`
+          ? `${formatUsd(TRACE_BASE_ANNUAL)} base · ${agentLearningPoolMonthly.toLocaleString('en-US')} traces/mo @ ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included`
           : [
               line.addon.flatAnnual != null
                 ? headcountBand && addonMultiplier !== 1

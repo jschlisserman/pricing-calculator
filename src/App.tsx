@@ -28,6 +28,7 @@ import {
   ADDONS,
   AGENCY_MODE_DISCOUNT,
   DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
+  TRACE_BASE_ANNUAL,
   PLANS,
   PLATFORM_PACKAGES,
   PROGRAMS,
@@ -723,9 +724,9 @@ export default function App() {
                             </>
                           ) : addon.id === 'agent-learning' ? (
                             <>
-                              $10.00
+                              {formatUsd(TRACE_BASE_ANNUAL)}
                               <br />
-                              / 1k traces
+                              + traces
                             </>
                           ) : displayedFlat != null ? (
                             <>
@@ -767,6 +768,9 @@ export default function App() {
                           </div>
                           <div className="ti-computed">
                             <span>
+                              {formatUsd(TRACE_BASE_ANNUAL)} base / yr
+                            </span>
+                            <span>
                               Rate{' '}
                               {formatUsd(
                                 getTraceIntelligenceRatePer1k(
@@ -781,7 +785,7 @@ export default function App() {
                                   agentLearningPoolMonthly,
                                 ),
                               )}
-                              /mo
+                              /mo traces
                             </span>
                             <span>
                               {formatUsd(
@@ -789,7 +793,7 @@ export default function App() {
                                   agentLearningPoolMonthly,
                                 ),
                               )}
-                              /yr
+                              /yr total
                             </span>
                           </div>
                           <div className="ti-table">
@@ -807,7 +811,9 @@ export default function App() {
                             ))}
                           </div>
                           <p className="ti-note">
-                            Pool resets monthly. Enterprise pools are committed
+                            {formatUsd(TRACE_BASE_ANNUAL)} annual Trace
+                            Intelligence base, plus analyzed-traces pool. Pool
+                            resets monthly. Enterprise pools are committed
                             annually; overage true-up at 1.25×. TI pauses when
                             the pool runs out. Bring-your-own model: same price.
                             Self-hosted / air-gapped: +50%.
