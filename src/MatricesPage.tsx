@@ -148,9 +148,9 @@ export default function MatricesPage() {
             </table>
           </div>
           <p className="matrix-note">
-            Agent Learning starts at $5,000/yr for the first 10k analyzed
-            traces/mo, then the volume scale (25K $16/1k → 10M $2/1k). Not
-            multiplied by headcount.
+            Trace Intelligence uses progressive per-trace bands (first 10k/mo
+            at $0, then down through 10M); selecting it adds $3,000/yr to the
+            plan. Not multiplied by headcount.
           </p>
         </section>
 

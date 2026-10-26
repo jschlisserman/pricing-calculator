@@ -165,7 +165,7 @@ export const PLAN_HEADCOUNT_MULTIPLIERS: Record<PlanId, BandMultipliers> = {
   byoc: BYOC_MULTIPLIERS,
 }
 
-/** Headcount multiplier applied to flat-fee add-ons (Agent Learning excluded). */
+/** Headcount multiplier applied to flat-fee add-ons (Trace Intelligence excluded). */
 export const ADDON_HEADCOUNT_MULTIPLIERS: Partial<
   Record<AddonId, BandMultipliers>
 > = {
@@ -202,7 +202,7 @@ export function getEvalsMultiplier(
 }
 
 export type AddonId =
-  | 'agent-learning'
+  | 'trace-intelligence'
   | 'agent-builder'
   | 'compliance'
   | 'premium-on-call'
@@ -225,10 +225,10 @@ export interface Addon {
 
 export const ADDONS: Addon[] = [
   {
-    id: 'agent-learning',
-    name: 'Agent Learning',
+    id: 'trace-intelligence',
+    name: 'Trace Intelligence',
     description:
-      'Trace Intelligence, Custom Signals · from $5,000/yr for 10k analyzed traces/mo',
+      'Custom Signals · 10k analyzed traces/mo included; +$3,000/yr on plan',
     rate: null,
     annualMinimum: 0,
     enterpriseOnly: true,
@@ -265,103 +265,134 @@ export const ADDONS: Addon[] = [
   },
 ]
 
+export interface TraceIntelligenceBand {
+  /** Inclusive start of the monthly analyzed-traces band. */
+  from: number
+  /** Inclusive end of the band; null = open-ended. */
+  to: number | null
+  /** Pre-commitment / pay-as-you-go rate per analyzed trace. */
+  ratePerTrace: number
+  /** Overage rate per analyzed trace above the committed pool. */
+  overagePerTrace: number
+}
+
 export interface TraceIntelligencePool {
-  monthlyPool: string
-  ratePer1k: string
+  fromLabel: string
+  toLabel: string
+  ratePerTrace: string
+  overagePerTrace: string
   price: string
 }
 
 /**
- * Volume rate anchors ($/1k analyzed traces) for the monthly pool.
- * Rates between anchors are linearly interpolated; below 25k uses $16,
- * above 10M uses $2.
+ * Progressive Trace Intelligence volume bands (per analyzed trace / month).
+ * First 10k are $0; rates from the pricing sheet, extended through 10M.
  */
-export const TRACE_RATE_TIERS: ReadonlyArray<{ pool: number; ratePer1k: number }> =
-  [
-    { pool: 25_000, ratePer1k: 16 },
-    { pool: 100_000, ratePer1k: 7.5 },
-    { pool: 250_000, ratePer1k: 6 },
-    { pool: 500_000, ratePer1k: 5 },
-    { pool: 1_000_000, ratePer1k: 4 },
-    { pool: 5_000_000, ratePer1k: 3 },
-    { pool: 10_000_000, ratePer1k: 2 },
-  ]
+export const TRACE_VOLUME_BANDS: ReadonlyArray<TraceIntelligenceBand> = [
+  { from: 1, to: 10_000, ratePerTrace: 0, overagePerTrace: 0.025 },
+  { from: 10_001, to: 25_000, ratePerTrace: 0.016, overagePerTrace: 0.02 },
+  { from: 25_001, to: 100_000, ratePerTrace: 0.0075, overagePerTrace: 0.01 },
+  { from: 100_001, to: 250_000, ratePerTrace: 0.006, overagePerTrace: 0.008 },
+  { from: 250_001, to: 500_000, ratePerTrace: 0.005, overagePerTrace: 0.006 },
+  { from: 500_001, to: 1_000_000, ratePerTrace: 0.004, overagePerTrace: 0.005 },
+  { from: 1_000_001, to: 5_000_000, ratePerTrace: 0.003, overagePerTrace: 0.004 },
+  { from: 5_000_001, to: 10_000_000, ratePerTrace: 0.002, overagePerTrace: 0.0025 },
+  { from: 10_000_001, to: null, ratePerTrace: 0.002, overagePerTrace: 0.0025 },
+]
 
 /**
- * Starting Trace Intelligence package: $5,000/yr for the first 10,000
- * analyzed traces/mo. Larger pools use the volume rate scale, floored at
- * the starting price.
+ * When Trace Intelligence is selected with a plan, this amount is added to
+ * the plan's annual fee. The TI pool itself starts at $0 for the first 10k
+ * analyzed traces/mo.
  */
-export const TRACE_STARTING_ANNUAL = 5_000
+export const TRACE_PLAN_UPLIFT_ANNUAL = 3_000
 export const TRACE_INCLUDED_MONTHLY = 10_000
 
-/** Default pool when Agent Learning is selected (starting package). */
+/** @deprecated Use TRACE_PLAN_UPLIFT_ANNUAL */
+export const TRACE_STARTING_ANNUAL = TRACE_PLAN_UPLIFT_ANNUAL
+
+/** Default pool when Trace Intelligence is selected (included package). */
 export const DEFAULT_AGENT_LEARNING_POOL_MONTHLY = TRACE_INCLUDED_MONTHLY
 
-/** Add-on pool rate per 1k analyzed traces from the volume tier table. */
-export function getTraceIntelligenceRatePer1k(poolMonthly: number): number {
-  const pool = Math.max(0, poolMonthly)
-  if (pool <= TRACE_INCLUDED_MONTHLY) return 0
-  const tiers = TRACE_RATE_TIERS
-  if (pool <= tiers[0].pool) return tiers[0].ratePer1k
-  if (pool >= tiers[tiers.length - 1].pool) {
-    return tiers[tiers.length - 1].ratePer1k
-  }
-  for (let i = 0; i < tiers.length - 1; i++) {
-    const lo = tiers[i]
-    const hi = tiers[i + 1]
-    if (pool >= lo.pool && pool <= hi.pool) {
-      const fraction = (pool - lo.pool) / (hi.pool - lo.pool)
-      return lo.ratePer1k + fraction * (hi.ratePer1k - lo.ratePer1k)
-    }
-  }
-  return tiers[tiers.length - 1].ratePer1k
+function formatTraceVolume(n: number): string {
+  return n.toLocaleString('en-US')
+}
+
+function formatTraceUnitRate(rate: number): string {
+  if (rate === 0) return '$0.00'
+  const digits = rate < 0.01 ? 4 : 3
+  return `$${rate.toFixed(digits)}`
 }
 
 /**
- * Annual Trace Intelligence total. $5,000/yr for the first 10k traces/mo;
- * larger pools priced on the volume scale, never below the starting price.
+ * Progressive monthly cost for a committed analyzed-traces pool.
+ * Each band is billed at its own pre-commitment rate (first 10k = $0).
  */
-export function getAgentLearningAnnual(poolMonthly: number): number {
-  const pool = Math.max(0, poolMonthly)
-  if (pool <= TRACE_INCLUDED_MONTHLY) return TRACE_STARTING_ANNUAL
-  const scaled = Math.round(
-    (pool / 1_000) * getTraceIntelligenceRatePer1k(pool) * 12,
-  )
-  return Math.max(TRACE_STARTING_ANNUAL, scaled)
-}
-
-/** Monthly Trace Intelligence cost (annual ÷ 12). */
 export function getAgentLearningMonthly(poolMonthly: number): number {
-  return getAgentLearningAnnual(poolMonthly) / 12
+  const pool = Math.max(0, Math.floor(poolMonthly))
+  if (pool <= 0) return 0
+
+  let cost = 0
+  for (const band of TRACE_VOLUME_BANDS) {
+    if (pool < band.from) break
+    const bandEnd = band.to ?? pool
+    const units = Math.min(pool, bandEnd) - band.from + 1
+    if (units > 0) cost += units * band.ratePerTrace
+  }
+  return cost
 }
 
-function formatTraceRatePer1k(rate: number): string {
-  return `$${rate.toFixed(2)}`
+/** Annual Trace Intelligence pool cost (monthly progressive cost × 12). */
+export function getAgentLearningAnnual(poolMonthly: number): number {
+  return Math.round(getAgentLearningMonthly(poolMonthly) * 12)
+}
+
+/** Marginal pre-commitment rate ($/trace) for the band the pool sits in. */
+export function getTraceIntelligenceMarginalRatePerTrace(
+  poolMonthly: number,
+): number {
+  const pool = Math.max(0, Math.floor(poolMonthly))
+  if (pool <= 0) return 0
+  for (let i = TRACE_VOLUME_BANDS.length - 1; i >= 0; i--) {
+    const band = TRACE_VOLUME_BANDS[i]
+    if (pool >= band.from) return band.ratePerTrace
+  }
+  return 0
+}
+
+/**
+ * Blended effective rate per 1k analyzed traces for the committed pool.
+ * Used in summary meta; 0 when the pool is fully within the included band.
+ */
+export function getTraceIntelligenceRatePer1k(poolMonthly: number): number {
+  const pool = Math.max(0, poolMonthly)
+  if (pool <= 0) return 0
+  const monthly = getAgentLearningMonthly(pool)
+  if (monthly <= 0) return 0
+  return (monthly / pool) * 1_000
 }
 
 function formatTracePoolPrice(poolMonthly: number): string {
   const annual = getAgentLearningAnnual(poolMonthly)
-  const monthly = annual / 12
+  if (annual === 0) {
+    return `Included · +${formatUsd(TRACE_PLAN_UPLIFT_ANNUAL)}/yr on plan`
+  }
+  const monthly = getAgentLearningMonthly(poolMonthly)
   return `${formatUsd(monthly)}/mo · ${formatUsd(annual)}/yr`
 }
 
-/** Trace Intelligence pools shown on Agent Learning (Enterprise terms). */
-export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] = [
-  {
-    monthlyPool: '10K',
-    ratePer1k: '—',
-    price: `${formatUsd(TRACE_STARTING_ANNUAL)}/yr starting`,
-  },
-  ...TRACE_RATE_TIERS.map((tier) => ({
-    monthlyPool:
-      tier.pool >= 1_000_000
-        ? `${tier.pool / 1_000_000}M`
-        : `${tier.pool / 1_000}K`,
-    ratePer1k: formatTraceRatePer1k(tier.ratePer1k),
-    price: formatTracePoolPrice(tier.pool),
-  })),
-]
+/** Trace Intelligence volume bands shown in the calculator. */
+export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] =
+  TRACE_VOLUME_BANDS.map((band) => {
+    const examplePool = band.to ?? band.from
+    return {
+      fromLabel: formatTraceVolume(band.from),
+      toLabel: band.to == null ? 'and up' : formatTraceVolume(band.to),
+      ratePerTrace: formatTraceUnitRate(band.ratePerTrace),
+      overagePerTrace: formatTraceUnitRate(band.overagePerTrace),
+      price: formatTracePoolPrice(examplePool),
+    }
+  })
 
 // —— Programs (annual, not discounted, hidden in agency mode) ——
 
@@ -401,9 +432,9 @@ export const AGENCY_MODE_DISCOUNT = 0.3
 export const BUNDLE_DISCOUNT = 0.15
 
 export function isAddonAvailable(addon: Addon, plan: Plan | null): boolean {
-  // Agent Learning and Premium on-call can also be purchased without a plan.
+  // Trace Intelligence and Premium on-call can also be purchased without a plan.
   if (!plan) {
-    return addon.id === 'agent-learning' || addon.id === 'premium-on-call'
+    return addon.id === 'trace-intelligence' || addon.id === 'premium-on-call'
   }
   if (addon.allowedPlanIds) return addon.allowedPlanIds.includes(plan.id)
   return addon.enterpriseOnly
@@ -780,9 +811,14 @@ export interface Quote {
   planMultiplier: number
   /** Plan annual fee before the headcount multiplier (0 if no plan). */
   planBaseAnnual: number
-  /** Plan annual fee after the headcount multiplier (0 if no plan). */
+  /**
+   * $3,000 Trace Intelligence uplift added to the plan when TI is selected
+   * with a plan; 0 otherwise.
+   */
+  planTraceUplift: number
+  /** Plan annual fee after headcount multiplier and TI uplift (0 if no plan). */
   planAnnual: number
-  /** Agent Learning add-on pool (analyzed traces/mo) used for pool pricing. */
+  /** Trace Intelligence pool (analyzed traces/mo) used for pool pricing. */
   agentLearningPoolMonthly: number
   addonPricing: AddonPricing
   agencyMode: boolean
@@ -811,7 +847,7 @@ export interface BuildQuoteInput {
   selectedProgramIds?: ProgramId[]
   /** Company headcount for size multipliers; null/undefined = 1.0×. */
   headcount?: number | null
-  /** Agent Learning add-on pool (analyzed traces/mo). */
+  /** Trace Intelligence pool (analyzed traces/mo). */
   agentLearningPoolMonthly?: number
   agencyMode?: boolean
   platformConfig?: PlatformConfig
@@ -825,7 +861,6 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   const headcountBand = getHeadcountBand(headcount)
   const planMultiplier = plan ? getPlanMultiplier(plan.id, headcount) : 1
   const planBaseAnnual = plan ? plan.annualFee : 0
-  const planAnnual = Math.round(planBaseAnnual * planMultiplier)
   const agentLearningPoolMonthly = Math.max(
     0,
     input.agentLearningPoolMonthly ?? DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
@@ -836,24 +871,32 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     return addon != null && isAddonAvailable(addon, plan)
   })
 
+  const agentLearningSelected = addonIds.includes('trace-intelligence')
+  const planTraceUplift =
+    plan && agentLearningSelected ? TRACE_PLAN_UPLIFT_ANNUAL : 0
+  const planAnnual =
+    Math.round(planBaseAnnual * planMultiplier) + planTraceUplift
+
   const baseAddonPricing = priceAddons(
     plan,
     planAnnual,
-    addonIds.filter((id) => id !== 'agent-learning'),
+    addonIds.filter((id) => id !== 'trace-intelligence'),
     headcount,
   )
 
-  const agentLearningAddon = ADDONS.find((a) => a.id === 'agent-learning')!
-  const agentLearningLines: AddonLine[] =
-    addonIds.includes('agent-learning')
-      ? [
-          {
-            addon: agentLearningAddon,
-            listAmount: getAgentLearningAnnual(agentLearningPoolMonthly),
-            billedAmount: getAgentLearningAnnual(agentLearningPoolMonthly),
-          },
-        ]
-      : []
+  const agentLearningAddon = ADDONS.find((a) => a.id === 'trace-intelligence')!
+  const agentLearningAmount = agentLearningSelected
+    ? getAgentLearningAnnual(agentLearningPoolMonthly)
+    : 0
+  const agentLearningLines: AddonLine[] = agentLearningSelected
+    ? [
+        {
+          addon: agentLearningAddon,
+          listAmount: agentLearningAmount,
+          billedAmount: agentLearningAmount,
+        },
+      ]
+    : []
 
   const addonPricing: AddonPricing = {
     lines: [...baseAddonPricing.lines, ...agentLearningLines],
@@ -878,12 +921,18 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   const productLines: QuoteLine[] = []
 
   if (plan) {
+    const planMetaParts = [
+      headcountBand
+        ? `${formatUsd(planBaseAnnual)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(planMultiplier)}`
+        : 'Fixed annual subscription',
+      planTraceUplift > 0
+        ? `+${formatUsd(planTraceUplift)} Trace Intelligence`
+        : null,
+    ].filter(Boolean)
     productLines.push({
       id: 'plan',
       name: plan.name,
-      meta: headcountBand
-        ? `${formatUsd(planBaseAnnual)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(planMultiplier)}`
-        : 'Fixed annual subscription',
+      meta: planMetaParts.join(' · '),
       annualAmount: planAnnual,
       period: '/ yr',
     })
@@ -891,28 +940,29 @@ export function buildQuote(input: BuildQuoteInput): Quote {
 
   for (const line of addonPricing.lines) {
     const addonMultiplier = getAddonMultiplier(line.addon.id, headcount)
+    const isAgentLearning = line.addon.id === 'trace-intelligence'
     productLines.push({
       id: line.addon.id,
       name: line.addon.name,
-      meta:
-        line.addon.id === 'agent-learning'
-          ? agentLearningPoolMonthly <= TRACE_INCLUDED_MONTHLY
-            ? `${formatUsd(TRACE_STARTING_ANNUAL)}/yr starting · ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')} traces/mo included`
-            : `${agentLearningPoolMonthly.toLocaleString('en-US')} traces/mo @ ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · ${formatUsd(TRACE_STARTING_ANNUAL)} starting covers first ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo`
-          : [
-              line.addon.flatAnnual != null
-                ? headcountBand && addonMultiplier !== 1
-                  ? `${formatUsd(line.addon.flatAnnual)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(addonMultiplier)}`
-                  : 'Fixed annual subscription'
-                : `${formatPercent(line.addon.rate ?? 0)} of subscription`,
-              line.addon.annualMinimum > 0
-                ? `${formatUsd(line.addon.annualMinimum)} min`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(' · '),
+      meta: isAgentLearning
+        ? agentLearningPoolMonthly <= TRACE_INCLUDED_MONTHLY
+          ? `${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')} traces/mo included${planTraceUplift > 0 ? ` · +${formatUsd(planTraceUplift)}/yr on plan` : ''}`
+          : `${agentLearningPoolMonthly.toLocaleString('en-US')} traces/mo progressive · blended ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · first ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included${planTraceUplift > 0 ? ` · +${formatUsd(planTraceUplift)}/yr on plan` : ''}`
+        : [
+            line.addon.flatAnnual != null
+              ? headcountBand && addonMultiplier !== 1
+                ? `${formatUsd(line.addon.flatAnnual)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(addonMultiplier)}`
+                : 'Fixed annual subscription'
+              : `${formatPercent(line.addon.rate ?? 0)} of subscription`,
+            line.addon.annualMinimum > 0
+              ? `${formatUsd(line.addon.annualMinimum)} min`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
       annualAmount: line.billedAmount,
       period: '/ yr',
+      included: isAgentLearning && line.billedAmount === 0,
     })
   }
 
@@ -987,6 +1037,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     headcountBand,
     planMultiplier,
     planBaseAnnual,
+    planTraceUplift,
     planAnnual,
     agentLearningPoolMonthly,
     addonPricing,

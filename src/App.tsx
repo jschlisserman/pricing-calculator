@@ -29,7 +29,7 @@ import {
   AGENCY_MODE_DISCOUNT,
   DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
   TRACE_INCLUDED_MONTHLY,
-  TRACE_STARTING_ANNUAL,
+  TRACE_PLAN_UPLIFT_ANNUAL,
   PLANS,
   PLATFORM_PACKAGES,
   PROGRAMS,
@@ -723,11 +723,11 @@ export default function App() {
                               <br />
                               / year
                             </>
-                          ) : addon.id === 'agent-learning' ? (
+                          ) : addon.id === 'trace-intelligence' ? (
                             <>
-                              {formatUsd(TRACE_STARTING_ANNUAL)}
+                              +{formatUsd(TRACE_PLAN_UPLIFT_ANNUAL)}
                               <br />
-                              / yr starting
+                              on plan
                             </>
                           ) : displayedFlat != null ? (
                             <>
@@ -747,24 +747,24 @@ export default function App() {
                         </span>
                       </button>
 
-                      {selected && addon.id === 'agent-learning' && (
+                      {selected && addon.id === 'trace-intelligence' && (
                         <div className="ti-panel">
                           <div className="platform-usage-intro">
-                            <strong>Trace Intelligence</strong>
+                            <strong>Volume pricing</strong>
                             <span>Analyzed traces / month</span>
                           </div>
                           <div className="ti-input-row">
-                            <label htmlFor="agent-learning-pool">
-                              Add-on pool (analyzed traces/mo)
+                            <label htmlFor="trace-intelligence-pool">
+                              Monthly pool (analyzed traces)
                             </label>
                             <NumberField
-                              id="agent-learning-pool"
+                              id="trace-intelligence-pool"
                               value={agentLearningPoolMonthly}
                               min={0}
                               onCommit={(next) =>
                                 setAgentLearningPoolMonthly(next ?? 0)
                               }
-                              aria-label="Agent Learning add-on pool, analyzed traces per month"
+                              aria-label="Trace Intelligence monthly pool, analyzed traces"
                             />
                           </div>
                           <div className="ti-computed">
@@ -772,7 +772,7 @@ export default function App() {
                               {agentLearningPoolMonthly <=
                               TRACE_INCLUDED_MONTHLY
                                 ? `${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included`
-                                : `Rate ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k`}
+                                : `Blended ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k`}
                             </span>
                             <span>
                               {formatUsd(
@@ -793,28 +793,34 @@ export default function App() {
                           </div>
                           <div className="ti-table">
                             <div className="ti-row ti-head">
-                              <span>Monthly pool</span>
-                              <span>Rate / 1k</span>
-                              <span>Price</span>
+                              <span>From</span>
+                              <span>To</span>
+                              <span>Pre-commit</span>
+                              <span>Overage</span>
+                              <span>At top of band</span>
                             </div>
                             {TRACE_INTELLIGENCE_POOLS.map((pool) => (
-                              <div className="ti-row" key={pool.monthlyPool}>
-                                <span>{pool.monthlyPool}</span>
-                                <span>{pool.ratePer1k}</span>
+                              <div
+                                className="ti-row"
+                                key={`${pool.fromLabel}-${pool.toLabel}`}
+                              >
+                                <span>{pool.fromLabel}</span>
+                                <span>{pool.toLabel}</span>
+                                <span>{pool.ratePerTrace}</span>
+                                <span>{pool.overagePerTrace}</span>
                                 <span>{pool.price}</span>
                               </div>
                             ))}
                           </div>
                           <p className="ti-note">
-                            Starts at {formatUsd(TRACE_STARTING_ANNUAL)}/yr for
-                            the first{' '}
-                            {TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}{' '}
-                            analyzed traces/mo. Larger pools use the volume
-                            rate scale below. Pool resets monthly. Enterprise
-                            pools are committed annually; overage true-up at
-                            1.25×. TI pauses when the pool runs out.
-                            Bring-your-own model: same price. Self-hosted /
-                            air-gapped: +50%.
+                            Progressive per-trace bands (first{' '}
+                            {TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}
+                            /mo at $0). Selecting Trace Intelligence adds{' '}
+                            {formatUsd(TRACE_PLAN_UPLIFT_ANNUAL)}/yr to the
+                            selected plan. Pool cost stacks each band up to the
+                            committed monthly volume. Pool resets monthly;
+                            overage bills at the overage rate. Bring-your-own
+                            model: same price. Self-hosted / air-gapped: +50%.
                           </p>
                         </div>
                       )}
@@ -1143,7 +1149,7 @@ export default function App() {
                                   </>
                                 )}
                               </span>
-                              {(line.id === 'agent-learning' ||
+                              {(line.id === 'trace-intelligence' ||
                                 line.id === 'agent-builder' ||
                                 line.id === 'compliance' ||
                                 line.id === 'premium-on-call') && (

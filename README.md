@@ -36,7 +36,7 @@ Fees above are the base (1.0×) price before the headcount multiplier below.
 
 ### Headcount multipliers
 
-Enter the customer's company headcount on the order builder. It maps to a band (Startup 1–24, SMB 25–99, Growth 100–249, Venture 250–499, Enterprise 500–999, Enterprise+ 1,000–4,999, Global 5,000–9,999, Global+ 10,000+) and multiplies the plan fee, Compliance, and Premium On-Call. No headcount entered = 1.0×. Agent Learning pool pricing is not multiplied.
+Enter the customer's company headcount on the order builder. It maps to a band (Startup 1–24, SMB 25–99, Growth 100–249, Venture 250–499, Enterprise 500–999, Enterprise+ 1,000–4,999, Global 5,000–9,999, Global+ 10,000+) and multiplies the plan fee, Compliance, and Premium On-Call. No headcount entered = 1.0×. Trace Intelligence pool pricing is not multiplied.
 
 | Band | Platform / Self-Hosted | BYO VPC / Private Cloud / Agent Builder | BYOC / Compliance / Premium On-Call / Evals |
 | --- | --- | --- | --- |
@@ -51,7 +51,7 @@ Enter the customer's company headcount on the order builder. It maps to a band (
 
 ### Add-ons
 
-- **Agent Learning** — Trace Intelligence (all plans; also available without a plan selected). Starts at **$5,000/yr** for the first 10k analyzed traces/mo. Larger pools use rates/1k: 25K $16, 100K $7.50, 250K $6, 500K $5, 1M $4, 5M $3, 10M $2 (interpolated between), floored at the $5,000 starting price.
+- **Trace Intelligence** — (all plans; also available without a plan selected). Progressive per-trace bands: first 10k/mo at $0, then $0.016 → $0.002 through 10M (see calculator table; includes overage rates). When selected with a plan, **+$3,000/yr** is added to that plan. Pool cost = sum of each band × rate × 12.
 - **Agent Builder** — fixed $6,000/yr base (all plans), scaled by the headcount multiplier (same curve as BYO VPC / Private Cloud)
 - **Compliance** — fixed $5,000/yr base (Enterprise Platform only), scaled by the headcount multiplier
 - **Premium on-call support** — fixed $10,000/yr base (Enterprise plans: Enterprise Platform, Enterprise Self-Hosted; also available without a plan selected), scaled by the headcount multiplier
