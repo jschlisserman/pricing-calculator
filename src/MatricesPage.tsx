@@ -148,9 +148,9 @@ export default function MatricesPage() {
             </table>
           </div>
           <p className="matrix-note">
-            Agent Learning is priced separately by Trace Intelligence pool
-            (25K $16/1k, 100K $7.50, 250K $6, 500K $5, 1M $4, 5M $3, 10M $2).
-            Not multiplied by headcount.
+            Agent Learning starts at $5,000/yr for the first 10k analyzed
+            traces/mo, then the volume scale (25K $16/1k → 10M $2/1k). Not
+            multiplied by headcount.
           </p>
         </section>
 

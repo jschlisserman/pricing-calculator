@@ -28,6 +28,8 @@ import {
   ADDONS,
   AGENCY_MODE_DISCOUNT,
   DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
+  TRACE_INCLUDED_MONTHLY,
+  TRACE_STARTING_ANNUAL,
   PLANS,
   PLATFORM_PACKAGES,
   PROGRAMS,
@@ -723,9 +725,9 @@ export default function App() {
                             </>
                           ) : addon.id === 'agent-learning' ? (
                             <>
-                              $7.50
+                              {formatUsd(TRACE_STARTING_ANNUAL)}
                               <br />
-                              / 1k traces
+                              / yr starting
                             </>
                           ) : displayedFlat != null ? (
                             <>
@@ -767,13 +769,10 @@ export default function App() {
                           </div>
                           <div className="ti-computed">
                             <span>
-                              Rate{' '}
-                              {formatUsd(
-                                getTraceIntelligenceRatePer1k(
-                                  agentLearningPoolMonthly,
-                                ),
-                              )}
-                              /1k
+                              {agentLearningPoolMonthly <=
+                              TRACE_INCLUDED_MONTHLY
+                                ? `${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included`
+                                : `Rate ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k`}
                             </span>
                             <span>
                               {formatUsd(
@@ -807,10 +806,15 @@ export default function App() {
                             ))}
                           </div>
                           <p className="ti-note">
-                            Pool resets monthly. Enterprise pools are committed
-                            annually; overage true-up at 1.25×. TI pauses when
-                            the pool runs out. Bring-your-own model: same price.
-                            Self-hosted / air-gapped: +50%.
+                            Starts at {formatUsd(TRACE_STARTING_ANNUAL)}/yr for
+                            the first{' '}
+                            {TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}{' '}
+                            analyzed traces/mo. Larger pools use the volume
+                            rate scale below. Pool resets monthly. Enterprise
+                            pools are committed annually; overage true-up at
+                            1.25×. TI pauses when the pool runs out.
+                            Bring-your-own model: same price. Self-hosted /
+                            air-gapped: +50%.
                           </p>
                         </div>
                       )}

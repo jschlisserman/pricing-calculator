@@ -228,7 +228,7 @@ export const ADDONS: Addon[] = [
     id: 'agent-learning',
     name: 'Agent Learning',
     description:
-      'Trace Intelligence, Custom Signals · 10k analyzed traces/mo included',
+      'Trace Intelligence, Custom Signals · from $5,000/yr for 10k analyzed traces/mo',
     rate: null,
     annualMinimum: 0,
     enterpriseOnly: true,
@@ -287,15 +287,21 @@ export const TRACE_RATE_TIERS: ReadonlyArray<{ pool: number; ratePer1k: number }
     { pool: 10_000_000, ratePer1k: 2 },
   ]
 
-/** Analyzed traces included each month before an add-on pool is purchased. */
+/**
+ * Starting Trace Intelligence package: $5,000/yr for the first 10,000
+ * analyzed traces/mo. Larger pools use the volume rate scale, floored at
+ * the starting price.
+ */
+export const TRACE_STARTING_ANNUAL = 5_000
 export const TRACE_INCLUDED_MONTHLY = 10_000
 
-/** Default add-on pool (analyzed traces/mo) when Agent Learning is selected. */
-export const DEFAULT_AGENT_LEARNING_POOL_MONTHLY = 100_000
+/** Default pool when Agent Learning is selected (starting package). */
+export const DEFAULT_AGENT_LEARNING_POOL_MONTHLY = TRACE_INCLUDED_MONTHLY
 
 /** Add-on pool rate per 1k analyzed traces from the volume tier table. */
 export function getTraceIntelligenceRatePer1k(poolMonthly: number): number {
   const pool = Math.max(0, poolMonthly)
+  if (pool <= TRACE_INCLUDED_MONTHLY) return 0
   const tiers = TRACE_RATE_TIERS
   if (pool <= tiers[0].pool) return tiers[0].ratePer1k
   if (pool >= tiers[tiers.length - 1].pool) {
@@ -312,15 +318,22 @@ export function getTraceIntelligenceRatePer1k(poolMonthly: number): number {
   return tiers[tiers.length - 1].ratePer1k
 }
 
-/** Monthly cost of the analyzed-traces pool only (excludes annual base). */
-export function getAgentLearningMonthly(poolMonthly: number): number {
+/**
+ * Annual Trace Intelligence total. $5,000/yr for the first 10k traces/mo;
+ * larger pools priced on the volume scale, never below the starting price.
+ */
+export function getAgentLearningAnnual(poolMonthly: number): number {
   const pool = Math.max(0, poolMonthly)
-  return (pool / 1_000) * getTraceIntelligenceRatePer1k(pool)
+  if (pool <= TRACE_INCLUDED_MONTHLY) return TRACE_STARTING_ANNUAL
+  const scaled = Math.round(
+    (pool / 1_000) * getTraceIntelligenceRatePer1k(pool) * 12,
+  )
+  return Math.max(TRACE_STARTING_ANNUAL, scaled)
 }
 
-/** Annual Agent Learning total: annualized pool (monthly pool cost × 12). */
-export function getAgentLearningAnnual(poolMonthly: number): number {
-  return Math.round(getAgentLearningMonthly(poolMonthly) * 12)
+/** Monthly Trace Intelligence cost (annual ÷ 12). */
+export function getAgentLearningMonthly(poolMonthly: number): number {
+  return getAgentLearningAnnual(poolMonthly) / 12
 }
 
 function formatTraceRatePer1k(rate: number): string {
@@ -328,21 +341,27 @@ function formatTraceRatePer1k(rate: number): string {
 }
 
 function formatTracePoolPrice(poolMonthly: number): string {
-  const monthly = getAgentLearningMonthly(poolMonthly)
   const annual = getAgentLearningAnnual(poolMonthly)
+  const monthly = annual / 12
   return `${formatUsd(monthly)}/mo · ${formatUsd(annual)}/yr`
 }
 
 /** Trace Intelligence pools shown on Agent Learning (Enterprise terms). */
-export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] =
-  TRACE_RATE_TIERS.map((tier) => ({
+export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] = [
+  {
+    monthlyPool: '10K',
+    ratePer1k: '—',
+    price: `${formatUsd(TRACE_STARTING_ANNUAL)}/yr starting`,
+  },
+  ...TRACE_RATE_TIERS.map((tier) => ({
     monthlyPool:
       tier.pool >= 1_000_000
         ? `${tier.pool / 1_000_000}M`
         : `${tier.pool / 1_000}K`,
     ratePer1k: formatTraceRatePer1k(tier.ratePer1k),
     price: formatTracePoolPrice(tier.pool),
-  }))
+  })),
+]
 
 // —— Programs (annual, not discounted, hidden in agency mode) ——
 
@@ -375,10 +394,11 @@ export const PROGRAMS: Program[] = [
 export const AGENCY_MODE_DISCOUNT = 0.3
 
 /**
- * Plan bundled with any add-on: 20% off plan + add-ons (not usage overage).
- * Does not stack with the agency discount — agency mode supersedes it.
+ * Plan bundled with any add-on: 15% off the plan fee only (add-ons and
+ * usage overage are not discounted). Does not stack with the agency
+ * discount — agency mode supersedes it.
  */
-export const BUNDLE_DISCOUNT = 0.2
+export const BUNDLE_DISCOUNT = 0.15
 
 export function isAddonAvailable(addon: Addon, plan: Plan | null): boolean {
   // Agent Learning and Premium on-call can also be purchased without a plan.
@@ -770,7 +790,7 @@ export interface Quote {
   subscriptionListAnnual: number
   /** Agency 30% off subscription; 0 when agency mode is off. */
   agencyDiscount: number
-  /** Plan + any add-on bundled: 20% off subscription; 0 when not bundled. */
+  /** Plan bundled with any add-on: 15% off plan fee; 0 when not bundled. */
   bundleDiscount: number
   /** Selected annual programs (excluded in agency mode). */
   programs: Program[]
@@ -876,7 +896,9 @@ export function buildQuote(input: BuildQuoteInput): Quote {
       name: line.addon.name,
       meta:
         line.addon.id === 'agent-learning'
-          ? `${agentLearningPoolMonthly.toLocaleString('en-US')} traces/mo @ ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included`
+          ? agentLearningPoolMonthly <= TRACE_INCLUDED_MONTHLY
+            ? `${formatUsd(TRACE_STARTING_ANNUAL)}/yr starting · ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')} traces/mo included`
+            : `${agentLearningPoolMonthly.toLocaleString('en-US')} traces/mo @ ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · ${formatUsd(TRACE_STARTING_ANNUAL)} starting covers first ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo`
           : [
               line.addon.flatAnnual != null
                 ? headcountBand && addonMultiplier !== 1
@@ -911,19 +933,17 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   }
 
   // Bundle and agency discounts do not stack: agency mode supersedes.
+  // Bundle is 15% off the plan fee only (not add-ons).
   const bundleDiscount =
-    !agencyMode &&
-    plan &&
-    addonPricing.lines.length > 0 &&
-    subscriptionListAnnual > 0
-      ? Math.round(subscriptionListAnnual * BUNDLE_DISCOUNT)
+    !agencyMode && plan && addonPricing.lines.length > 0 && planAnnual > 0
+      ? Math.round(planAnnual * BUNDLE_DISCOUNT)
       : 0
 
   if (bundleDiscount > 0) {
     productLines.push({
       id: 'bundle-discount',
       name: 'Bundle discount',
-      meta: `${formatPercent(BUNDLE_DISCOUNT)} off plan and add-ons when bundled`,
+      meta: `${formatPercent(BUNDLE_DISCOUNT)} off plan when bundled with an add-on`,
       annualAmount: -bundleDiscount,
       period: '/ yr',
     })

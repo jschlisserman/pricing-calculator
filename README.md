@@ -51,7 +51,7 @@ Enter the customer's company headcount on the order builder. It maps to a band (
 
 ### Add-ons
 
-- **Agent Learning** — Trace Intelligence pool pricing (all plans; also available without a plan selected). Rates/1k by monthly pool: 25K $16, 100K $7.50, 250K $6, 500K $5, 1M $4, 5M $3, 10M $2 (interpolated between). 10k analyzed traces/mo included. Annual = pool monthly × 12
+- **Agent Learning** — Trace Intelligence (all plans; also available without a plan selected). Starts at **$5,000/yr** for the first 10k analyzed traces/mo. Larger pools use rates/1k: 25K $16, 100K $7.50, 250K $6, 500K $5, 1M $4, 5M $3, 10M $2 (interpolated between), floored at the $5,000 starting price.
 - **Agent Builder** — fixed $6,000/yr base (all plans), scaled by the headcount multiplier (same curve as BYO VPC / Private Cloud)
 - **Compliance** — fixed $5,000/yr base (Enterprise Platform only), scaled by the headcount multiplier
 - **Premium on-call support** — fixed $10,000/yr base (Enterprise plans: Enterprise Platform, Enterprise Self-Hosted; also available without a plan selected), scaled by the headcount multiplier
@@ -69,7 +69,7 @@ Enterprise Platform only. Usage packages scale includes from the product total p
 
 ### Bundle discount
 
-When a plan is bundled with any add-on, the plan + add-ons subscription gets **20% off**. Platform usage overage is not discounted. The bundle discount does **not** stack with the agency discount — while agency mode is on, only the 30% agency discount applies.
+When a plan is bundled with any add-on, the **plan** gets **15% off**. Add-ons and platform usage overage are not discounted. The bundle discount does **not** stack with the agency discount — while agency mode is on, only the 30% agency discount applies.
 
 ### Agency mode
 
