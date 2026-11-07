@@ -75,6 +75,10 @@ When a plan is bundled with any add-on, the **plan** gets **15% off**. Add-ons a
 
 Optional toggle on the order builder. Applies **30% off** plan and add-ons. Platform usage overage is not discounted. While agency mode is on, Support / services are hidden.
 
+### Mastra Forward
+
+Shown above Support, hidden while agency mode is on. Enter bill rate ($/hour) and hours/week. Cost basis is $110/hr. Annual = rate × hours/week × 52. Margin = revenue − cost (shown once both inputs are set).
+
 ### Support
 
 Hidden while agency mode is on.

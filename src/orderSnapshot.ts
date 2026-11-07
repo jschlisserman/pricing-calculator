@@ -16,6 +16,8 @@ export interface OrderSnapshot {
   agencyModeLabel: string | null
   productLines: OrderLineSnapshot[]
   productTotal: number
+  forwardLines: OrderLineSnapshot[]
+  forwardAnnualTotal: number | null
   supportLines: OrderLineSnapshot[]
   supportPath1Total: number | null
   supportPath1Period: '/ qtr' | '/ yr' | null
@@ -95,6 +97,17 @@ export function formatOrderEmailText(
     sections.push('')
   }
 
+  if (order.forwardLines.length > 0) {
+    sections.push('Mastra Forward')
+    for (const line of order.forwardLines) sections.push(`- ${lineText(line)}`)
+    if (order.forwardAnnualTotal != null) {
+      sections.push(
+        `Mastra Forward / year: ${formatUsd(order.forwardAnnualTotal)}`,
+      )
+    }
+    sections.push('')
+  }
+
   if (order.supportLines.length > 0) {
     sections.push('Support')
     for (const line of order.supportLines) sections.push(`- ${lineText(line)}`)
@@ -161,6 +174,17 @@ export function formatOrderEmailHtml(
          <p style="font-size:18px;font-weight:700">Product total / year: ${formatUsd(order.productTotal)}</p>`
       : ''
 
+  const forwardBlock =
+    order.forwardLines.length > 0
+      ? `<h3 style="margin:24px 0 8px">Mastra Forward</h3>
+         <table style="width:100%;border-collapse:collapse">${renderLines(order.forwardLines)}</table>
+         ${
+           order.forwardAnnualTotal != null
+             ? `<p style="font-size:18px;font-weight:700">Mastra Forward / year: ${formatUsd(order.forwardAnnualTotal)}</p>`
+             : ''
+         }`
+      : ''
+
   const supportBlock =
     order.supportLines.length > 0
       ? `<h3 style="margin:24px 0 8px">Support</h3>
@@ -192,6 +216,7 @@ export function formatOrderEmailHtml(
     ${order.headcountLabel ? `<p><strong>Company headcount:</strong> ${esc(order.headcountLabel)}</p>` : ''}
     ${order.agencyModeLabel ? `<p><strong>${esc(order.agencyModeLabel)}</strong></p>` : ''}
     ${productBlock}
+    ${forwardBlock}
     ${supportBlock}
   </body>
 </html>`

@@ -7,6 +7,7 @@ import {
   PATH2_EVALS_ID,
   PATH2_MARGIN_OPTIONS,
   PATH2_PACKAGES,
+  buildMastraForwardQuote,
   buildSupportMargin,
   buildSupportQuote,
   getAuditFee,
@@ -108,6 +109,13 @@ export default function App() {
   const headcountBand = getHeadcountBand(headcount)
   const evalsMultiplier = getEvalsMultiplier(headcount)
   const [agencyMode, setAgencyMode] = useState(false)
+  const [mastraForwardSelected, setMastraForwardSelected] = useState(false)
+  const [forwardSellRatePerHour, setForwardSellRatePerHour] = useState<
+    number | null
+  >(null)
+  const [forwardHoursPerWeek, setForwardHoursPerWeek] = useState<number | null>(
+    null,
+  )
   const [supportIds, setSupportIds] = useState<string[]>([])
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(() =>
     defaultPlatformConfig(0),
@@ -135,6 +143,7 @@ export default function App() {
     if (agencyMode) {
       setSupportIds([])
       setSelectedPrograms([])
+      setMastraForwardSelected(false)
     }
   }, [agencyMode])
 
@@ -191,6 +200,27 @@ export default function App() {
     ],
   )
 
+  const mastraForward = useMemo(
+    () =>
+      agencyMode
+        ? null
+        : buildMastraForwardQuote(
+            mastraForwardSelected,
+            {
+              sellRatePerHour: forwardSellRatePerHour,
+              hoursPerWeek: forwardHoursPerWeek,
+            },
+            engineerCostPerHour,
+          ),
+    [
+      agencyMode,
+      mastraForwardSelected,
+      forwardSellRatePerHour,
+      forwardHoursPerWeek,
+      engineerCostPerHour,
+    ],
+  )
+
   const margin = useMemo(
     () => buildSupportMargin(support, engineerCostPerHour),
     [support, engineerCostPerHour],
@@ -220,8 +250,13 @@ export default function App() {
     (support.path1 != null ||
       support.path2.length > 0 ||
       support.audit != null)
+  const hasMastraForward =
+    !agencyMode &&
+    mastraForward != null &&
+    mastraForward.hoursPerWeek > 0 &&
+    mastraForward.sellRatePerHour > 0
   const hasProducts = quote.productLines.length > 0
-  const hasOrder = hasProducts || hasSupport
+  const hasOrder = hasProducts || hasSupport || hasMastraForward
 
   const orderSnapshot = useMemo((): OrderSnapshot | null => {
     if (!hasOrder) return null
@@ -237,6 +272,21 @@ export default function App() {
         included: line.included,
       }),
     )
+
+    const forwardLines: OrderLineSnapshot[] = []
+    if (hasMastraForward && mastraForward) {
+      forwardLines.push({
+        name: 'Mastra Forward',
+        meta: `${formatUsd(mastraForward.sellRatePerHour)}/hr · ${mastraForward.hoursPerWeek} hrs/wk · cost ${formatUsd(mastraForward.costPerHour)}/hr${
+          mastraForward.marginRate != null
+            ? ` · ${formatPercent(mastraForward.marginRate)} margin`
+            : ''
+        }`,
+        listAmount: Math.round(mastraForward.annualRevenue),
+        billedAmount: Math.round(mastraForward.annualRevenue),
+        period: '/ yr',
+      })
+    }
 
     const supportLines: OrderLineSnapshot[] = []
     if (!agencyMode) {
@@ -286,6 +336,10 @@ export default function App() {
         : null,
       productLines,
       productTotal: quote.annualTotal,
+      forwardLines,
+      forwardAnnualTotal: hasMastraForward
+        ? Math.round(mastraForward!.annualRevenue)
+        : null,
       supportLines,
       supportPath1Total:
         !agencyMode && support.path1 ? support.path1Total : null,
@@ -296,7 +350,7 @@ export default function App() {
           ? support.oneTimeTotal
           : null,
     }
-  }, [hasOrder, quote, support, agencyMode])
+  }, [hasOrder, hasMastraForward, quote, support, mastraForward, agencyMode, headcountBand])
 
   function selectPlan(id: PlanId) {
     setPlanId(id)
@@ -390,6 +444,9 @@ export default function App() {
     setHeadcount(null)
     setAgentLearningPoolMonthly(DEFAULT_AGENT_LEARNING_POOL_MONTHLY)
     setAgencyMode(false)
+    setMastraForwardSelected(false)
+    setForwardSellRatePerHour(null)
+    setForwardHoursPerWeek(null)
     setSupportIds([])
     setPlatformConfig(defaultPlatformConfig(0))
     setPath2Hours({})
@@ -867,6 +924,120 @@ export default function App() {
               )}
 
               {!agencyMode && (
+                <section className="category">
+                  <div className="category-title">
+                    <h3>Mastra Forward</h3>
+                    <span className="category-meta">Services</span>
+                  </div>
+                  <div className="items">
+                    <div
+                      className={`item-wrap${mastraForwardSelected ? ' open' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className={`item${mastraForwardSelected ? ' selected' : ''}`}
+                        onClick={() =>
+                          setMastraForwardSelected((v) => !v)
+                        }
+                        aria-pressed={mastraForwardSelected}
+                      >
+                        <span className="check" aria-hidden="true">
+                          {mastraForwardSelected ? <CheckIcon /> : null}
+                        </span>
+                        <span className="item-body">
+                          <span className="item-name">Mastra Forward</span>
+                          <p className="item-desc">
+                            Billable engineering hours. Cost basis{' '}
+                            {formatUsd(engineerCostPerHour)}/hr.
+                          </p>
+                        </span>
+                        <span className="item-price">
+                          {hasMastraForward
+                            ? (
+                                <>
+                                  {formatUsd(
+                                    Math.round(mastraForward!.annualRevenue),
+                                  )}
+                                  <br />
+                                  / year
+                                </>
+                              )
+                            : (
+                                <>
+                                  Set rate
+                                  <br />
+                                  &amp; hours
+                                </>
+                              )}
+                        </span>
+                      </button>
+                      {mastraForwardSelected && (
+                        <div className="path2-pricing">
+                          <label
+                            className="scoped-price"
+                            htmlFor="forward-sell-rate"
+                          >
+                            $/hour
+                            <NumberField
+                              id="forward-sell-rate"
+                              value={forwardSellRatePerHour}
+                              min={0}
+                              placeholder="e.g. 220"
+                              emptyValue={null}
+                              onCommit={(next) =>
+                                setForwardSellRatePerHour(next)
+                              }
+                              aria-label="Mastra Forward bill rate per hour"
+                            />
+                          </label>
+                          <label
+                            className="scoped-price"
+                            htmlFor="forward-hours-week"
+                          >
+                            Hours / week
+                            <NumberField
+                              id="forward-hours-week"
+                              value={forwardHoursPerWeek}
+                              min={0}
+                              placeholder="e.g. 10"
+                              emptyValue={null}
+                              onCommit={(next) =>
+                                setForwardHoursPerWeek(next)
+                              }
+                              aria-label="Mastra Forward hours per week"
+                            />
+                          </label>
+                          {hasMastraForward && mastraForward && (
+                            <div className="path2-price-breakdown">
+                              <span>
+                                Cost{' '}
+                                {formatUsd(
+                                  Math.round(mastraForward.annualCost),
+                                )}
+                                /yr ·{' '}
+                                {mastraForward.hoursPerWeek} hrs/wk ×{' '}
+                                {formatUsd(mastraForward.costPerHour)}/hr × 52
+                              </span>
+                              <strong>
+                                Margin{' '}
+                                {formatUsd(
+                                  Math.round(mastraForward.annualMargin),
+                                )}
+                                /yr
+                                {mastraForward.marginRate != null
+                                  ? ` (${formatPercent(mastraForward.marginRate)})`
+                                  : ''}
+                              </strong>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {!agencyMode && (
               <section className="category concierge-section">
                 <div className="category-title">
                   <h3>Support</h3>
@@ -1197,6 +1368,61 @@ export default function App() {
                             </span>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  )}
+
+                  {hasMastraForward && mastraForward && (
+                    <div className="summary-group">
+                      <h3 className="summary-group-title">Mastra Forward</h3>
+                      <ul className="order-lines">
+                        <li className="order-line">
+                          <div>
+                            <span className="order-line-name">
+                              Mastra Forward
+                            </span>
+                            <span className="order-line-meta">
+                              {formatUsd(mastraForward.sellRatePerHour)}/hr ·{' '}
+                              {mastraForward.hoursPerWeek} hrs/wk · cost{' '}
+                              {formatUsd(mastraForward.costPerHour)}/hr
+                            </span>
+                          </div>
+                          <span className="order-line-price">
+                            {formatUsd(
+                              Math.round(mastraForward.annualRevenue),
+                            )}
+                            <span className="order-line-meta">/ yr</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="remove"
+                            onClick={() => setMastraForwardSelected(false)}
+                            aria-label="Remove Mastra Forward"
+                          >
+                            <CloseIcon />
+                          </button>
+                        </li>
+                      </ul>
+                      <div className="totals">
+                        <div className="total-row grand">
+                          <span>Mastra Forward / year</span>
+                          <span>
+                            {formatUsd(
+                              Math.round(mastraForward.annualRevenue),
+                            )}
+                          </span>
+                        </div>
+                        <div className="total-row muted">
+                          <span>Forward margin</span>
+                          <span>
+                            {formatUsd(
+                              Math.round(mastraForward.annualMargin),
+                            )}
+                            {mastraForward.marginRate != null
+                              ? ` (${formatPercent(mastraForward.marginRate)})`
+                              : ''}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}

@@ -83,6 +83,41 @@ function OrderLines({ order }: { order: OrderSnapshot }) {
         </div>
       )}
 
+      {order.forwardLines.length > 0 && (
+        <div className="summary-group">
+          <h3 className="summary-group-title">Mastra Forward</h3>
+          <ul className="order-lines">
+            {order.forwardLines.map((line) => (
+              <li
+                className="order-line review-line"
+                key={line.name + (line.meta ?? '')}
+              >
+                <div>
+                  <span className="order-line-name">{line.name}</span>
+                  {line.meta && (
+                    <span className="order-line-meta">{line.meta}</span>
+                  )}
+                </div>
+                <span className="order-line-price">
+                  {line.billedAmount == null || line.billedAmount === 0
+                    ? '—'
+                    : formatUsd(line.billedAmount)}
+                  <span className="order-line-meta">{line.period}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {order.forwardAnnualTotal != null && (
+            <div className="totals">
+              <div className="total-row grand">
+                <span>Mastra Forward / year</span>
+                <span>{formatUsd(order.forwardAnnualTotal)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {order.supportLines.length > 0 && (
         <div className="summary-group">
           <h3 className="summary-group-title">Support</h3>

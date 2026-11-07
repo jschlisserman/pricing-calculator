@@ -19,8 +19,66 @@ export const AUDIT_FEE = 500
 /** Weeks in a quarterly Path 1 engagement (for implied hourly). */
 export const PATH1_WEEKS_PER_QUARTER = 13
 
-/** Default fully loaded engineer cost for Support margin ($/hr). */
+/** Default fully loaded engineer cost for Support / Forward margin ($/hr). */
 export const DEFAULT_ENGINEER_COST_PER_HOUR = 110
+
+/** Weeks per year used to annualize Mastra Forward hours/week. */
+export const FORWARD_WEEKS_PER_YEAR = 52
+
+export interface MastraForwardInput {
+  /** Customer bill rate ($/hour). */
+  sellRatePerHour: number | null
+  /** Committed hours per week. */
+  hoursPerWeek: number | null
+}
+
+export interface MastraForwardQuote {
+  selected: boolean
+  sellRatePerHour: number
+  hoursPerWeek: number
+  costPerHour: number
+  weeklyRevenue: number
+  weeklyCost: number
+  annualRevenue: number
+  annualCost: number
+  weeklyMargin: number
+  annualMargin: number
+  marginRate: number | null
+}
+
+export function buildMastraForwardQuote(
+  selected: boolean,
+  input: MastraForwardInput,
+  costPerHour = DEFAULT_ENGINEER_COST_PER_HOUR,
+): MastraForwardQuote | null {
+  if (!selected) return null
+
+  const sellRate = Math.max(0, input.sellRatePerHour ?? 0)
+  const hours = Math.max(0, input.hoursPerWeek ?? 0)
+  const costRate = Math.max(0, costPerHour)
+
+  const weeklyRevenue = sellRate * hours
+  const weeklyCost = costRate * hours
+  const annualRevenue = weeklyRevenue * FORWARD_WEEKS_PER_YEAR
+  const annualCost = weeklyCost * FORWARD_WEEKS_PER_YEAR
+  const weeklyMargin = weeklyRevenue - weeklyCost
+  const annualMargin = annualRevenue - annualCost
+  const marginRate = weeklyRevenue > 0 ? weeklyMargin / weeklyRevenue : null
+
+  return {
+    selected: true,
+    sellRatePerHour: sellRate,
+    hoursPerWeek: hours,
+    costPerHour: costRate,
+    weeklyRevenue,
+    weeklyCost,
+    annualRevenue,
+    annualCost,
+    weeklyMargin,
+    annualMargin,
+    marginRate,
+  }
+}
 
 export interface Path1Tier {
   id: Path1TierId
