@@ -1,31 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  AUDIT_ID,
-  DEFAULT_ENGINEER_COST_PER_HOUR,
-  DEFAULT_PATH2_MARGIN,
-  PATH1_TIERS,
-  PATH2_EVALS_ID,
-  PATH2_MARGIN_OPTIONS,
-  PATH2_PACKAGES,
-  buildMastraForwardQuote,
-  buildSupportMargin,
-  buildSupportQuote,
-  getAuditFee,
-  getPath1ImpliedHourly,
-  getPath1ListPrice,
-  getPath1PeriodLabel,
-  getPath2Cost,
-  getPath2ListPrice,
-  isPath1Id,
-  isPath2Id,
-  withoutOtherPath1Tiers,
-  type Path1BillingPeriod,
-  type Path2Hours,
-  type Path2MarginRate,
-  type Path2Margins,
-  type Path2PackageId,
-} from './concierge'
-import {
   ADDONS,
   AGENCY_MODE_DISCOUNT,
   DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
@@ -33,16 +7,13 @@ import {
   TRACE_PLAN_UPLIFT_ANNUAL,
   PLANS,
   PLATFORM_PACKAGES,
-  PROGRAMS,
   PLATFORM_USAGE_METRICS,
   TRACE_INTELLIGENCE_POOLS,
-  buildPlatformMargin,
   buildQuote,
   defaultPlatformConfig,
   formatPercent,
   formatUnitCost,
   formatUsd,
-  formatMultiplier,
   getAdditionalUsageUnitPrice,
   getAddonMultiplier,
   getAgentLearningAnnual,
@@ -60,42 +31,48 @@ import {
   type PlatformConfig,
   type PlatformPackageId,
 } from './pricing'
+// Type-only: erased from the agency bundle.
+import type {
+  Path1BillingPeriod,
+  Path2Hours,
+  Path2MarginRate,
+  Path2Margins,
+  Path2PackageId,
+} from './internal/concierge'
+import AccessPage from './AccessPage'
 import MatricesPage from './MatricesPage'
 import ReviewPage from './ReviewPage'
 import NumberField from './NumberField'
+import { useInternalEdition } from './edition'
+import { CheckIcon, CloseIcon } from './icons'
+import { useSession } from './session'
 import type { OrderLineSnapshot, OrderSnapshot } from './orderSnapshot'
 
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 12 12" fill="none" aria-hidden="true">
-      <path
-        d="M2.5 6.2 4.8 8.5 9.5 3.5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M4 4l8 8M12 4l-8 8"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-type AppPage = 'order' | 'review' | 'matrices'
+type AppPage = 'order' | 'review' | 'matrices' | 'access'
 
 export default function App() {
-  const [page, setPage] = useState<AppPage>('order')
+  const user = useSession()
+  // Internal-only pricing; null in the agency app.
+  const internal = useInternalEdition()
+  const programs = internal?.programs ?? []
+  // Agency users always price with the agency discount and never see the toggle.
+  const isAgency = user.role === 'agency'
+  const isInternal = user.role === 'internal'
+  // The access-request email links to /#access.
+  const [page, setPage] = useState<AppPage>(() =>
+    isInternal && window.location.hash === '#access' ? 'access' : 'order',
+  )
+  const [pendingAccessCount, setPendingAccessCount] = useState(0)
+
+  useEffect(() => {
+    if (!isInternal) return
+    fetch('/api/access')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { pending?: unknown[] } | null) => {
+        if (data?.pending) setPendingAccessCount(data.pending.length)
+      })
+      .catch(() => {})
+  }, [isInternal])
   const [reviewSnapshot, setReviewSnapshot] = useState<OrderSnapshot | null>(
     null,
   )
@@ -108,7 +85,7 @@ export default function App() {
   const [headcount, setHeadcount] = useState<number | null>(null)
   const headcountBand = getHeadcountBand(headcount)
   const evalsMultiplier = getEvalsMultiplier(headcount)
-  const [agencyMode, setAgencyMode] = useState(false)
+  const [agencyMode, setAgencyMode] = useState(isAgency)
   const [mastraForwardSelected, setMastraForwardSelected] = useState(false)
   const [forwardSellRatePerHour, setForwardSellRatePerHour] = useState<
     number | null
@@ -124,7 +101,6 @@ export default function App() {
   const [path2Margins, setPath2Margins] = useState<Path2Margins>({})
   const [path1BillingPeriod, setPath1BillingPeriod] =
     useState<Path1BillingPeriod>('quarter')
-  const [engineerCostPerHour] = useState(DEFAULT_ENGINEER_COST_PER_HOUR)
 
   const plan = planId == null ? null : getPlan(planId)
 
@@ -152,7 +128,7 @@ export default function App() {
       buildQuote({
         planId,
         selectedAddonIds: selectedAddons,
-        selectedProgramIds: selectedPrograms,
+        programs: programs.filter((p) => selectedPrograms.includes(p.id)),
         headcount,
         agentLearningPoolMonthly,
         agencyMode,
@@ -162,6 +138,7 @@ export default function App() {
       planId,
       selectedAddons,
       selectedPrograms,
+      programs,
       headcount,
       agentLearningPoolMonthly,
       agencyMode,
@@ -182,19 +159,21 @@ export default function App() {
 
   const support = useMemo(
     () =>
-      buildSupportQuote(
-        supportIds,
-        path2Hours,
-        path2Margins,
-        engineerCostPerHour,
-        path1BillingPeriod,
-        evalsMultiplier,
-      ),
+      internal && !agencyMode
+        ? internal.buildSupportQuote(
+            supportIds,
+            path2Hours,
+            path2Margins,
+            path1BillingPeriod,
+            evalsMultiplier,
+          )
+        : null,
     [
+      internal,
+      agencyMode,
       supportIds,
       path2Hours,
       path2Margins,
-      engineerCostPerHour,
       path1BillingPeriod,
       evalsMultiplier,
     ],
@@ -202,56 +181,50 @@ export default function App() {
 
   const mastraForward = useMemo(
     () =>
-      agencyMode
-        ? null
-        : buildMastraForwardQuote(
+      internal && !agencyMode
+        ? internal.buildMastraForwardQuote(
             mastraForwardSelected,
-            {
-              sellRatePerHour: forwardSellRatePerHour,
-              hoursPerWeek: forwardHoursPerWeek,
-            },
-            engineerCostPerHour,
-          ),
+            forwardSellRatePerHour,
+            forwardHoursPerWeek,
+          )
+        : null,
     [
+      internal,
       agencyMode,
       mastraForwardSelected,
       forwardSellRatePerHour,
       forwardHoursPerWeek,
-      engineerCostPerHour,
     ],
   )
 
-  const margin = useMemo(
-    () => buildSupportMargin(support, engineerCostPerHour),
-    [support, engineerCostPerHour],
-  )
+  const multipliedProducts = internal
+    ? 'the plan, Agent Builder, Compliance, Premium On-Call, and Evals'
+    : 'the plan, Agent Builder, Compliance, and Premium On-Call'
 
   const showUsage = Boolean(quote.plan?.hasUsage)
 
   const platformMargin = useMemo(() => {
-    if (!showUsage) return null
-    return buildPlatformMargin(
+    if (!showUsage || !internal || isAgency) return null
+    return internal.buildPlatformMargin(
       quote.annualTotal,
       quote.platformIncludes,
       platformConfig.additional,
     )
   }, [
     showUsage,
+    internal,
+    isAgency,
     quote.annualTotal,
     quote.platformIncludes,
     platformConfig.additional,
   ])
 
-  const selectedPath1Id = supportIds.find(isPath1Id)
-  const auditSelected = supportIds.includes(AUDIT_ID)
-  const auditFee = getAuditFee()
   const hasSupport =
-    !agencyMode &&
+    support != null &&
     (support.path1 != null ||
       support.path2.length > 0 ||
       support.audit != null)
   const hasMastraForward =
-    !agencyMode &&
     mastraForward != null &&
     mastraForward.hoursPerWeek > 0 &&
     mastraForward.sellRatePerHour > 0
@@ -273,57 +246,19 @@ export default function App() {
       }),
     )
 
-    const forwardLines: OrderLineSnapshot[] = []
-    if (hasMastraForward && mastraForward) {
-      forwardLines.push({
-        name: 'Mastra Forward',
-        meta: `${formatUsd(mastraForward.sellRatePerHour)}/hr · ${mastraForward.hoursPerWeek} hrs/wk · cost ${formatUsd(mastraForward.costPerHour)}/hr${
-          mastraForward.marginRate != null
-            ? ` · ${formatPercent(mastraForward.marginRate)} margin`
-            : ''
-        }`,
-        listAmount: Math.round(mastraForward.annualRevenue),
-        billedAmount: Math.round(mastraForward.annualRevenue),
-        period: '/ yr',
-      })
-    }
+    const forwardSnapshot = internal
+      ? internal.forwardOrderSnapshot(mastraForward)
+      : { forwardLines: [], forwardAnnualTotal: null }
 
-    const supportLines: OrderLineSnapshot[] = []
-    if (!agencyMode) {
-      if (support.path1) {
-        supportLines.push({
-          name: `Support Path 1 · ${support.path1.tier.name}`,
-          meta: `${support.path1.tier.hoursPerWeek} hrs/wk · ${
-            support.path1.billingPeriod === 'year' ? 'Annual' : 'Quarterly'
-          }`,
-          listAmount: support.path1.listAmount,
-          billedAmount: support.path1.billedAmount,
-          period: support.path1.periodLabel,
-        })
-      }
-      for (const line of support.path2) {
-        supportLines.push({
-          name: `Support Path 2 · ${line.package.name}`,
-          meta:
-            line.flatPrice != null
-              ? line.flatMultiplier !== 1 && headcountBand
-                ? `${formatUsd(line.flatPrice)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(line.flatMultiplier)} · Flat one-time`
-                : 'Flat one-time'
-              : `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
-          listAmount: line.listAmount > 0 ? line.listAmount : null,
-          billedAmount: line.listAmount > 0 ? line.billedAmount : null,
-          period: '/ one-time',
-        })
-      }
-      if (support.audit) {
-        supportLines.push({
-          name: 'Mastra Audit',
-          listAmount: support.audit.listAmount,
-          billedAmount: support.audit.billedAmount,
-          period: '/ one-time',
-        })
-      }
-    }
+    const supportSnapshot =
+      internal && support
+        ? internal.supportOrderSnapshot(support, headcountBand)
+        : {
+            supportLines: [],
+            supportPath1Total: null,
+            supportPath1Period: null,
+            supportOneTimeTotal: null,
+          }
 
     return {
       planLabel: quote.plan?.name ?? 'No plan',
@@ -336,21 +271,18 @@ export default function App() {
         : null,
       productLines,
       productTotal: quote.annualTotal,
-      forwardLines,
-      forwardAnnualTotal: hasMastraForward
-        ? Math.round(mastraForward!.annualRevenue)
-        : null,
-      supportLines,
-      supportPath1Total:
-        !agencyMode && support.path1 ? support.path1Total : null,
-      supportPath1Period:
-        !agencyMode && support.path1 ? support.path1.periodLabel : null,
-      supportOneTimeTotal:
-        !agencyMode && (support.path2.length > 0 || support.audit)
-          ? support.oneTimeTotal
-          : null,
+      ...forwardSnapshot,
+      ...supportSnapshot,
     }
-  }, [hasOrder, hasMastraForward, quote, support, mastraForward, agencyMode, headcountBand])
+  }, [
+    hasOrder,
+    quote,
+    support,
+    mastraForward,
+    agencyMode,
+    internal,
+    headcountBand,
+  ])
 
   function selectPlan(id: PlanId) {
     setPlanId(id)
@@ -369,16 +301,8 @@ export default function App() {
   }
 
   function toggleSupport(id: string) {
-    setSupportIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id)
-      if (isPath1Id(id)) return withoutOtherPath1Tiers([...prev, id], id)
-      if (isPath2Id(id)) {
-        // Evals does not auto-include the Mastra Audit.
-        if (id === PATH2_EVALS_ID) return [...prev, id]
-        return prev.includes(AUDIT_ID) ? [...prev, id] : [...prev, id, AUDIT_ID]
-      }
-      return [...prev, id]
-    })
+    if (!internal) return
+    setSupportIds((prev) => internal.toggleSupportId(prev, id))
   }
 
   function removeSupport(id: string) {
@@ -443,7 +367,7 @@ export default function App() {
     setSelectedPrograms([])
     setHeadcount(null)
     setAgentLearningPoolMonthly(DEFAULT_AGENT_LEARNING_POOL_MONTHLY)
-    setAgencyMode(false)
+    setAgencyMode(isAgency)
     setMastraForwardSelected(false)
     setForwardSellRatePerHour(null)
     setForwardHoursPerWeek(null)
@@ -492,6 +416,25 @@ export default function App() {
           >
             Pricing matrix
           </button>
+          {isInternal && (
+            <button
+              type="button"
+              className={`nav-tab${page === 'access' ? ' active' : ''}`}
+              onClick={() => setPage('access')}
+              aria-current={page === 'access' ? 'page' : undefined}
+            >
+              Access
+              {pendingAccessCount > 0 && (
+                <span className="nav-badge">{pendingAccessCount}</span>
+              )}
+            </button>
+          )}
+          <span className="nav-user" title={user.email}>
+            {user.email}
+          </span>
+          <a className="nav-tab" href="/auth/logout">
+            Sign out
+          </a>
         </nav>
       </header>
 
@@ -504,6 +447,8 @@ export default function App() {
           }}
           onSubmitted={clearOrder}
         />
+      ) : page === 'access' && isInternal ? (
+        <AccessPage onPendingCount={setPendingAccessCount} />
       ) : page === 'matrices' ? (
         <MatricesPage />
       ) : (
@@ -535,15 +480,18 @@ export default function App() {
                 </div>
                 <p className="item-desc">
                   {headcountBand
-                    ? `${headcountBand.name} (${headcountBand.rangeLabel} employees) — multipliers apply to the plan, Agent Builder, Compliance, Premium On-Call, and Evals.`
-                    : 'Enter headcount to apply size multipliers to the plan, Agent Builder, Compliance, Premium On-Call, and Evals. Defaults to 1.0×.'}
+                    ? `${headcountBand.name} (${headcountBand.rangeLabel} employees) — multipliers apply to ${multipliedProducts}.`
+                    : `Enter headcount to apply size multipliers to ${multipliedProducts}. Defaults to 1.0×.`}
                 </p>
               </section>
 
+              {!isAgency && (
               <section className="category">
                 <div className="category-title">
                   <h3>Agency mode</h3>
-                  <span className="category-meta">Optional</span>
+                  <span className="category-meta">
+                    Optional
+                  </span>
                 </div>
                 <div className="items">
                   <button
@@ -570,6 +518,7 @@ export default function App() {
                   </button>
                 </div>
               </section>
+              )}
 
               <div className="panel-head">
                 <h2>Plan</h2>
@@ -887,14 +836,14 @@ export default function App() {
                 </div>
               </section>
 
-              {!agencyMode && (
+              {programs.length > 0 && !agencyMode && (
                 <section className="category">
                   <div className="category-title">
                     <h3>Programs</h3>
                     <span className="category-meta">Annual</span>
                   </div>
                   <div className="items">
-                    {PROGRAMS.map((program) => {
+                    {programs.map((program) => {
                       const selected = selectedPrograms.includes(program.id)
                       return (
                         <button
@@ -923,353 +872,30 @@ export default function App() {
                 </section>
               )}
 
-              {!agencyMode && (
-                <section className="category">
-                  <div className="category-title">
-                    <h3>Mastra Forward</h3>
-                    <span className="category-meta">Services</span>
-                  </div>
-                  <div className="items">
-                    <div
-                      className={`item-wrap${mastraForwardSelected ? ' open' : ''}`}
-                    >
-                      <button
-                        type="button"
-                        className={`item${mastraForwardSelected ? ' selected' : ''}`}
-                        onClick={() =>
-                          setMastraForwardSelected((v) => !v)
-                        }
-                        aria-pressed={mastraForwardSelected}
-                      >
-                        <span className="check" aria-hidden="true">
-                          {mastraForwardSelected ? <CheckIcon /> : null}
-                        </span>
-                        <span className="item-body">
-                          <span className="item-name">Mastra Forward</span>
-                          <p className="item-desc">
-                            Billable engineering hours. Cost basis{' '}
-                            {formatUsd(engineerCostPerHour)}/hr.
-                          </p>
-                        </span>
-                        <span className="item-price">
-                          {hasMastraForward
-                            ? (
-                                <>
-                                  {formatUsd(
-                                    Math.round(mastraForward!.annualRevenue),
-                                  )}
-                                  <br />
-                                  / year
-                                </>
-                              )
-                            : (
-                                <>
-                                  Set rate
-                                  <br />
-                                  &amp; hours
-                                </>
-                              )}
-                        </span>
-                      </button>
-                      {mastraForwardSelected && (
-                        <div className="path2-pricing">
-                          <label
-                            className="scoped-price"
-                            htmlFor="forward-sell-rate"
-                          >
-                            $/hour
-                            <NumberField
-                              id="forward-sell-rate"
-                              value={forwardSellRatePerHour}
-                              min={0}
-                              placeholder="e.g. 220"
-                              emptyValue={null}
-                              onCommit={(next) =>
-                                setForwardSellRatePerHour(next)
-                              }
-                              aria-label="Mastra Forward bill rate per hour"
-                            />
-                          </label>
-                          <label
-                            className="scoped-price"
-                            htmlFor="forward-hours-week"
-                          >
-                            Hours / week
-                            <NumberField
-                              id="forward-hours-week"
-                              value={forwardHoursPerWeek}
-                              min={0}
-                              placeholder="e.g. 10"
-                              emptyValue={null}
-                              onCommit={(next) =>
-                                setForwardHoursPerWeek(next)
-                              }
-                              aria-label="Mastra Forward hours per week"
-                            />
-                          </label>
-                          {hasMastraForward && mastraForward && (
-                            <div className="path2-price-breakdown">
-                              <span>
-                                Cost{' '}
-                                {formatUsd(
-                                  Math.round(mastraForward.annualCost),
-                                )}
-                                /yr ·{' '}
-                                {mastraForward.hoursPerWeek} hrs/wk ×{' '}
-                                {formatUsd(mastraForward.costPerHour)}/hr × 52
-                              </span>
-                              <strong>
-                                Margin{' '}
-                                {formatUsd(
-                                  Math.round(mastraForward.annualMargin),
-                                )}
-                                /yr
-                                {mastraForward.marginRate != null
-                                  ? ` (${formatPercent(mastraForward.marginRate)})`
-                                  : ''}
-                              </strong>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </section>
+              {internal && !agencyMode && (
+                <internal.ForwardSection
+                  selected={mastraForwardSelected}
+                  sellRatePerHour={forwardSellRatePerHour}
+                  hoursPerWeek={forwardHoursPerWeek}
+                  quote={mastraForward}
+                  onToggle={() => setMastraForwardSelected((v) => !v)}
+                  onSellRateChange={setForwardSellRatePerHour}
+                  onHoursChange={setForwardHoursPerWeek}
+                />
               )}
 
-              {!agencyMode && (
-              <section className="category concierge-section">
-                <div className="category-title">
-                  <h3>Support</h3>
-                  <span className="category-meta">Services</span>
-                </div>
-
-                <div className="concierge-subhead">
-                  <h4>Path 1 — Standard</h4>
-                  <p>
-                    Ongoing engineering support. Annual is ~10% off quarterly
-                    annualized.
-                  </p>
-                </div>
-                <div
-                  className="mode-picker path1-billing-picker"
-                  role="radiogroup"
-                  aria-label="Path 1 billing period"
-                >
-                  <button
-                    type="button"
-                    className={`mode-option${path1BillingPeriod === 'quarter' ? ' active' : ''}`}
-                    role="radio"
-                    aria-checked={path1BillingPeriod === 'quarter'}
-                    onClick={() => setPath1BillingPeriod('quarter')}
-                  >
-                    <strong>Quarterly</strong>
-                    <span>Billed each quarter</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`mode-option${path1BillingPeriod === 'year' ? ' active' : ''}`}
-                    role="radio"
-                    aria-checked={path1BillingPeriod === 'year'}
-                    onClick={() => setPath1BillingPeriod('year')}
-                  >
-                    <strong>Annually</strong>
-                    <span>~10% off vs quarterly × 4</span>
-                  </button>
-                </div>
-                <div className="items">
-                  {PATH1_TIERS.map((tier) => {
-                    const selected = selectedPath1Id === tier.id
-                    const price = getPath1ListPrice(tier, path1BillingPeriod)
-                    const hourly = getPath1ImpliedHourly(
-                      price,
-                      tier,
-                      path1BillingPeriod,
-                    )
-                    const periodLabel = getPath1PeriodLabel(path1BillingPeriod)
-                    return (
-                      <button
-                        key={tier.id}
-                        type="button"
-                        className={`item radio${selected ? ' selected' : ''}`}
-                        onClick={() => toggleSupport(tier.id)}
-                        aria-pressed={selected}
-                      >
-                        <span className="check" aria-hidden="true" />
-                        <span className="item-body">
-                          <span className="item-name">
-                            {tier.name}
-                            <span className="pill">
-                              {tier.hoursPerWeek} hrs/wk
-                            </span>
-                          </span>
-                          <p className="item-desc">
-                            {formatUsd(Math.round(hourly))}/hr implied
-                            {path1BillingPeriod === 'quarter'
-                              ? ` · ${formatUsd(tier.annualPrice)} annual package`
-                              : ` · ${formatUsd(tier.quarterlyPrice)}/qtr`}
-                          </p>
-                        </span>
-                        <span className="item-price">
-                          {formatUsd(price)}
-                          <br />
-                          {periodLabel}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                <div className="concierge-subhead">
-                  <h4>Path 2 — Builds</h4>
-                  <p>
-                    Fixed-scope delivery. Price = ${engineerCostPerHour}/hr ×
-                    hours ÷ (1 − margin)
-                  </p>
-                </div>
-                <div className="items">
-                  {PATH2_PACKAGES.map((pkg) => {
-                    const selected = supportIds.includes(pkg.id)
-                    const isFlat = pkg.flatPrice != null
-                    const hours = path2Hours[pkg.id] ?? 0
-                    const targetMargin =
-                      path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
-                    const cost = getPath2Cost(hours, engineerCostPerHour)
-                    const listPrice =
-                      pkg.flatPrice != null
-                        ? pkg.flatPrice * evalsMultiplier
-                        : getPath2ListPrice(
-                            hours,
-                            targetMargin,
-                            engineerCostPerHour,
-                          )
-                    return (
-                      <div
-                        key={pkg.id}
-                        className={`item-wrap${selected ? ' open' : ''}`}
-                      >
-                        <button
-                          type="button"
-                          className={`item${selected ? ' selected' : ''}`}
-                          onClick={() => toggleSupport(pkg.id)}
-                          aria-pressed={selected}
-                        >
-                          <span className="check" aria-hidden="true">
-                            {selected ? <CheckIcon /> : null}
-                          </span>
-                          <span className="item-body">
-                            <span className="item-name">
-                              {pkg.name}
-                              <span className="pill">Outcome</span>
-                            </span>
-                          </span>
-                          <span className="item-price">
-                            {listPrice > 0 ? (
-                              <>
-                                {formatUsd(Math.round(listPrice))}
-                                <br />
-                                / one-time
-                              </>
-                            ) : (
-                              <>
-                                Set hours
-                                <br />
-                                / one-time
-                              </>
-                            )}
-                          </span>
-                        </button>
-                        {selected && !isFlat && (
-                          <div className="path2-pricing">
-                            <label
-                              className="scoped-price"
-                              htmlFor={`hours-${pkg.id}`}
-                            >
-                              Project hours
-                              <NumberField
-                                id={`hours-${pkg.id}`}
-                                value={
-                                  path2Hours[pkg.id] != null
-                                    ? path2Hours[pkg.id]!
-                                    : null
-                                }
-                                min={0}
-                                placeholder="0"
-                                emptyValue={null}
-                                onCommit={(next) =>
-                                  setPath2DeliveryHours(pkg.id, next)
-                                }
-                              />
-                            </label>
-                            <div
-                              className="mode-picker path2-margin-picker"
-                              role="radiogroup"
-                              aria-label={`${pkg.name} target margin`}
-                            >
-                              {PATH2_MARGIN_OPTIONS.map((rate) => (
-                                <button
-                                  key={rate}
-                                  type="button"
-                                  className={`mode-option${targetMargin === rate ? ' active' : ''}`}
-                                  role="radio"
-                                  aria-checked={targetMargin === rate}
-                                  onClick={() =>
-                                    setPath2TargetMargin(pkg.id, rate)
-                                  }
-                                >
-                                  <strong>{formatPercent(rate)}</strong>
-                                  <span>target margin</span>
-                                </button>
-                              ))}
-                            </div>
-                            <div className="path2-price-breakdown">
-                              <span>
-                                Cost {formatUsd(Math.round(cost))}
-                                {hours > 0
-                                  ? ` · ${hours} hrs × ${formatUsd(engineerCostPerHour)}/hr`
-                                  : ''}
-                              </span>
-                              <strong>
-                                {listPrice > 0
-                                  ? formatUsd(Math.round(listPrice))
-                                  : '—'}
-                              </strong>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="concierge-subhead">
-                  <h4>Mastra Audit</h4>
-                  <p>
-                    One-time scoping fee. Credits 100% against a Build within 90
-                    days.
-                  </p>
-                </div>
-                <div className="items">
-                  <button
-                    type="button"
-                    className={`item${auditSelected ? ' selected' : ''}`}
-                    onClick={() => toggleSupport(AUDIT_ID)}
-                    aria-pressed={auditSelected}
-                  >
-                    <span className="check" aria-hidden="true">
-                      {auditSelected ? <CheckIcon /> : null}
-                    </span>
-                    <span className="item-body">
-                      <span className="item-name">Mastra Audit</span>
-                    </span>
-                    <span className="item-price">
-                      {formatUsd(auditFee)}
-                      <br />
-                      / one-time
-                    </span>
-                  </button>
-                </div>
-              </section>
+              {internal && !agencyMode && (
+                <internal.SupportSection
+                  supportIds={supportIds}
+                  path1BillingPeriod={path1BillingPeriod}
+                  path2Hours={path2Hours}
+                  path2Margins={path2Margins}
+                  evalsMultiplier={evalsMultiplier}
+                  onToggle={toggleSupport}
+                  onBillingPeriodChange={setPath1BillingPeriod}
+                  onHoursChange={setPath2DeliveryHours}
+                  onMarginChange={setPath2TargetMargin}
+                />
               )}
             </div>
 
@@ -1335,8 +961,7 @@ export default function App() {
                                   <CloseIcon />
                                 </button>
                               )}
-                              {(line.id === 'agency-program' ||
-                                line.id === 'design-partner-program') && (
+                              {programs.some((p) => p.id === line.id) && (
                                 <button
                                   type="button"
                                   className="remove"
@@ -1357,7 +982,7 @@ export default function App() {
                           <span>Product total / year</span>
                           <span>{formatUsd(quote.annualTotal)}</span>
                         </div>
-                        {platformMargin && (
+                        {platformMargin && !isAgency && (
                           <div className="total-row muted">
                             <span>Platform margin</span>
                             <span>
@@ -1372,212 +997,35 @@ export default function App() {
                     </div>
                   )}
 
-                  {hasMastraForward && mastraForward && (
-                    <div className="summary-group">
-                      <h3 className="summary-group-title">Mastra Forward</h3>
-                      <ul className="order-lines">
-                        <li className="order-line">
-                          <div>
-                            <span className="order-line-name">
-                              Mastra Forward
-                            </span>
-                            <span className="order-line-meta">
-                              {formatUsd(mastraForward.sellRatePerHour)}/hr ·{' '}
-                              {mastraForward.hoursPerWeek} hrs/wk · cost{' '}
-                              {formatUsd(mastraForward.costPerHour)}/hr
-                            </span>
-                          </div>
-                          <span className="order-line-price">
-                            {formatUsd(
-                              Math.round(mastraForward.annualRevenue),
-                            )}
-                            <span className="order-line-meta">/ yr</span>
-                          </span>
-                          <button
-                            type="button"
-                            className="remove"
-                            onClick={() => setMastraForwardSelected(false)}
-                            aria-label="Remove Mastra Forward"
-                          >
-                            <CloseIcon />
-                          </button>
-                        </li>
-                      </ul>
-                      <div className="totals">
-                        <div className="total-row grand">
-                          <span>Mastra Forward / year</span>
-                          <span>
-                            {formatUsd(
-                              Math.round(mastraForward.annualRevenue),
-                            )}
-                          </span>
-                        </div>
-                        <div className="total-row muted">
-                          <span>Forward margin</span>
-                          <span>
-                            {formatUsd(
-                              Math.round(mastraForward.annualMargin),
-                            )}
-                            {mastraForward.marginRate != null
-                              ? ` (${formatPercent(mastraForward.marginRate)})`
-                              : ''}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                  {internal && hasMastraForward && mastraForward && (
+                    <internal.ForwardSummary
+                      quote={mastraForward}
+                      onRemove={() => setMastraForwardSelected(false)}
+                    />
                   )}
 
-                  {hasSupport && (
-                    <div className="summary-group">
-                      <h3 className="summary-group-title">Support</h3>
-                      <ul className="order-lines">
-                        {support.path1 && (
-                          <li className="order-line">
-                            <div>
-                              <span className="order-line-name">
-                                Path 1 · {support.path1.tier.name}
-                              </span>
-                              <span className="order-line-meta">
-                                {support.path1.tier.hoursPerWeek} hrs/wk ·{' '}
-                                {support.path1.billingPeriod === 'year'
-                                  ? 'Annual'
-                                  : 'Quarterly'}
-                              </span>
-                            </div>
-                            <span className="order-line-price">
-                              {formatUsd(support.path1.billedAmount)}
-                              <span className="order-line-meta">
-                                {support.path1.periodLabel}
-                              </span>
-                            </span>
-                            <button
-                              type="button"
-                              className="remove"
-                              onClick={() =>
-                                removeSupport(support.path1!.tier.id)
-                              }
-                              aria-label={`Remove Path 1 ${support.path1.tier.name}`}
-                            >
-                              <CloseIcon />
-                            </button>
-                          </li>
-                        )}
-                        {support.path2.map((line) => (
-                          <li className="order-line" key={line.package.id}>
-                            <div>
-                              <span className="order-line-name">
-                                Path 2 · {line.package.name}
-                              </span>
-                              <span className="order-line-meta">
-                                {line.flatPrice != null
-                                  ? line.flatMultiplier !== 1 && headcountBand
-                                    ? `${formatUsd(line.flatPrice)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(line.flatMultiplier)} · Flat one-time`
-                                    : 'Flat one-time'
-                                  : `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`}
-                              </span>
-                            </div>
-                            <span className="order-line-price">
-                              {line.listAmount > 0
-                                ? formatUsd(line.billedAmount)
-                                : '—'}
-                              <span className="order-line-meta">
-                                / one-time
-                              </span>
-                            </span>
-                            <button
-                              type="button"
-                              className="remove"
-                              onClick={() => removeSupport(line.package.id)}
-                              aria-label={`Remove ${line.package.name}`}
-                            >
-                              <CloseIcon />
-                            </button>
-                          </li>
-                        ))}
-                        {support.audit && (
-                          <li className="order-line">
-                            <div>
-                              <span className="order-line-name">
-                                Mastra Audit
-                              </span>
-                            </div>
-                            <span className="order-line-price">
-                              {formatUsd(support.audit.billedAmount)}
-                              <span className="order-line-meta">
-                                / one-time
-                              </span>
-                            </span>
-                            <button
-                              type="button"
-                              className="remove"
-                              onClick={() => removeSupport(AUDIT_ID)}
-                              aria-label="Remove Mastra Audit"
-                            >
-                              <CloseIcon />
-                            </button>
-                          </li>
-                        )}
-                      </ul>
-                      <div className="totals">
-                        {support.path1 && (
-                          <div className="total-row grand">
-                            <span>
-                              Support /{' '}
-                              {support.path1.billingPeriod === 'year'
-                                ? 'year'
-                                : 'quarter'}
-                            </span>
-                            <span>{formatUsd(support.path1Total)}</span>
-                          </div>
-                        )}
-                        {(support.path2.length > 0 || support.audit) && (
-                          <div
-                            className={`total-row${support.path1 ? '' : ' grand'}`}
-                          >
-                            <span>Support one-time</span>
-                            <span>{formatUsd(support.oneTimeTotal)}</span>
-                          </div>
-                        )}
-                        {support.path1 && (
-                          <div className="total-row muted">
-                            <span>Path 1 margin</span>
-                            <span>
-                              {formatUsd(margin.path1Margin)}
-                              {margin.path1MarginRate != null
-                                ? ` (${formatPercent(margin.path1MarginRate)})`
-                                : ''}
-                            </span>
-                          </div>
-                        )}
-                        {margin.path2.map((row) => (
-                          <div
-                            className="total-row muted"
-                            key={`margin-${row.id}`}
-                          >
-                            <span>Path 2 · {row.name} margin</span>
-                            <span>
-                              {formatUsd(Math.round(row.margin))}
-                              {row.marginRate != null
-                                ? ` (${formatPercent(row.marginRate)})`
-                                : ''}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                  {internal && hasSupport && support && (
+                    <internal.SupportSummary
+                      support={support}
+                      headcountBand={headcountBand}
+                      onRemove={removeSupport}
+                    />
                   )}
 
-                  <button
-                    type="button"
-                    className="clear-btn confirm-btn"
-                    onClick={() => {
-                      if (!orderSnapshot) return
-                      setReviewSnapshot(orderSnapshot)
-                      setPage('review')
-                    }}
-                  >
-                    Submit order
-                  </button>
+                  {/* Agencies can price deals but not submit orders. */}
+                  {!isAgency && (
+                    <button
+                      type="button"
+                      className="clear-btn confirm-btn"
+                      onClick={() => {
+                        if (!orderSnapshot) return
+                        setReviewSnapshot(orderSnapshot)
+                        setPage('review')
+                      }}
+                    >
+                      Submit order
+                    </button>
+                  )}
                 </>
               ) : (
                 <p className="summary-empty">

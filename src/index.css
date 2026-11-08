@@ -131,6 +131,26 @@ button {
     border-color 140ms ease;
 }
 
+.nav-user {
+  margin-left: 0.75rem;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+@media (max-width: 720px) {
+  .nav-user {
+    display: none;
+  }
+}
+
+a.nav-tab {
+  text-decoration: none;
+}
+
 .nav-tab:hover {
   color: var(--text);
   background: var(--surface-3);
@@ -140,6 +160,123 @@ button {
   color: var(--text);
   background: var(--surface-3);
   border-color: var(--border-strong);
+}
+
+.nav-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  min-width: 1.2rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: var(--green-dim);
+  color: var(--green);
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+.access-stack {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 820px;
+  margin-bottom: 3rem;
+}
+
+.access-empty {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.access-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.access-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.access-item:last-child {
+  border-bottom: none;
+}
+
+.access-item-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.access-email {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.access-message {
+  margin: 0.45rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.access-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.access-btn {
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 0.45rem 0.7rem;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.access-btn:hover:not(:disabled) {
+  background: var(--surface-4);
+  color: var(--text);
+}
+
+.access-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.access-btn.approve {
+  background: color-mix(in srgb, var(--green) 18%, var(--surface-3));
+  border-color: color-mix(in srgb, var(--green) 35%, var(--border-strong));
+  color: var(--green);
+}
+
+.access-btn.deny:hover:not(:disabled) {
+  color: var(--red);
+}
+
+.access-toggle {
+  display: flex;
+  gap: 0.35rem;
+}
+
+@media (max-width: 640px) {
+  .access-item {
+    grid-template-columns: 1fr;
+  }
+
+  .access-actions {
+    justify-content: flex-start;
+  }
 }
 
 .review-page {

@@ -5,10 +5,12 @@ import {
   formatOrderEmailText,
   type OrderContactDetails,
   type OrderSnapshot,
+  type OrderSubmitter,
 } from '../src/orderSnapshot'
 
 export interface SendOrderEmailInput extends OrderContactDetails {
   order: OrderSnapshot
+  submitter?: OrderSubmitter
   apiKey: string
   from?: string
 }
@@ -32,11 +34,15 @@ export async function sendOrderEmail({
   pointOfContactName,
   pointOfContactEmail,
   notes = '',
+  submitter,
   apiKey,
   from = process.env.RESEND_FROM || 'Mastra Pricing <onboarding@resend.dev>',
 }: SendOrderEmailInput): Promise<{ id: string }> {
   const contact: OrderContactDetails = {
-    accountOwner: requireField('Submission by', accountOwner),
+    accountOwner: requireField(
+      'Submission by',
+      accountOwner?.trim() ? accountOwner : submitter?.email,
+    ),
     leadCompanyName: requireField('Customer name', leadCompanyName),
     pointOfContactName: optionalField(pointOfContactName),
     pointOfContactEmail: optionalField(pointOfContactEmail),
@@ -53,8 +59,8 @@ export async function sendOrderEmail({
     from,
     to: [...ORDER_EMAIL_RECIPIENTS],
     subject,
-    text: formatOrderEmailText(order, contact),
-    html: formatOrderEmailHtml(order, contact),
+    text: formatOrderEmailText(order, contact, submitter),
+    html: formatOrderEmailHtml(order, contact, submitter),
   })
 
   if (error) {

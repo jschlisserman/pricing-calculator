@@ -1,4 +1,4 @@
-import { formatUsd } from './pricing'
+import { formatUsd } from '../pricing'
 
 export type Path1TierId =
   | 'support-path1-small'
@@ -78,6 +78,13 @@ export function buildMastraForwardQuote(
     annualMargin,
     marginRate,
   }
+}
+
+/** True once a Forward quote has both a bill rate and hours. */
+export function isForwardBillable(
+  quote: MastraForwardQuote | null,
+): quote is MastraForwardQuote {
+  return quote != null && quote.hoursPerWeek > 0 && quote.sellRatePerHour > 0
 }
 
 export interface Path1Tier {

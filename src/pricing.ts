@@ -395,6 +395,7 @@ export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] =
   })
 
 // —— Programs (annual, not discounted, hidden in agency mode) ——
+// Program prices are internal-only and live in src/internal/programs.ts.
 
 export type ProgramId = 'agency-program' | 'design-partner-program'
 
@@ -405,21 +406,6 @@ export interface Program {
   /** Fixed annual program fee. */
   annualFee: number
 }
-
-export const PROGRAMS: Program[] = [
-  {
-    id: 'agency-program',
-    name: 'Mastra Agency Program',
-    description: 'Annual program for agency partners building on Mastra.',
-    annualFee: 10_000,
-  },
-  {
-    id: 'design-partner-program',
-    name: 'Design Partner Program',
-    description: 'Annual design partner program with the Mastra team.',
-    annualFee: 12_000,
-  },
-]
 
 /** Agency mode: 30% off plan and add-ons (not usage overage). */
 export const AGENCY_MODE_DISCOUNT = 0.3
@@ -489,7 +475,6 @@ export interface PlatformUsageMetric {
   id: string
   name: string
   unitCost: number
-  deliveryUnitCost: number
   unitLabel: string
   includedNote?: string
 }
@@ -499,7 +484,6 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     id: 'observability-events',
     name: 'Observability Events',
     unitCost: 0.00008,
-    deliveryUnitCost: 0.0000023,
     unitLabel: 'event',
     includedNote: 'First 1,000,000 events free outside package includes',
   },
@@ -507,7 +491,6 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     id: 'data-egress',
     name: 'Data Egress (GB)',
     unitCost: 0.8,
-    deliveryUnitCost: 0.05,
     unitLabel: 'GB',
     includedNote: 'First 100 GB free outside package includes',
   },
@@ -515,7 +498,6 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     id: 'cpu-time',
     name: 'CPU Time (Hour)',
     unitCost: 0.25,
-    deliveryUnitCost: 0.027792,
     unitLabel: 'hour',
     includedNote: 'First 250 hours free outside package includes',
   },
@@ -523,21 +505,18 @@ export const PLATFORM_USAGE_METRICS: PlatformUsageMetric[] = [
     id: 'rows-written',
     name: 'Rows Written (LibSQL)',
     unitCost: 0.000002,
-    deliveryUnitCost: 0.000001,
     unitLabel: 'row',
   },
   {
     id: 'compute-hours',
     name: 'Compute Hours (Postgres)',
     unitCost: 0.4,
-    deliveryUnitCost: 0.22,
     unitLabel: 'hour',
   },
   {
     id: 'data-storage',
     name: 'Data Storage GB',
     unitCost: 0.75,
-    deliveryUnitCost: 0.35,
     unitLabel: 'GB',
   },
 ]
@@ -708,87 +687,6 @@ export function buildPlatformUsageLines(
   }).filter((line) => line.additionalAmount > 0)
 }
 
-export function costOfUsageAmounts(amounts: PlatformUsageAmounts): number {
-  return PLATFORM_USAGE_METRICS.reduce((sum, metric) => {
-    const qty = Math.max(0, amounts[metric.id] ?? 0)
-    return sum + qty * metric.deliveryUnitCost
-  }, 0)
-}
-
-export interface PlatformUsageCostLine {
-  metric: PlatformUsageMetric
-  amount: number
-  deliveryUnitCost: number
-  cost: number
-}
-
-export function buildUsageCostLines(
-  amounts: PlatformUsageAmounts,
-): PlatformUsageCostLine[] {
-  return PLATFORM_USAGE_METRICS.map((metric) => {
-    const amount = Math.max(0, amounts[metric.id] ?? 0)
-    return {
-      metric,
-      amount,
-      deliveryUnitCost: metric.deliveryUnitCost,
-      cost: amount * metric.deliveryUnitCost,
-    }
-  }).filter((line) => line.amount > 0)
-}
-
-export interface PlatformMargin {
-  revenue: number
-  additionalRevenue: number
-  includeCost: number
-  additionalCost: number
-  totalCost: number
-  margin: number
-  marginRate: number | null
-  includeLines: PlatformUsageCostLine[]
-  additionalCostLines: PlatformUsageCostLine[]
-  additionalRevenueLines: PlatformUsageLine[]
-}
-
-export function buildPlatformMargin(
-  productAnnualTotal: number,
-  includes: PlatformUsageAmounts,
-  additional: PlatformUsageAmounts,
-): PlatformMargin {
-  const includeLines = buildUsageCostLines(includes).map((line) => ({
-    ...line,
-    cost: line.cost * USAGE_MONTHS_PER_YEAR,
-  }))
-  const additionalCostLines = buildUsageCostLines(additional).map((line) => ({
-    ...line,
-    cost: line.cost * USAGE_MONTHS_PER_YEAR,
-  }))
-  const additionalRevenueLines = buildPlatformUsageLines(additional)
-  const includeCost = includeLines.reduce((sum, line) => sum + line.cost, 0)
-  const additionalCost = additionalCostLines.reduce(
-    (sum, line) => sum + line.cost,
-    0,
-  )
-  const additionalRevenue = additionalRevenueLines.reduce(
-    (sum, line) => sum + line.cost,
-    0,
-  )
-  const totalCost = includeCost + additionalCost
-  const revenue = productAnnualTotal
-  const margin = revenue - totalCost
-  return {
-    revenue,
-    additionalRevenue,
-    includeCost,
-    additionalCost,
-    totalCost,
-    margin,
-    marginRate: revenue > 0 ? margin / revenue : null,
-    includeLines,
-    additionalCostLines,
-    additionalRevenueLines,
-  }
-}
-
 // —— Quote ——
 
 export interface QuoteLine {
@@ -844,7 +742,8 @@ export interface Quote {
 export interface BuildQuoteInput {
   planId: PlanId | null
   selectedAddonIds: AddonId[]
-  selectedProgramIds?: ProgramId[]
+  /** Selected annual programs (internal edition only). */
+  programs?: Program[]
   /** Company headcount for size multipliers; null/undefined = 1.0×. */
   headcount?: number | null
   /** Trace Intelligence pool (analyzed traces/mo). */
@@ -999,9 +898,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     })
   }
 
-  const programs = agencyMode
-    ? []
-    : PROGRAMS.filter((p) => input.selectedProgramIds?.includes(p.id))
+  const programs = agencyMode ? [] : (input.programs ?? [])
   const programTotal = programs.reduce((sum, p) => sum + p.annualFee, 0)
 
   for (const program of programs) {

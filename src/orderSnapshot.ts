@@ -32,6 +32,12 @@ export interface OrderContactDetails {
   notes?: string
 }
 
+/** Verified identity of the signed-in user, set server-side from the session. */
+export interface OrderSubmitter {
+  email: string
+  role: 'internal' | 'agency'
+}
+
 export interface SubmitOrderRequest extends OrderContactDetails {
   order: OrderSnapshot
 }
@@ -66,6 +72,7 @@ function displayOrNone(value: string): string {
 export function formatOrderEmailText(
   order: OrderSnapshot,
   contact: OrderContactDetails,
+  submitter?: OrderSubmitter,
 ): string {
   const notes = contact.notes?.trim() ?? ''
   const sections: string[] = [
@@ -73,6 +80,9 @@ export function formatOrderEmailText(
     '',
     'Account details',
     `Submission by: ${displayOrNone(contact.accountOwner)}`,
+    ...(submitter
+      ? [`Signed in as: ${submitter.email} (${submitter.role})`]
+      : []),
     `Customer name: ${contact.leadCompanyName}`,
     `Point of contact name: ${displayOrNone(contact.pointOfContactName)}`,
     `Point of contact email address: ${displayOrNone(contact.pointOfContactEmail)}`,
@@ -130,6 +140,7 @@ export function formatOrderEmailText(
 export function formatOrderEmailHtml(
   order: OrderSnapshot,
   contact: OrderContactDetails,
+  submitter?: OrderSubmitter,
 ): string {
   const esc = (value: string) =>
     value
@@ -207,6 +218,7 @@ export function formatOrderEmailHtml(
     <h1 style="font-size:22px;margin:0 0 16px">New pricing calculator order</h1>
     <h2 style="font-size:16px;margin:0 0 8px">Account details</h2>
     <p><strong>Submission by:</strong> ${contact.accountOwner.trim() ? esc(contact.accountOwner.trim()) : '<span style="color:#888">(none)</span>'}</p>
+    ${submitter ? `<p><strong>Signed in as:</strong> ${esc(submitter.email)} (${submitter.role})</p>` : ''}
     <p><strong>Customer name:</strong> ${esc(contact.leadCompanyName)}</p>
     <p><strong>Point of contact name:</strong> ${contact.pointOfContactName.trim() ? esc(contact.pointOfContactName.trim()) : '<span style="color:#888">(none)</span>'}</p>
     <p><strong>Point of contact email address:</strong> ${contact.pointOfContactEmail.trim() ? esc(contact.pointOfContactEmail.trim()) : '<span style="color:#888">(none)</span>'}</p>

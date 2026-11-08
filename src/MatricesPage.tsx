@@ -1,4 +1,4 @@
-import { PATH2_PACKAGES, PATH2_EVALS_ID } from './concierge'
+import { useInternalEdition } from './edition'
 import {
   ADDON_HEADCOUNT_MULTIPLIERS,
   ADDONS,
@@ -43,17 +43,19 @@ const ROWS: MatrixRow[] = [
   ),
 ]
 
-const evalsPackage = PATH2_PACKAGES.find((p) => p.id === PATH2_EVALS_ID)!
-const EVALS_ROW: MatrixRow = {
-  name: 'Evals (Path 2)',
-  note: 'Support · one-time',
-  baseAnnual: evalsPackage.flatPrice ?? 0,
-  multipliers: EVALS_HEADCOUNT_MULTIPLIERS,
-}
-
-const MULTIPLIER_ROWS: MatrixRow[] = [...ROWS, EVALS_ROW]
-
 export default function MatricesPage() {
+  // Evals is a support service, so it only appears in the internal app.
+  const internal = useInternalEdition()
+  const evalsRow: MatrixRow | null = internal
+    ? {
+        name: 'Evals (Path 2)',
+        note: 'Support · one-time',
+        baseAnnual: internal.evalsBasePrice,
+        multipliers: EVALS_HEADCOUNT_MULTIPLIERS,
+      }
+    : null
+  const multiplierRows: MatrixRow[] = evalsRow ? [...ROWS, evalsRow] : ROWS
+
   return (
     <>
       <section className="hero animate-in delay-1">
@@ -84,7 +86,7 @@ export default function MatricesPage() {
                 </tr>
               </thead>
               <tbody>
-                {MULTIPLIER_ROWS.map((row) => (
+                {multiplierRows.map((row) => (
                   <tr key={row.name}>
                     <th scope="row">
                       {row.name}
@@ -154,48 +156,50 @@ export default function MatricesPage() {
           </p>
         </section>
 
-        <section className="matrix-card">
-          <h2>Evals (Path 2) — one-time price</h2>
-          <div className="matrix-wrap">
-            <table className="matrix-table">
-              <thead>
-                <tr>
-                  <th scope="col">Product</th>
-                  <th scope="col">Base</th>
-                  {HEADCOUNT_BANDS.map((band) => (
-                    <th scope="col" key={band.id}>
-                      {band.name}
-                      <span className="matrix-band-range">
-                        {band.rangeLabel}
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th scope="row">
-                    {EVALS_ROW.name}
-                    {EVALS_ROW.note && (
-                      <span className="matrix-row-note">{EVALS_ROW.note}</span>
-                    )}
-                  </th>
-                  <td>{formatUsd(EVALS_ROW.baseAnnual)}</td>
-                  {HEADCOUNT_BANDS.map((band) => (
-                    <td key={band.id}>
-                      {formatUsd(
-                        Math.round(
-                          EVALS_ROW.baseAnnual *
-                            EVALS_ROW.multipliers[band.id],
-                        ),
+        {evalsRow && (
+          <section className="matrix-card">
+            <h2>Evals (Path 2) — one-time price</h2>
+            <div className="matrix-wrap">
+              <table className="matrix-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col">Base</th>
+                    {HEADCOUNT_BANDS.map((band) => (
+                      <th scope="col" key={band.id}>
+                        {band.name}
+                        <span className="matrix-band-range">
+                          {band.rangeLabel}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">
+                      {evalsRow.name}
+                      {evalsRow.note && (
+                        <span className="matrix-row-note">{evalsRow.note}</span>
                       )}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+                    </th>
+                    <td>{formatUsd(evalsRow.baseAnnual)}</td>
+                    {HEADCOUNT_BANDS.map((band) => (
+                      <td key={band.id}>
+                        {formatUsd(
+                          Math.round(
+                            evalsRow.baseAnnual *
+                              evalsRow.multipliers[band.id],
+                          ),
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
       </div>
     </>
   )
