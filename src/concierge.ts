@@ -25,6 +25,19 @@ export const DEFAULT_ENGINEER_COST_PER_HOUR = 110
 /** Weeks per year used to annualize Mastra Forward hours/week. */
 export const FORWARD_WEEKS_PER_YEAR = 52
 
+/** Selectable Mastra Forward bill rates ($/hour). */
+export const FORWARD_RATE_OPTIONS = [
+  140, 160, 180, 200, 225, 250, 275, 300,
+] as const
+
+/** Selectable Mastra Forward hours per week. */
+export const FORWARD_HOURS_OPTIONS = [
+  2, 4, 6, 8, 10, 12, 15, 20, 40,
+] as const
+
+export type ForwardRateOption = (typeof FORWARD_RATE_OPTIONS)[number]
+export type ForwardHoursOption = (typeof FORWARD_HOURS_OPTIONS)[number]
+
 export interface MastraForwardInput {
   /** Customer bill rate ($/hour). */
   sellRatePerHour: number | null

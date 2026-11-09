@@ -58,10 +58,11 @@ Enter the customer's company headcount on the order builder. It maps to a band (
 
 ### Programs
 
-Shown below Add-ons, hidden while agency mode is on. Fixed annual fees, not discounted and not multiplied by headcount. They do not count as add-ons for the bundle discount.
+Shown below Add-ons, hidden while agency mode is on. Fixed annual fees (Agency / Design Partner) are not discounted and not multiplied by headcount. They do not count as add-ons for the bundle discount.
 
 - **Mastra Agency Program** — $10,000/yr
 - **Design Partner Program** — $12,000/yr
+- **Mastra Forward** — select bill rate ($140–$300/hr) and hours/week (2–40). Cost basis $110/hr. Annual = rate × hours/week × 52. Margin shown once both are selected.
 
 ### Platform usage
 
@@ -74,10 +75,6 @@ When a plan is bundled with any add-on, the **plan** gets **15% off**. Add-ons a
 ### Agency mode
 
 Optional toggle on the order builder. Applies **30% off** plan and add-ons. Platform usage overage is not discounted. While agency mode is on, Support / services are hidden.
-
-### Mastra Forward
-
-Shown above Support, hidden while agency mode is on. Enter bill rate ($/hour) and hours/week. Cost basis is $110/hr. Annual = rate × hours/week × 52. Margin = revenue − cost (shown once both inputs are set).
 
 ### Support
 

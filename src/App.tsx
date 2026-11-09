@@ -3,6 +3,8 @@ import {
   AUDIT_ID,
   DEFAULT_ENGINEER_COST_PER_HOUR,
   DEFAULT_PATH2_MARGIN,
+  FORWARD_HOURS_OPTIONS,
+  FORWARD_RATE_OPTIONS,
   PATH1_TIERS,
   PATH2_EVALS_ID,
   PATH2_MARGIN_OPTIONS,
@@ -919,17 +921,7 @@ export default function App() {
                         </button>
                       )
                     })}
-                  </div>
-                </section>
-              )}
 
-              {!agencyMode && (
-                <section className="category">
-                  <div className="category-title">
-                    <h3>Mastra Forward</h3>
-                    <span className="category-meta">Services</span>
-                  </div>
-                  <div className="items">
                     <div
                       className={`item-wrap${mastraForwardSelected ? ' open' : ''}`}
                     >
@@ -952,61 +944,85 @@ export default function App() {
                           </p>
                         </span>
                         <span className="item-price">
-                          {hasMastraForward
-                            ? (
-                                <>
-                                  {formatUsd(
-                                    Math.round(mastraForward!.annualRevenue),
-                                  )}
-                                  <br />
-                                  / year
-                                </>
-                              )
-                            : (
-                                <>
-                                  Set rate
-                                  <br />
-                                  &amp; hours
-                                </>
+                          {hasMastraForward ? (
+                            <>
+                              {formatUsd(
+                                Math.round(mastraForward!.annualRevenue),
                               )}
+                              <br />
+                              / year
+                            </>
+                          ) : (
+                            <>
+                              Select rate
+                              <br />
+                              &amp; hours
+                            </>
+                          )}
                         </span>
                       </button>
                       {mastraForwardSelected && (
                         <div className="path2-pricing">
-                          <label
-                            className="scoped-price"
-                            htmlFor="forward-sell-rate"
-                          >
-                            $/hour
-                            <NumberField
-                              id="forward-sell-rate"
-                              value={forwardSellRatePerHour}
-                              min={0}
-                              placeholder="e.g. 220"
-                              emptyValue={null}
-                              onCommit={(next) =>
-                                setForwardSellRatePerHour(next)
-                              }
+                          <div>
+                            <div className="concierge-subhead">
+                              <h4>$/hour</h4>
+                            </div>
+                            <div
+                              className="mode-picker forward-option-picker"
+                              role="radiogroup"
                               aria-label="Mastra Forward bill rate per hour"
-                            />
-                          </label>
-                          <label
-                            className="scoped-price"
-                            htmlFor="forward-hours-week"
-                          >
-                            Hours / week
-                            <NumberField
-                              id="forward-hours-week"
-                              value={forwardHoursPerWeek}
-                              min={0}
-                              placeholder="e.g. 10"
-                              emptyValue={null}
-                              onCommit={(next) =>
-                                setForwardHoursPerWeek(next)
-                              }
+                            >
+                              {FORWARD_RATE_OPTIONS.map((rate) => (
+                                <button
+                                  key={rate}
+                                  type="button"
+                                  className={`mode-option${
+                                    forwardSellRatePerHour === rate
+                                      ? ' active'
+                                      : ''
+                                  }`}
+                                  role="radio"
+                                  aria-checked={forwardSellRatePerHour === rate}
+                                  onClick={() =>
+                                    setForwardSellRatePerHour(rate)
+                                  }
+                                >
+                                  <strong>{formatUsd(rate)}</strong>
+                                  <span>/ hr</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="concierge-subhead">
+                              <h4>Hours / week</h4>
+                            </div>
+                            <div
+                              className="mode-picker forward-option-picker"
+                              role="radiogroup"
                               aria-label="Mastra Forward hours per week"
-                            />
-                          </label>
+                            >
+                              {FORWARD_HOURS_OPTIONS.map((hours) => (
+                                <button
+                                  key={hours}
+                                  type="button"
+                                  className={`mode-option${
+                                    forwardHoursPerWeek === hours
+                                      ? ' active'
+                                      : ''
+                                  }`}
+                                  role="radio"
+                                  aria-checked={forwardHoursPerWeek === hours}
+                                  onClick={() =>
+                                    setForwardHoursPerWeek(hours)
+                                  }
+                                >
+                                  <strong>{hours}</strong>
+                                  <span>hrs / wk</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                           {hasMastraForward && mastraForward && (
                             <div className="path2-price-breakdown">
                               <span>

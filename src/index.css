@@ -282,6 +282,27 @@ button {
   gap: 0.4rem;
 }
 
+.forward-option-picker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.forward-option-picker .mode-option {
+  padding: 0.45rem 0.35rem;
+  text-align: center;
+}
+
+.forward-option-picker .mode-option span {
+  font-size: 0.65rem;
+}
+
+@media (max-width: 720px) {
+  .forward-option-picker {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .path2-margin-picker .mode-option {
   padding: 0.45rem 0.35rem;
   text-align: center;
