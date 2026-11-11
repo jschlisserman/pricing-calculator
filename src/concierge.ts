@@ -25,6 +25,12 @@ export const DEFAULT_ENGINEER_COST_PER_HOUR = 110
 /** Weeks per year used to annualize Mastra Forward hours/week. */
 export const FORWARD_WEEKS_PER_YEAR = 52
 
+/** Weeks per quarter used for Startup Forward quarterly billing. */
+export const FORWARD_WEEKS_PER_QUARTER = PATH1_WEEKS_PER_QUARTER
+
+/** Fixed Mastra Forward bill rate for embedded engineering hours ($/hour). */
+export const FORWARD_EMBEDDED_SELL_RATE_PER_HOUR = 210
+
 /** Selectable Mastra Forward bill rates ($/hour). */
 export const FORWARD_RATE_OPTIONS = [
   140, 160, 180, 200, 225, 250, 275, 300,
@@ -37,6 +43,133 @@ export const FORWARD_HOURS_OPTIONS = [
 
 export type ForwardRateOption = (typeof FORWARD_RATE_OPTIONS)[number]
 export type ForwardHoursOption = (typeof FORWARD_HOURS_OPTIONS)[number]
+/**
+ * Hours commitment length for Forward embedded engineering.
+ * Billing is always an annual subscription; this only changes how many
+ * weeks of hours are in that annual price (13 vs 52).
+ */
+export type ForwardHoursCommitment = 'quarter' | 'year'
+/** @deprecated Use ForwardHoursCommitment */
+export type ForwardBillingPeriod = ForwardHoursCommitment
+
+export function getForwardCommitmentWeeks(
+  commitment: ForwardHoursCommitment,
+): number {
+  return commitment === 'year'
+    ? FORWARD_WEEKS_PER_YEAR
+    : FORWARD_WEEKS_PER_QUARTER
+}
+
+/** @deprecated Use getForwardCommitmentWeeks */
+export function getForwardPeriodWeeks(
+  period: ForwardHoursCommitment,
+): number {
+  return getForwardCommitmentWeeks(period)
+}
+
+/** Forward is always billed as an annual subscription. */
+export function getForwardPeriodLabel(
+  _commitment?: ForwardHoursCommitment,
+): '/ yr' {
+  return '/ yr'
+}
+
+export function getForwardPeriodShortLabel(
+  _commitment?: ForwardHoursCommitment,
+): string {
+  return '/yr'
+}
+
+/**
+ * Annual Forward subscription for embedded engineering:
+ * hours/wk × sell rate × commitment weeks (13 quarter / 52 year).
+ */
+export function getForwardEmbeddedAmount(
+  hoursPerWeek: number,
+  commitment: ForwardHoursCommitment = 'year',
+  sellRatePerHour = FORWARD_EMBEDDED_SELL_RATE_PER_HOUR,
+): number {
+  return Math.round(
+    Math.max(0, hoursPerWeek) *
+      sellRatePerHour *
+      getForwardCommitmentWeeks(commitment),
+  )
+}
+
+/** Annual Forward embedded-engineering fee: hours/wk × sell rate × 52. */
+export function getForwardEmbeddedAnnual(
+  hoursPerWeek: number,
+  sellRatePerHour = FORWARD_EMBEDDED_SELL_RATE_PER_HOUR,
+): number {
+  return getForwardEmbeddedAmount(hoursPerWeek, 'year', sellRatePerHour)
+}
+
+/** Exact hours/wk implied by an annual subscription at the fixed sell rate. */
+export function getForwardEmbeddedExactHours(
+  amount: number,
+  commitment: ForwardHoursCommitment = 'year',
+  sellRatePerHour = FORWARD_EMBEDDED_SELL_RATE_PER_HOUR,
+): number {
+  const denom = sellRatePerHour * getForwardCommitmentWeeks(commitment)
+  if (!(denom > 0)) return 0
+  return Math.max(0, amount) / denom
+}
+
+/** Nearest value in `options` to `target` (ties prefer the lower option). */
+export function nearestForwardHours(
+  targetHours: number,
+  options: ReadonlyArray<number> = FORWARD_HOURS_OPTIONS,
+): number {
+  if (options.length === 0) return Math.max(0, Math.round(targetHours))
+  let best = options[0]
+  let bestDist = Math.abs(options[0] - targetHours)
+  for (let i = 1; i < options.length; i++) {
+    const dist = Math.abs(options[i] - targetHours)
+    if (dist < bestDist || (dist === bestDist && options[i] < best)) {
+      best = options[i]
+      bestDist = dist
+    }
+  }
+  return best
+}
+
+/**
+ * Map an annual subscription amount to hours/wk for a commitment length,
+ * rounded to the nearest chip (2, 4, 6, 8, 10, 12, 15, 20, 40 by default).
+ */
+export function hoursFromForwardAmount(
+  amount: number,
+  commitment: ForwardHoursCommitment = 'year',
+  options: ReadonlyArray<number> = FORWARD_HOURS_OPTIONS,
+  sellRatePerHour = FORWARD_EMBEDDED_SELL_RATE_PER_HOUR,
+): number {
+  return nearestForwardHours(
+    getForwardEmbeddedExactHours(amount, commitment, sellRatePerHour),
+    options,
+  )
+}
+
+/** Engineer cost for Forward hours commitment: hours/wk × cost/hr × weeks. */
+export function getForwardEmbeddedCostAnnual(
+  hoursPerWeek: number,
+  commitment: ForwardHoursCommitment = 'year',
+  costPerHour = DEFAULT_ENGINEER_COST_PER_HOUR,
+): number {
+  return Math.round(
+    Math.max(0, hoursPerWeek) *
+      costPerHour *
+      getForwardCommitmentWeeks(commitment),
+  )
+}
+
+/** @deprecated Use hoursFromForwardAmount(..., 'year') */
+export function hoursFromForwardAnnual(
+  annual: number,
+  options: ReadonlyArray<number> = FORWARD_HOURS_OPTIONS,
+  sellRatePerHour = FORWARD_EMBEDDED_SELL_RATE_PER_HOUR,
+): number {
+  return hoursFromForwardAmount(annual, 'year', options, sellRatePerHour)
+}
 
 export interface MastraForwardInput {
   /** Customer bill rate ($/hour). */

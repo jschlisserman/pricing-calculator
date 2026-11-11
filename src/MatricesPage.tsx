@@ -1,5 +1,11 @@
 import { PATH2_PACKAGES, PATH2_EVALS_ID } from './concierge'
 import {
+  ENTERPRISE_FEATURES,
+  FORWARD_PLANS,
+  formatForwardPriceRange,
+  getForwardTraceIncludedMonthly,
+} from './forwardPlans'
+import {
   ADDON_HEADCOUNT_MULTIPLIERS,
   ADDONS,
   EVALS_HEADCOUNT_MULTIPLIERS,
@@ -65,6 +71,72 @@ export default function MatricesPage() {
       </section>
 
       <div className="matrix-stack animate-in delay-2">
+        <section className="matrix-card">
+          <h2>Mastra Forward plans</h2>
+          <div className="matrix-wrap">
+            <table className="matrix-table">
+              <thead>
+                <tr>
+                  <th scope="col">Plan</th>
+                  <th scope="col">Guidance / yr</th>
+                  <th scope="col">Hours / wk</th>
+                  <th scope="col">Features</th>
+                  <th scope="col">TI traces included</th>
+                </tr>
+              </thead>
+              <tbody>
+                {FORWARD_PLANS.map((plan) => {
+                  const featureNote =
+                    plan.featurePickCount > 0
+                      ? plan.includedFeatures.length > 0
+                        ? `${plan.includedFeatures
+                            .map(
+                              (id) =>
+                                ENTERPRISE_FEATURES.find((f) => f.id === id)
+                                  ?.name,
+                            )
+                            .filter(Boolean)
+                            .join(', ')} + pick ${plan.featurePickCount}`
+                        : `Pick ${plan.featurePickCount} of ${plan.featurePool.length}`
+                      : 'All enterprise features'
+                  const tiIncluded = getForwardTraceIncludedMonthly(plan)
+                  return (
+                    <tr key={plan.id}>
+                      <th scope="row">
+                        {plan.name}
+                        <span className="matrix-row-note">
+                          {plan.description}
+                        </span>
+                      </th>
+                      <td>{formatForwardPriceRange(plan)}</td>
+                      <td>
+                        {plan.hoursMax == null
+                          ? `${plan.hoursMin}+`
+                          : `${plan.hoursMin}–${plan.hoursMax}`}
+                      </td>
+                      <td>{featureNote}</td>
+                      <td>
+                        {tiIncluded.toLocaleString('en-US')}/mo
+                        {plan.id === 'startup' ? ' when picked' : ''}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="matrix-note">
+            Embedded engineering is always an annual subscription at $210/hr ×
+            hours/week × commitment weeks (13 for Startup 3-month hours, 52 for
+            12-month). Engineer cost ($110/hr × same weeks) is measured against
+            that annual price. Platform packages are paused for now. Trace
+            Intelligence includes 25k traces/mo on Growth and 50k on Enterprise
+            (10k when picked on Startup); margin COGS is $0.005/trace. Agent
+            Builder, Mastra Knowledge, and Trace Intelligence map to the same
+            add-ons when purchased outside Forward.
+          </p>
+        </section>
+
         <section className="matrix-card">
           <h2>Multipliers</h2>
           <div className="matrix-wrap">
@@ -149,8 +221,12 @@ export default function MatricesPage() {
           </div>
           <p className="matrix-note">
             Trace Intelligence uses progressive per-trace bands (first 10k/mo
-            at $0, then down through 10M); selecting it adds $3,000/yr to the
-            plan. Not multiplied by headcount.
+            at $0, then down through 10M); selecting it as an add-on adds
+            $3,000/yr to the plan. Not multiplied by headcount. When included
+            via Forward, the $3k uplift is waived; pool overage still bills.
+            Mastra Knowledge is volume-priced ($6K/KB/yr with 3 sources + 10GB
+            included; +$1K/yr per extra source; data $2.5K/$1.5K/$750 per 100GB
+            by band) and is not multiplied by headcount.
           </p>
         </section>
 

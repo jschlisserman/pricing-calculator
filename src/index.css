@@ -282,6 +282,11 @@ button {
   gap: 0.4rem;
 }
 
+.forward-plan-panel {
+  display: grid;
+  gap: 1.25rem;
+}
+
 .forward-option-picker {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

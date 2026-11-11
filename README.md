@@ -51,18 +51,22 @@ Enter the customer's company headcount on the order builder. It maps to a band (
 
 ### Add-ons
 
-- **Trace Intelligence** — (all plans; also available without a plan selected). Progressive per-trace bands: first 10k/mo at $0, then $0.016 → $0.002 through 10M (see calculator table; includes overage rates). When selected with a plan, **+$3,000/yr** is added to that plan. Pool cost = sum of each band × rate × 12.
+- **Trace Intelligence** — (all plans; also available without a plan selected). Progressive per-trace bands: first 10k/mo at $0, then $0.016 → $0.002 through 10M (see calculator table; includes overage rates). When selected with a plan, **+$3,000/yr** is added to that plan (waived when included via Forward). Pool cost = sum of each band × rate × 12.
 - **Agent Builder** — fixed $6,000/yr base (all plans), scaled by the headcount multiplier (same curve as BYO VPC / Private Cloud)
+- **Mastra Knowledge** — (all plans). **$6,000/KB/yr**; each KB includes **3 sources + 10GB**. Extra sources **$1,000/yr** each. Billable data (above includes) in 100GB blocks: **$2,500** up to 1TB, **$1,500** from 1–10TB, **$750** beyond. Not multiplied by headcount.
 - **Compliance** — fixed $5,000/yr base (Enterprise Platform only), scaled by the headcount multiplier
 - **Premium on-call support** — fixed $10,000/yr base (Enterprise plans: Enterprise Platform, Enterprise Self-Hosted; also available without a plan selected), scaled by the headcount multiplier
 
+### Mastra Forward
+
+Hidden while agency mode is on. Startup / Growth / Enterprise plans with hours/week chips. Embedded engineering is always an **annual subscription** at **$210/hr** × hours/week × commitment weeks (**13** for a 3-month hours commitment on Startup, **52** for 12 months). Cost basis $110/hr for margin (commitment weeks × cost, measured against the annual price). Feature picks: Agent Builder / Mastra Knowledge / Trace Intelligence. Trace Intelligence includes **25k traces/mo on Growth** and **50k on Enterprise** (10k when picked on Startup); overage still bills. TI margin uses COGS of **$0.005/trace** analyzed. Platform packages are paused for now. Features included by Forward are not charged again as add-ons. Legacy deployment SKUs and headcount multipliers remain available alongside Forward.
+
 ### Programs
 
-Shown below Add-ons, hidden while agency mode is on. Fixed annual fees (Agency / Design Partner) are not discounted and not multiplied by headcount. They do not count as add-ons for the bundle discount.
+Shown below Forward, hidden while agency mode is on. Fixed annual fees are not discounted and not multiplied by headcount. They do not count as add-ons for the bundle discount.
 
 - **Mastra Agency Program** — $10,000/yr
 - **Design Partner Program** — $12,000/yr
-- **Mastra Forward** — select bill rate ($140–$300/hr) and hours/week (2–40). Cost basis $110/hr. Annual = rate × hours/week × 52. Margin shown once both are selected.
 
 ### Platform usage
 

@@ -3,13 +3,18 @@ import {
   AUDIT_ID,
   DEFAULT_ENGINEER_COST_PER_HOUR,
   DEFAULT_PATH2_MARGIN,
+  FORWARD_EMBEDDED_SELL_RATE_PER_HOUR,
   FORWARD_HOURS_OPTIONS,
-  FORWARD_RATE_OPTIONS,
+  getForwardCommitmentWeeks,
+  getForwardEmbeddedAmount,
+  getForwardEmbeddedCostAnnual,
+  getForwardPeriodShortLabel,
+  hoursFromForwardAmount,
   PATH1_TIERS,
+  type ForwardHoursCommitment,
   PATH2_EVALS_ID,
   PATH2_MARGIN_OPTIONS,
   PATH2_PACKAGES,
-  buildMastraForwardQuote,
   buildSupportMargin,
   buildSupportQuote,
   getAuditFee,
@@ -28,11 +33,31 @@ import {
   type Path2PackageId,
 } from './concierge'
 import {
+  ENTERPRISE_FEATURES,
+  FORWARD_PLANS,
+  buildForwardQuote,
+  formatForwardPriceRange,
+  getForwardPlan,
+  getForwardPlanHoursOptions,
+  getForwardTraceIncludedMonthly,
+  type EnterpriseFeatureId,
+  type ForwardPlanId,
+} from './forwardPlans'
+import {
   ADDONS,
   AGENCY_MODE_DISCOUNT,
   DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
+  DEFAULT_KNOWLEDGE_CONFIG,
+  KNOWLEDGE_DATA_BANDS,
+  KNOWLEDGE_DATA_BLOCK_GB,
+  KNOWLEDGE_DATA_INCLUDED_GB_PER_KB,
+  KNOWLEDGE_KB_ANNUAL,
+  KNOWLEDGE_SOURCE_ANNUAL,
+  KNOWLEDGE_SOURCES_INCLUDED_PER_KB,
+  TRACE_COST_PER_TRACE,
   TRACE_INCLUDED_MONTHLY,
   TRACE_PLAN_UPLIFT_ANNUAL,
+  getTraceIntelligenceCostAnnual,
   PLANS,
   PLATFORM_PACKAGES,
   PROGRAMS,
@@ -51,12 +76,21 @@ import {
   getAgentLearningMonthly,
   getEvalsMultiplier,
   getHeadcountBand,
+  getKnowledgeAnnual,
+  getKnowledgeBillableDataGb,
+  getKnowledgeDataAnnual,
+  getKnowledgeExtraSources,
+  getKnowledgeIncludedDataGb,
+  getKnowledgeIncludedSources,
   getPlan,
   getPlanMultiplier,
   getTraceIntelligenceRatePer1k,
   isAddonAvailable,
+  isForwardMappedAddon,
+  normalizeKnowledgeConfig,
   platformConfigFromPackage,
   type AddonId,
+  type KnowledgeConfig,
   type PlanId,
   type ProgramId,
   type PlatformConfig,
@@ -106,18 +140,22 @@ export default function App() {
   const [agentLearningPoolMonthly, setAgentLearningPoolMonthly] = useState(
     DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
   )
+  const [knowledgeConfig, setKnowledgeConfig] = useState<KnowledgeConfig>(
+    DEFAULT_KNOWLEDGE_CONFIG,
+  )
   const [selectedPrograms, setSelectedPrograms] = useState<ProgramId[]>([])
   const [headcount, setHeadcount] = useState<number | null>(null)
   const headcountBand = getHeadcountBand(headcount)
   const evalsMultiplier = getEvalsMultiplier(headcount)
   const [agencyMode, setAgencyMode] = useState(false)
   const [mastraForwardSelected, setMastraForwardSelected] = useState(false)
-  const [forwardSellRatePerHour, setForwardSellRatePerHour] = useState<
-    number | null
-  >(null)
-  const [forwardHoursPerWeek, setForwardHoursPerWeek] = useState<number | null>(
-    null,
-  )
+  const [forwardPlanId, setForwardPlanId] = useState<ForwardPlanId>('startup')
+  const [forwardHoursPerWeek, setForwardHoursPerWeek] = useState(2)
+  const [forwardHoursCommitment, setForwardHoursCommitment] =
+    useState<ForwardHoursCommitment>('quarter')
+  const [forwardFeaturePicks, setForwardFeaturePicks] = useState<
+    EnterpriseFeatureId[]
+  >([])
   const [supportIds, setSupportIds] = useState<string[]>([])
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(() =>
     defaultPlatformConfig(0),
@@ -149,6 +187,120 @@ export default function App() {
     }
   }, [agencyMode])
 
+  const forwardPlan = getForwardPlan(forwardPlanId)
+  const forwardCommitment: ForwardHoursCommitment =
+    forwardPlan.allowsQuarterlyHours && forwardHoursCommitment === 'quarter'
+      ? 'quarter'
+      : 'year'
+  const forwardPlanAmount = getForwardEmbeddedAmount(
+    forwardHoursPerWeek,
+    forwardCommitment,
+  )
+  const forwardPeriodShort = getForwardPeriodShortLabel(forwardCommitment)
+  const forwardCommitmentWeeks = getForwardCommitmentWeeks(forwardCommitment)
+
+  const mastraForward = useMemo(
+    () =>
+      agencyMode || !mastraForwardSelected
+        ? null
+        : buildForwardQuote({
+            planId: forwardPlanId,
+            planAmount: forwardPlanAmount,
+            hoursPerWeek: forwardHoursPerWeek,
+            hoursCommitment: forwardCommitment,
+            featurePicks: forwardFeaturePicks,
+          }),
+    [
+      agencyMode,
+      mastraForwardSelected,
+      forwardPlanId,
+      forwardPlanAmount,
+      forwardHoursPerWeek,
+      forwardCommitment,
+      forwardFeaturePicks,
+    ],
+  )
+
+  const forwardIncludedAddonIds = useMemo((): AddonId[] => {
+    if (!mastraForward) return []
+    return mastraForward.includedFeatureIds.filter(isForwardMappedAddon)
+  }, [mastraForward])
+
+  const forwardTraceIncludedMonthly = useMemo(() => {
+    if (!forwardIncludedAddonIds.includes('trace-intelligence')) {
+      return TRACE_INCLUDED_MONTHLY
+    }
+    return getForwardTraceIncludedMonthly(forwardPlan)
+  }, [forwardIncludedAddonIds, forwardPlan])
+
+  const traceIncludedMonthly = forwardIncludedAddonIds.includes(
+    'trace-intelligence',
+  )
+    ? forwardTraceIncludedMonthly
+    : TRACE_INCLUDED_MONTHLY
+
+  const traceIntelligenceSelected =
+    selectedAddons.includes('trace-intelligence') ||
+    forwardIncludedAddonIds.includes('trace-intelligence')
+
+  const traceIntelligenceRevenueAnnual = useMemo(() => {
+    if (!traceIntelligenceSelected) return 0
+    const poolOverage = getAgentLearningAnnual(
+      agentLearningPoolMonthly,
+      traceIncludedMonthly,
+    )
+    const planUplift =
+      selectedAddons.includes('trace-intelligence') &&
+      !forwardIncludedAddonIds.includes('trace-intelligence') &&
+      planId != null
+        ? TRACE_PLAN_UPLIFT_ANNUAL
+        : 0
+    return poolOverage + planUplift
+  }, [
+    traceIntelligenceSelected,
+    agentLearningPoolMonthly,
+    traceIncludedMonthly,
+    selectedAddons,
+    forwardIncludedAddonIds,
+    planId,
+  ])
+
+  const traceIntelligenceCostAnnual = useMemo(() => {
+    if (!traceIntelligenceSelected) return 0
+    return getTraceIntelligenceCostAnnual(agentLearningPoolMonthly)
+  }, [traceIntelligenceSelected, agentLearningPoolMonthly])
+
+  const traceIntelligenceMargin = useMemo(() => {
+    if (!traceIntelligenceSelected) return null
+    const margin =
+      traceIntelligenceRevenueAnnual - traceIntelligenceCostAnnual
+    return {
+      revenue: traceIntelligenceRevenueAnnual,
+      cost: traceIntelligenceCostAnnual,
+      margin,
+      marginRate:
+        traceIntelligenceRevenueAnnual > 0
+          ? margin / traceIntelligenceRevenueAnnual
+          : null,
+    }
+  }, [
+    traceIntelligenceSelected,
+    traceIntelligenceRevenueAnnual,
+    traceIntelligenceCostAnnual,
+  ])
+
+  useEffect(() => {
+    if (forwardIncludedAddonIds.length === 0) return
+    setSelectedAddons((prev) =>
+      prev.filter((id) => !forwardIncludedAddonIds.includes(id)),
+    )
+  }, [forwardIncludedAddonIds])
+
+  useEffect(() => {
+    if (!forwardIncludedAddonIds.includes('trace-intelligence')) return
+    setAgentLearningPoolMonthly(forwardTraceIncludedMonthly)
+  }, [forwardIncludedAddonIds, forwardTraceIncludedMonthly])
+
   const quote = useMemo(
     () =>
       buildQuote({
@@ -157,8 +309,11 @@ export default function App() {
         selectedProgramIds: selectedPrograms,
         headcount,
         agentLearningPoolMonthly,
+        traceIncludedMonthly,
+        knowledgeConfig,
         agencyMode,
         platformConfig,
+        includedByForwardIds: forwardIncludedAddonIds,
       }),
     [
       planId,
@@ -166,10 +321,53 @@ export default function App() {
       selectedPrograms,
       headcount,
       agentLearningPoolMonthly,
+      traceIncludedMonthly,
+      knowledgeConfig,
       agencyMode,
       platformConfig,
+      forwardIncludedAddonIds,
     ],
   )
+
+  const forwardMargin = useMemo(() => {
+    if (!mastraForward) return null
+    const engCost = getForwardEmbeddedCostAnnual(
+      mastraForward.hoursPerWeek,
+      mastraForward.hoursCommitment,
+      engineerCostPerHour,
+    )
+    const engRevenue = mastraForward.planAmount
+    const tiOnForward = forwardIncludedAddonIds.includes('trace-intelligence')
+    const tiRevenue = tiOnForward
+      ? getAgentLearningAnnual(
+          agentLearningPoolMonthly,
+          forwardTraceIncludedMonthly,
+        )
+      : 0
+    const tiCost = tiOnForward ? traceIntelligenceCostAnnual : 0
+    // Hours commitment cost (13 or 52 wks) measured against annual subscription.
+    const periodRevenue = engRevenue + tiRevenue
+    const periodCost = engCost + tiCost
+    const periodMargin = periodRevenue - periodCost
+    return {
+      engCost,
+      engRevenue,
+      tiCost,
+      tiRevenue,
+      periodCost,
+      periodRevenue,
+      periodMargin,
+      marginRate: periodRevenue > 0 ? periodMargin / periodRevenue : null,
+      commitmentWeeks: mastraForward.commitmentWeeks,
+    }
+  }, [
+    mastraForward,
+    engineerCostPerHour,
+    forwardIncludedAddonIds,
+    agentLearningPoolMonthly,
+    forwardTraceIncludedMonthly,
+    traceIntelligenceCostAnnual,
+  ])
 
   const usageScaleAnnual =
     quote.subscriptionListAnnual - quote.agencyDiscount - quote.bundleDiscount
@@ -202,27 +400,6 @@ export default function App() {
     ],
   )
 
-  const mastraForward = useMemo(
-    () =>
-      agencyMode
-        ? null
-        : buildMastraForwardQuote(
-            mastraForwardSelected,
-            {
-              sellRatePerHour: forwardSellRatePerHour,
-              hoursPerWeek: forwardHoursPerWeek,
-            },
-            engineerCostPerHour,
-          ),
-    [
-      agencyMode,
-      mastraForwardSelected,
-      forwardSellRatePerHour,
-      forwardHoursPerWeek,
-      engineerCostPerHour,
-    ],
-  )
-
   const margin = useMemo(
     () => buildSupportMargin(support, engineerCostPerHour),
     [support, engineerCostPerHour],
@@ -252,11 +429,7 @@ export default function App() {
     (support.path1 != null ||
       support.path2.length > 0 ||
       support.audit != null)
-  const hasMastraForward =
-    !agencyMode &&
-    mastraForward != null &&
-    mastraForward.hoursPerWeek > 0 &&
-    mastraForward.sellRatePerHour > 0
+  const hasMastraForward = !agencyMode && mastraForward != null
   const hasProducts = quote.productLines.length > 0
   const hasOrder = hasProducts || hasSupport || hasMastraForward
 
@@ -277,17 +450,16 @@ export default function App() {
 
     const forwardLines: OrderLineSnapshot[] = []
     if (hasMastraForward && mastraForward) {
-      forwardLines.push({
-        name: 'Mastra Forward',
-        meta: `${formatUsd(mastraForward.sellRatePerHour)}/hr · ${mastraForward.hoursPerWeek} hrs/wk · cost ${formatUsd(mastraForward.costPerHour)}/hr${
-          mastraForward.marginRate != null
-            ? ` · ${formatPercent(mastraForward.marginRate)} margin`
-            : ''
-        }`,
-        listAmount: Math.round(mastraForward.annualRevenue),
-        billedAmount: Math.round(mastraForward.annualRevenue),
-        period: '/ yr',
-      })
+      for (const line of mastraForward.lines) {
+        forwardLines.push({
+          name: line.name,
+          meta: line.meta,
+          listAmount: line.included ? null : line.amount,
+          billedAmount: line.included ? null : line.amount,
+          period: line.included ? '/ yr' : mastraForward.periodLabel,
+          included: line.included,
+        })
+      }
     }
 
     const supportLines: OrderLineSnapshot[] = []
@@ -340,8 +512,9 @@ export default function App() {
       productTotal: quote.annualTotal,
       forwardLines,
       forwardAnnualTotal: hasMastraForward
-        ? Math.round(mastraForward!.annualRevenue)
+        ? Math.round(mastraForward!.periodTotal)
         : null,
+      forwardPeriod: hasMastraForward ? '/ yr' : null,
       supportLines,
       supportPath1Total:
         !agencyMode && support.path1 ? support.path1Total : null,
@@ -439,16 +612,62 @@ export default function App() {
     }))
   }
 
+  function selectForwardPlan(id: ForwardPlanId) {
+    const next = getForwardPlan(id)
+    setForwardPlanId(id)
+    setForwardHoursCommitment(next.allowsQuarterlyHours ? 'quarter' : 'year')
+    const hoursOptions = getForwardPlanHoursOptions(next)
+    setForwardHoursPerWeek(hoursOptions[0] ?? next.hoursMin)
+    setForwardFeaturePicks([])
+  }
+
+  function applyForwardHours(hours: number) {
+    const allowedHere = getForwardPlanHoursOptions(forwardPlan).includes(hours)
+    if (!allowedHere) {
+      const nextPlan =
+        FORWARD_PLANS.find((p) =>
+          getForwardPlanHoursOptions(p).includes(hours),
+        ) ?? null
+      if (nextPlan && nextPlan.id !== forwardPlanId) {
+        setForwardPlanId(nextPlan.id)
+        setForwardHoursCommitment(
+          nextPlan.allowsQuarterlyHours ? forwardHoursCommitment : 'year',
+        )
+        setForwardFeaturePicks([])
+      }
+    }
+    setForwardHoursPerWeek(hours)
+  }
+
+  function applyForwardAmountFromPrice(amount: number) {
+    const hours = hoursFromForwardAmount(
+      amount,
+      forwardCommitment,
+      FORWARD_HOURS_OPTIONS,
+    )
+    applyForwardHours(hours)
+  }
+
+  function toggleForwardFeaturePick(id: EnterpriseFeatureId) {
+    setForwardFeaturePicks((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id)
+      const max = forwardPlan.featurePickCount
+      if (max <= 0) return prev
+      if (prev.length >= max) return [...prev.slice(1), id]
+      return [...prev, id]
+    })
+  }
+
   function clearOrder() {
     setPlanId(null)
     setSelectedAddons([])
     setSelectedPrograms([])
     setHeadcount(null)
     setAgentLearningPoolMonthly(DEFAULT_AGENT_LEARNING_POOL_MONTHLY)
+    setKnowledgeConfig(DEFAULT_KNOWLEDGE_CONFIG)
     setAgencyMode(false)
     setMastraForwardSelected(false)
-    setForwardSellRatePerHour(null)
-    setForwardHoursPerWeek(null)
+    selectForwardPlan('startup')
     setSupportIds([])
     setPlatformConfig(defaultPlatformConfig(0))
     setPath2Hours({})
@@ -729,8 +948,13 @@ export default function App() {
                 </div>
                 <div className="items">
                   {ADDONS.map((addon) => {
-                    const allowed = isAddonAvailable(addon, plan)
-                    const selected = selectedAddons.includes(addon.id)
+                    const coveredByForward = forwardIncludedAddonIds.includes(
+                      addon.id,
+                    )
+                    const allowed =
+                      coveredByForward || isAddonAvailable(addon, plan)
+                    const selected =
+                      coveredByForward || selectedAddons.includes(addon.id)
                     const priced = quote.addonPricing.lines.find(
                       (l) => l.addon.id === addon.id,
                     )
@@ -742,20 +966,34 @@ export default function App() {
                       addon.flatAnnual != null
                         ? Math.round(addon.flatAnnual * addonMultiplier)
                         : null
+                    const showTiPool =
+                      selected &&
+                      addon.id === 'trace-intelligence' &&
+                      !coveredByForward
+                    const showKnowledgePanel =
+                      selected &&
+                      addon.id === 'mastra-knowledge' &&
+                      !coveredByForward
+                    const knowledgeNormalized = normalizeKnowledgeConfig(
+                      knowledgeConfig,
+                    )
+                    const knowledgePrice = getKnowledgeAnnual(
+                      knowledgeNormalized,
+                    )
                     return (
                       <div
                         key={addon.id}
-                        className={`item-wrap${selected ? ' open' : ''}`}
+                        className={`item-wrap${showTiPool || showKnowledgePanel ? ' open' : ''}`}
                       >
                       <button
                         type="button"
-                        className={`item${selected ? ' selected' : ''}${!allowed ? ' unavailable' : ''}`}
+                        className={`item${selected ? ' selected' : ''}${!allowed || coveredByForward ? ' unavailable' : ''}`}
                         onClick={() => {
-                          if (!allowed) return
+                          if (!allowed || coveredByForward) return
                           toggleAddon(addon.id)
                         }}
                         aria-pressed={selected}
-                        disabled={!allowed}
+                        disabled={!allowed || coveredByForward}
                       >
                         <span className="check" aria-hidden="true">
                           {selected ? <CheckIcon /> : null}
@@ -763,18 +1001,24 @@ export default function App() {
                         <span className="item-body">
                           <span className="item-name">
                             {addon.name}
-                            {!allowed && (
-                              <span className="pill">
-                                {addon.id === 'compliance'
-                                  ? 'Enterprise Platform only'
-                                  : 'Enterprise only'}
-                              </span>
+                            {coveredByForward ? (
+                              <span className="pill">Included with Forward</span>
+                            ) : (
+                              !allowed && (
+                                <span className="pill">
+                                  {addon.id === 'compliance'
+                                    ? 'Enterprise Platform only'
+                                    : 'Enterprise only'}
+                                </span>
+                              )
                             )}
                           </span>
                           <p className="item-desc">{addon.description}</p>
                         </span>
                         <span className="item-price">
-                          {!allowed ? (
+                          {coveredByForward ? (
+                            'Included'
+                          ) : !allowed ? (
                             '—'
                           ) : priced ? (
                             <>
@@ -787,6 +1031,12 @@ export default function App() {
                               +{formatUsd(TRACE_PLAN_UPLIFT_ANNUAL)}
                               <br />
                               on plan
+                            </>
+                          ) : addon.id === 'mastra-knowledge' ? (
+                            <>
+                              {formatUsd(knowledgePrice)}
+                              <br />
+                              / year
                             </>
                           ) : displayedFlat != null ? (
                             <>
@@ -806,7 +1056,144 @@ export default function App() {
                         </span>
                       </button>
 
-                      {selected && addon.id === 'trace-intelligence' && (
+                      {showKnowledgePanel && (
+                        <div className="ti-panel">
+                          <div className="platform-usage-intro">
+                            <strong>Knowledge volume</strong>
+                            <span>
+                              {formatUsd(KNOWLEDGE_KB_ANNUAL)}/KB/yr ·{' '}
+                              {KNOWLEDGE_SOURCES_INCLUDED_PER_KB} sources +{' '}
+                              {KNOWLEDGE_DATA_INCLUDED_GB_PER_KB} GB included
+                              per KB
+                            </span>
+                          </div>
+                          <div className="ti-input-row">
+                            <label htmlFor="knowledge-kb-count">
+                              Knowledge bases
+                            </label>
+                            <NumberField
+                              id="knowledge-kb-count"
+                              value={knowledgeNormalized.kbCount}
+                              min={1}
+                              onCommit={(next) => {
+                                const kbCount = Math.max(1, next ?? 1)
+                                setKnowledgeConfig((prev) =>
+                                  normalizeKnowledgeConfig({
+                                    ...prev,
+                                    kbCount,
+                                  }),
+                                )
+                              }}
+                              aria-label="Number of knowledge bases"
+                            />
+                          </div>
+                          <div className="ti-input-row">
+                            <label htmlFor="knowledge-sources">
+                              Sources (total)
+                            </label>
+                            <NumberField
+                              id="knowledge-sources"
+                              value={knowledgeNormalized.sources}
+                              min={getKnowledgeIncludedSources(
+                                knowledgeNormalized.kbCount,
+                              )}
+                              onCommit={(next) => {
+                                setKnowledgeConfig((prev) =>
+                                  normalizeKnowledgeConfig({
+                                    ...prev,
+                                    sources:
+                                      next ??
+                                      getKnowledgeIncludedSources(prev.kbCount),
+                                  }),
+                                )
+                              }}
+                              aria-label="Total Mastra Knowledge sources"
+                            />
+                          </div>
+                          <div className="ti-input-row">
+                            <label htmlFor="knowledge-data-gb">
+                              Data (GB total)
+                            </label>
+                            <NumberField
+                              id="knowledge-data-gb"
+                              value={knowledgeNormalized.dataGb}
+                              min={getKnowledgeIncludedDataGb(
+                                knowledgeNormalized.kbCount,
+                              )}
+                              onCommit={(next) => {
+                                setKnowledgeConfig((prev) =>
+                                  normalizeKnowledgeConfig({
+                                    ...prev,
+                                    dataGb:
+                                      next ??
+                                      getKnowledgeIncludedDataGb(prev.kbCount),
+                                  }),
+                                )
+                              }}
+                              aria-label="Mastra Knowledge data in GB"
+                            />
+                          </div>
+                          <div className="ti-computed">
+                            <span>
+                              {getKnowledgeExtraSources(knowledgeNormalized)}{' '}
+                              extra sources ·{' '}
+                              {formatUsd(
+                                getKnowledgeExtraSources(knowledgeNormalized) *
+                                  KNOWLEDGE_SOURCE_ANNUAL,
+                              )}
+                            </span>
+                            <span>
+                              {getKnowledgeBillableDataGb(
+                                knowledgeNormalized,
+                              ).toLocaleString('en-US')}{' '}
+                              GB billable ·{' '}
+                              {formatUsd(
+                                getKnowledgeDataAnnual(
+                                  getKnowledgeBillableDataGb(
+                                    knowledgeNormalized,
+                                  ),
+                                ),
+                              )}
+                            </span>
+                            <span>{formatUsd(knowledgePrice)}/yr</span>
+                          </div>
+                          <div className="ti-table">
+                            <div className="ti-row ti-head">
+                              <span>Data band</span>
+                              <span>Per 100 GB / yr</span>
+                            </div>
+                            {KNOWLEDGE_DATA_BANDS.map((band) => (
+                              <div
+                                className="ti-row"
+                                key={band.toGb ?? 'open'}
+                              >
+                                <span>
+                                  {band.toGb == null
+                                    ? `Above ${(10_000).toLocaleString('en-US')} GB`
+                                    : band.toGb <= 1_000
+                                      ? `Up to ${band.toGb.toLocaleString('en-US')} GB`
+                                      : `${(1_000).toLocaleString('en-US')}–${band.toGb.toLocaleString('en-US')} GB`}
+                                </span>
+                                <span>
+                                  {formatUsd(band.annualPerBlock)} /{' '}
+                                  {KNOWLEDGE_DATA_BLOCK_GB} GB
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="ti-note">
+                            Each KB is {formatUsd(KNOWLEDGE_KB_ANNUAL)}/yr and
+                            includes {KNOWLEDGE_SOURCES_INCLUDED_PER_KB} sources
+                            + {KNOWLEDGE_DATA_INCLUDED_GB_PER_KB} GB. Extra
+                            sources are {formatUsd(KNOWLEDGE_SOURCE_ANNUAL)}
+                            /yr each. Billable data (above includes) is priced
+                            in {KNOWLEDGE_DATA_BLOCK_GB} GB blocks on the bands
+                            above. Not multiplied by headcount.
+                          </p>
+                        </div>
+                      )}
+
+                      {showTiPool && (
                         <div className="ti-panel">
                           <div className="platform-usage-intro">
                             <strong>Volume pricing</strong>
@@ -874,12 +1261,16 @@ export default function App() {
                           <p className="ti-note">
                             Progressive per-trace bands (first{' '}
                             {TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}
-                            /mo at $0). Selecting Trace Intelligence adds{' '}
-                            {formatUsd(TRACE_PLAN_UPLIFT_ANNUAL)}/yr to the
-                            selected plan. Pool cost stacks each band up to the
-                            committed monthly volume. Pool resets monthly;
-                            overage bills at the overage rate. Bring-your-own
-                            model: same price. Self-hosted / air-gapped: +50%.
+                            /mo at $0).
+                            {forwardIncludedAddonIds.includes(
+                              'trace-intelligence',
+                            )
+                              ? ' Included with Forward — $3,000/yr plan uplift waived.'
+                              : ` Selecting Trace Intelligence adds ${formatUsd(TRACE_PLAN_UPLIFT_ANNUAL)}/yr to the selected plan.`}{' '}
+                            Pool cost stacks each band up to the committed
+                            monthly volume. Pool resets monthly; overage bills
+                            at the overage rate. Bring-your-own model: same
+                            price. Self-hosted / air-gapped: +50%.
                           </p>
                         </div>
                       )}
@@ -888,6 +1279,410 @@ export default function App() {
                   })}
                 </div>
               </section>
+
+              {!agencyMode && (
+                <section className="category">
+                  <div className="category-title">
+                    <h3>Mastra Forward</h3>
+                    <span className="category-meta">Plans</span>
+                  </div>
+                  <div className="items">
+                    <div
+                      className={`item-wrap${mastraForwardSelected ? ' open' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className={`item${mastraForwardSelected ? ' selected' : ''}`}
+                        onClick={() => {
+                          if (mastraForwardSelected) {
+                            setMastraForwardSelected(false)
+                            return
+                          }
+                          selectForwardPlan('startup')
+                          setMastraForwardSelected(true)
+                        }}
+                        aria-pressed={mastraForwardSelected}
+                      >
+                        <span className="check" aria-hidden="true">
+                          {mastraForwardSelected ? <CheckIcon /> : null}
+                        </span>
+                        <span className="item-body">
+                          <span className="item-name">Mastra Forward</span>
+                          <p className="item-desc">
+                            Embedded Mastra team with enterprise feature picks.
+                            Startup / Growth / Enterprise.
+                          </p>
+                        </span>
+                        <span className="item-price">
+                          {hasMastraForward ? (
+                            <>
+                              {formatUsd(Math.round(mastraForward!.periodTotal))}
+                              <br />
+                              {forwardPeriodShort}
+                            </>
+                          ) : (
+                            <>
+                              Select plan
+                              <br />
+                              &amp; hours
+                            </>
+                          )}
+                        </span>
+                      </button>
+                      {mastraForwardSelected && (
+                        <div className="path2-pricing forward-plan-panel">
+                          <div>
+                            <div className="concierge-subhead">
+                              <h4>Plan</h4>
+                            </div>
+                            <div
+                              className="mode-picker forward-option-picker"
+                              role="radiogroup"
+                              aria-label="Mastra Forward plan"
+                            >
+                              {FORWARD_PLANS.map((fwdPlan) => (
+                                <button
+                                  key={fwdPlan.id}
+                                  type="button"
+                                  className={`mode-option${
+                                    forwardPlanId === fwdPlan.id ? ' active' : ''
+                                  }`}
+                                  role="radio"
+                                  aria-checked={forwardPlanId === fwdPlan.id}
+                                  onClick={() => selectForwardPlan(fwdPlan.id)}
+                                >
+                                  <strong>{fwdPlan.name}</strong>
+                                  <span>
+                                    {formatForwardPriceRange(fwdPlan)}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                            <p className="item-desc">
+                              {forwardPlan.description} Embedded engineering is
+                              billed at{' '}
+                              {formatUsd(FORWARD_EMBEDDED_SELL_RATE_PER_HOUR)}
+                              /hr (guidance {formatForwardPriceRange(forwardPlan)}
+                              ).
+                            </p>
+                          </div>
+
+                          {forwardPlan.allowsQuarterlyHours && (
+                            <div>
+                              <div className="concierge-subhead">
+                                <h4>Hours commitment</h4>
+                                <p>
+                                  Billing is always an annual subscription.
+                                  Choose whether embedded hours cover 3 months
+                                  or 12 months.
+                                </p>
+                              </div>
+                              <div
+                                className="mode-picker path1-billing-picker"
+                                role="radiogroup"
+                                aria-label="Mastra Forward hours commitment"
+                              >
+                                <button
+                                  type="button"
+                                  className={`mode-option${forwardCommitment === 'quarter' ? ' active' : ''}`}
+                                  role="radio"
+                                  aria-checked={forwardCommitment === 'quarter'}
+                                  onClick={() =>
+                                    setForwardHoursCommitment('quarter')
+                                  }
+                                >
+                                  <strong>3 months</strong>
+                                  <span>13 wks in annual price</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`mode-option${forwardCommitment === 'year' ? ' active' : ''}`}
+                                  role="radio"
+                                  aria-checked={forwardCommitment === 'year'}
+                                  onClick={() =>
+                                    setForwardHoursCommitment('year')
+                                  }
+                                >
+                                  <strong>12 months</strong>
+                                  <span>52 wks in annual price</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          <div>
+                            <div className="concierge-subhead">
+                              <h4>Hours / week</h4>
+                              <p>
+                                {forwardPlan.hoursNote} · select hours for an
+                                annual price, or enter annual to snap hours (
+                                {formatUsd(FORWARD_EMBEDDED_SELL_RATE_PER_HOUR)}
+                                /hr × {forwardCommitmentWeeks} wks)
+                              </p>
+                            </div>
+                            <div
+                              className="mode-picker forward-option-picker"
+                              role="radiogroup"
+                              aria-label="Mastra Forward hours per week"
+                            >
+                              {getForwardPlanHoursOptions(forwardPlan).map(
+                                (hours) => (
+                                  <button
+                                    key={hours}
+                                    type="button"
+                                    className={`mode-option${
+                                      forwardHoursPerWeek === hours
+                                        ? ' active'
+                                        : ''
+                                    }`}
+                                    role="radio"
+                                    aria-checked={
+                                      forwardHoursPerWeek === hours
+                                    }
+                                    onClick={() => applyForwardHours(hours)}
+                                  >
+                                    <strong>{hours}</strong>
+                                    <span>
+                                      {formatUsd(
+                                        getForwardEmbeddedAmount(
+                                          hours,
+                                          forwardCommitment,
+                                        ),
+                                      )}
+                                      /yr
+                                    </span>
+                                  </button>
+                                ),
+                              )}
+                            </div>
+                            <div className="ti-input-row">
+                              <label htmlFor="forward-plan-annual">
+                                Or annual at{' '}
+                                {formatUsd(FORWARD_EMBEDDED_SELL_RATE_PER_HOUR)}
+                                /hr → hours
+                              </label>
+                              <NumberField
+                                id="forward-plan-annual"
+                                value={forwardPlanAmount}
+                                min={0}
+                                onCommit={(next) =>
+                                  applyForwardAmountFromPrice(next ?? 0)
+                                }
+                                aria-label="Mastra Forward annual price to derive hours"
+                              />
+                            </div>
+                            {forwardMargin && (
+                              <div className="path2-price-breakdown">
+                                <span>
+                                  Annual {formatUsd(forwardPlanAmount)}
+                                  /yr · eng cost{' '}
+                                  {formatUsd(Math.round(forwardMargin.engCost))}
+                                  /yr ({mastraForward!.hoursPerWeek} hrs/wk ×{' '}
+                                  {formatUsd(engineerCostPerHour)}/hr ×{' '}
+                                  {forwardMargin.commitmentWeeks}
+                                  {forwardMargin.tiCost > 0
+                                    ? ` · TI cost ${formatUsd(forwardMargin.tiCost)}/yr`
+                                    : ''}
+                                  )
+                                </span>
+                                <strong>
+                                  Margin{' '}
+                                  {formatUsd(
+                                    Math.round(forwardMargin.periodMargin),
+                                  )}
+                                  /yr
+                                  {forwardMargin.marginRate != null
+                                    ? ` (${formatPercent(forwardMargin.marginRate)})`
+                                    : ''}
+                                </strong>
+                              </div>
+                            )}
+                          </div>
+
+                          {(forwardPlan.featurePickCount > 0 ||
+                            forwardPlan.includedFeatures.length > 0) && (
+                            <div>
+                              <div className="concierge-subhead">
+                                <h4>Enterprise features</h4>
+                                <p>
+                                  {forwardPlan.featurePickCount > 0
+                                    ? `Pick ${forwardPlan.featurePickCount} of ${forwardPlan.featurePool.length}`
+                                    : 'All features included'}
+                                </p>
+                              </div>
+                              <div className="items">
+                                {ENTERPRISE_FEATURES.map((feature) => {
+                                  const alwaysIncluded =
+                                    forwardPlan.includedFeatures.includes(
+                                      feature.id,
+                                    )
+                                  const inPool =
+                                    forwardPlan.featurePool.includes(feature.id)
+                                  if (!alwaysIncluded && !inPool) return null
+                                  const picked =
+                                    alwaysIncluded ||
+                                    forwardFeaturePicks.includes(feature.id)
+                                  const showForwardTi =
+                                    feature.id === 'trace-intelligence' &&
+                                    picked
+                                  return (
+                                    <div
+                                      key={feature.id}
+                                      className={`item-wrap${showForwardTi ? ' open' : ''}`}
+                                    >
+                                      <button
+                                        type="button"
+                                        className={`item${picked ? ' selected' : ''}${alwaysIncluded ? ' unavailable' : ''}`}
+                                        onClick={() => {
+                                          if (alwaysIncluded) return
+                                          toggleForwardFeaturePick(feature.id)
+                                        }}
+                                        aria-pressed={picked}
+                                        disabled={alwaysIncluded}
+                                      >
+                                        <span
+                                          className="check"
+                                          aria-hidden="true"
+                                        >
+                                          {picked ? <CheckIcon /> : null}
+                                        </span>
+                                        <span className="item-body">
+                                          <span className="item-name">
+                                            {feature.name}
+                                            {alwaysIncluded && (
+                                              <span className="pill">
+                                                Included
+                                              </span>
+                                            )}
+                                          </span>
+                                          <p className="item-desc">
+                                            {feature.description}
+                                          </p>
+                                        </span>
+                                        <span className="item-price">
+                                          {alwaysIncluded || picked
+                                            ? 'Included'
+                                            : 'Pick'}
+                                        </span>
+                                      </button>
+                                      {showForwardTi && (
+                                        <div className="ti-panel">
+                                          <div className="platform-usage-intro">
+                                            <strong>Volume pricing</strong>
+                                            <span>
+                                              Analyzed traces / month ·{' '}
+                                              {forwardTraceIncludedMonthly.toLocaleString(
+                                                'en-US',
+                                              )}{' '}
+                                              included
+                                            </span>
+                                          </div>
+                                          <div className="ti-input-row">
+                                            <label htmlFor="forward-trace-intelligence-pool">
+                                              Monthly pool (analyzed traces)
+                                            </label>
+                                            <NumberField
+                                              id="forward-trace-intelligence-pool"
+                                              value={agentLearningPoolMonthly}
+                                              min={forwardTraceIncludedMonthly}
+                                              onCommit={(next) =>
+                                                setAgentLearningPoolMonthly(
+                                                  Math.max(
+                                                    forwardTraceIncludedMonthly,
+                                                    next ??
+                                                      forwardTraceIncludedMonthly,
+                                                  ),
+                                                )
+                                              }
+                                              aria-label="Forward Trace Intelligence monthly pool, analyzed traces"
+                                            />
+                                          </div>
+                                          <div className="ti-computed">
+                                            <span>
+                                              {agentLearningPoolMonthly <=
+                                              forwardTraceIncludedMonthly
+                                                ? `${forwardTraceIncludedMonthly.toLocaleString('en-US')}/mo included`
+                                                : `Blended ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly, forwardTraceIncludedMonthly))}/1k`}
+                                            </span>
+                                            <span>
+                                              {formatUsd(
+                                                getAgentLearningMonthly(
+                                                  agentLearningPoolMonthly,
+                                                  forwardTraceIncludedMonthly,
+                                                ),
+                                              )}
+                                              /mo
+                                            </span>
+                                            <span>
+                                              {formatUsd(
+                                                getAgentLearningAnnual(
+                                                  agentLearningPoolMonthly,
+                                                  forwardTraceIncludedMonthly,
+                                                ),
+                                              )}
+                                              /yr
+                                            </span>
+                                          </div>
+                                          <div className="ti-table">
+                                            <div className="ti-row ti-head">
+                                              <span>From</span>
+                                              <span>To</span>
+                                              <span>Pre-commit</span>
+                                              <span>Overage</span>
+                                              <span>At top of band</span>
+                                            </div>
+                                            {TRACE_INTELLIGENCE_POOLS.map(
+                                              (pool) => (
+                                                <div
+                                                  className="ti-row"
+                                                  key={`${pool.fromLabel}-${pool.toLabel}`}
+                                                >
+                                                  <span>{pool.fromLabel}</span>
+                                                  <span>{pool.toLabel}</span>
+                                                  <span>
+                                                    {pool.ratePerTrace}
+                                                  </span>
+                                                  <span>
+                                                    {pool.overagePerTrace}
+                                                  </span>
+                                                  <span>{pool.price}</span>
+                                                </div>
+                                              ),
+                                            )}
+                                          </div>
+                                          <p className="ti-note">
+                                            {forwardPlan.name} includes{' '}
+                                            {forwardTraceIncludedMonthly.toLocaleString(
+                                              'en-US',
+                                            )}{' '}
+                                            traces/mo at $0. Plan uplift of{' '}
+                                            {formatUsd(TRACE_PLAN_UPLIFT_ANNUAL)}
+                                            /yr is waived. Pool overage above
+                                            the include still bills on the
+                                            progressive bands.
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {forwardPlan.allowsPrivateDeployment && (
+                            <p className="item-desc">
+                              Enterprise includes BYO VPC / BYOC / private cloud
+                              deployment options (priced via deployment SKUs
+                              above).
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              )}
 
               {!agencyMode && (
                 <section className="category">
@@ -921,134 +1716,6 @@ export default function App() {
                         </button>
                       )
                     })}
-
-                    <div
-                      className={`item-wrap${mastraForwardSelected ? ' open' : ''}`}
-                    >
-                      <button
-                        type="button"
-                        className={`item${mastraForwardSelected ? ' selected' : ''}`}
-                        onClick={() =>
-                          setMastraForwardSelected((v) => !v)
-                        }
-                        aria-pressed={mastraForwardSelected}
-                      >
-                        <span className="check" aria-hidden="true">
-                          {mastraForwardSelected ? <CheckIcon /> : null}
-                        </span>
-                        <span className="item-body">
-                          <span className="item-name">Mastra Forward</span>
-                          <p className="item-desc">
-                            Billable engineering hours. Cost basis{' '}
-                            {formatUsd(engineerCostPerHour)}/hr.
-                          </p>
-                        </span>
-                        <span className="item-price">
-                          {hasMastraForward ? (
-                            <>
-                              {formatUsd(
-                                Math.round(mastraForward!.annualRevenue),
-                              )}
-                              <br />
-                              / year
-                            </>
-                          ) : (
-                            <>
-                              Select rate
-                              <br />
-                              &amp; hours
-                            </>
-                          )}
-                        </span>
-                      </button>
-                      {mastraForwardSelected && (
-                        <div className="path2-pricing">
-                          <div>
-                            <div className="concierge-subhead">
-                              <h4>$/hour</h4>
-                            </div>
-                            <div
-                              className="mode-picker forward-option-picker"
-                              role="radiogroup"
-                              aria-label="Mastra Forward bill rate per hour"
-                            >
-                              {FORWARD_RATE_OPTIONS.map((rate) => (
-                                <button
-                                  key={rate}
-                                  type="button"
-                                  className={`mode-option${
-                                    forwardSellRatePerHour === rate
-                                      ? ' active'
-                                      : ''
-                                  }`}
-                                  role="radio"
-                                  aria-checked={forwardSellRatePerHour === rate}
-                                  onClick={() =>
-                                    setForwardSellRatePerHour(rate)
-                                  }
-                                >
-                                  <strong>{formatUsd(rate)}</strong>
-                                  <span>/ hr</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="concierge-subhead">
-                              <h4>Hours / week</h4>
-                            </div>
-                            <div
-                              className="mode-picker forward-option-picker"
-                              role="radiogroup"
-                              aria-label="Mastra Forward hours per week"
-                            >
-                              {FORWARD_HOURS_OPTIONS.map((hours) => (
-                                <button
-                                  key={hours}
-                                  type="button"
-                                  className={`mode-option${
-                                    forwardHoursPerWeek === hours
-                                      ? ' active'
-                                      : ''
-                                  }`}
-                                  role="radio"
-                                  aria-checked={forwardHoursPerWeek === hours}
-                                  onClick={() =>
-                                    setForwardHoursPerWeek(hours)
-                                  }
-                                >
-                                  <strong>{hours}</strong>
-                                  <span>hrs / wk</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          {hasMastraForward && mastraForward && (
-                            <div className="path2-price-breakdown">
-                              <span>
-                                Cost{' '}
-                                {formatUsd(
-                                  Math.round(mastraForward.annualCost),
-                                )}
-                                /yr ·{' '}
-                                {mastraForward.hoursPerWeek} hrs/wk ×{' '}
-                                {formatUsd(mastraForward.costPerHour)}/hr × 52
-                              </span>
-                              <strong>
-                                Margin{' '}
-                                {formatUsd(
-                                  Math.round(mastraForward.annualMargin),
-                                )}
-                                /yr
-                                {mastraForward.marginRate != null
-                                  ? ` (${formatPercent(mastraForward.marginRate)})`
-                                  : ''}
-                              </strong>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </section>
               )}
@@ -1338,6 +2005,7 @@ export default function App() {
                               </span>
                               {(line.id === 'trace-intelligence' ||
                                 line.id === 'agent-builder' ||
+                                line.id === 'mastra-knowledge' ||
                                 line.id === 'compliance' ||
                                 line.id === 'premium-on-call') && (
                                 <button
@@ -1384,6 +2052,25 @@ export default function App() {
                             </span>
                           </div>
                         )}
+                        {traceIntelligenceMargin &&
+                          !forwardIncludedAddonIds.includes(
+                            'trace-intelligence',
+                          ) && (
+                            <div className="total-row muted">
+                              <span>
+                                Trace Intelligence margin (COGS{' '}
+                                {formatUsd(TRACE_COST_PER_TRACE)}/trace)
+                              </span>
+                              <span>
+                                {formatUsd(
+                                  Math.round(traceIntelligenceMargin.margin),
+                                )}
+                                {traceIntelligenceMargin.marginRate != null
+                                  ? ` (${formatPercent(traceIntelligenceMargin.marginRate)})`
+                                  : ''}
+                              </span>
+                            </div>
+                          )}
                       </div>
                     </div>
                   )}
@@ -1392,53 +2079,70 @@ export default function App() {
                     <div className="summary-group">
                       <h3 className="summary-group-title">Mastra Forward</h3>
                       <ul className="order-lines">
-                        <li className="order-line">
-                          <div>
-                            <span className="order-line-name">
-                              Mastra Forward
+                        {mastraForward.lines.map((line, index) => (
+                          <li className="order-line" key={line.id}>
+                            <div>
+                              <span className="order-line-name">
+                                {line.name}
+                              </span>
+                              {line.meta && (
+                                <span className="order-line-meta">
+                                  {line.meta}
+                                </span>
+                              )}
+                            </div>
+                            <span className="order-line-price">
+                              {line.included ? (
+                                <span className="order-line-meta">
+                                  Included
+                                </span>
+                              ) : (
+                                <>
+                                  {formatUsd(line.amount)}
+                                  <span className="order-line-meta">
+                                    {mastraForward.periodLabel}
+                                  </span>
+                                </>
+                              )}
                             </span>
-                            <span className="order-line-meta">
-                              {formatUsd(mastraForward.sellRatePerHour)}/hr ·{' '}
-                              {mastraForward.hoursPerWeek} hrs/wk · cost{' '}
-                              {formatUsd(mastraForward.costPerHour)}/hr
-                            </span>
-                          </div>
-                          <span className="order-line-price">
-                            {formatUsd(
-                              Math.round(mastraForward.annualRevenue),
+                            {index === 0 && (
+                              <button
+                                type="button"
+                                className="remove"
+                                onClick={() => setMastraForwardSelected(false)}
+                                aria-label="Remove Mastra Forward"
+                              >
+                                <CloseIcon />
+                              </button>
                             )}
-                            <span className="order-line-meta">/ yr</span>
-                          </span>
-                          <button
-                            type="button"
-                            className="remove"
-                            onClick={() => setMastraForwardSelected(false)}
-                            aria-label="Remove Mastra Forward"
-                          >
-                            <CloseIcon />
-                          </button>
-                        </li>
+                          </li>
+                        ))}
                       </ul>
                       <div className="totals">
                         <div className="total-row grand">
                           <span>Mastra Forward / year</span>
                           <span>
-                            {formatUsd(
-                              Math.round(mastraForward.annualRevenue),
-                            )}
+                            {formatUsd(Math.round(mastraForward.periodTotal))}
                           </span>
                         </div>
-                        <div className="total-row muted">
-                          <span>Forward margin</span>
-                          <span>
-                            {formatUsd(
-                              Math.round(mastraForward.annualMargin),
-                            )}
-                            {mastraForward.marginRate != null
-                              ? ` (${formatPercent(mastraForward.marginRate)})`
-                              : ''}
-                          </span>
-                        </div>
+                        {forwardMargin && (
+                          <div className="total-row muted">
+                            <span>
+                              Forward margin
+                              {forwardMargin.tiCost > 0
+                                ? ` (incl. TI COGS ${formatUsd(TRACE_COST_PER_TRACE)}/trace)`
+                                : ''}
+                            </span>
+                            <span>
+                              {formatUsd(
+                                Math.round(forwardMargin.periodMargin),
+                              )}
+                              {forwardMargin.marginRate != null
+                                ? ` (${formatPercent(forwardMargin.marginRate)})`
+                                : ''}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

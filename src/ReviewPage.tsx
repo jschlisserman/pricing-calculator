@@ -99,10 +99,16 @@ function OrderLines({ order }: { order: OrderSnapshot }) {
                   )}
                 </div>
                 <span className="order-line-price">
-                  {line.billedAmount == null || line.billedAmount === 0
-                    ? '—'
-                    : formatUsd(line.billedAmount)}
-                  <span className="order-line-meta">{line.period}</span>
+                  {line.included ? (
+                    <span className="order-line-meta">Included</span>
+                  ) : line.billedAmount == null ? (
+                    '—'
+                  ) : (
+                    <>
+                      {formatUsd(line.billedAmount)}
+                      <span className="order-line-meta">{line.period}</span>
+                    </>
+                  )}
                 </span>
               </li>
             ))}

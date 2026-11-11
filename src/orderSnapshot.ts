@@ -17,7 +17,9 @@ export interface OrderSnapshot {
   productLines: OrderLineSnapshot[]
   productTotal: number
   forwardLines: OrderLineSnapshot[]
+  /** Forward total for the selected billing period. */
   forwardAnnualTotal: number | null
+  forwardPeriod: '/ qtr' | '/ yr' | null
   supportLines: OrderLineSnapshot[]
   supportPath1Total: number | null
   supportPath1Period: '/ qtr' | '/ yr' | null

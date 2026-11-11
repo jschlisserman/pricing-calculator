@@ -204,6 +204,7 @@ export function getEvalsMultiplier(
 export type AddonId =
   | 'trace-intelligence'
   | 'agent-builder'
+  | 'mastra-knowledge'
   | 'compliance'
   | 'premium-on-call'
 
@@ -240,6 +241,15 @@ export const ADDONS: Addon[] = [
     rate: null,
     annualMinimum: 0,
     flatAnnual: 6_000,
+    enterpriseOnly: true,
+  },
+  {
+    id: 'mastra-knowledge',
+    name: 'Mastra Knowledge',
+    description:
+      '$6K/KB/yr · 3 sources + 10GB included per KB; extra sources + data overage',
+    rate: null,
+    annualMinimum: 0,
     enterpriseOnly: true,
   },
   {
@@ -307,12 +317,20 @@ export const TRACE_VOLUME_BANDS: ReadonlyArray<TraceIntelligenceBand> = [
  */
 export const TRACE_PLAN_UPLIFT_ANNUAL = 3_000
 export const TRACE_INCLUDED_MONTHLY = 10_000
+/** Internal COGS per analyzed trace (used in margin). */
+export const TRACE_COST_PER_TRACE = 0.005
 
 /** @deprecated Use TRACE_PLAN_UPLIFT_ANNUAL */
 export const TRACE_STARTING_ANNUAL = TRACE_PLAN_UPLIFT_ANNUAL
 
 /** Default pool when Trace Intelligence is selected (included package). */
 export const DEFAULT_AGENT_LEARNING_POOL_MONTHLY = TRACE_INCLUDED_MONTHLY
+
+/** Annual Trace Intelligence COGS: analyzed traces/mo × $0.005 × 12. */
+export function getTraceIntelligenceCostAnnual(poolMonthly: number): number {
+  const pool = Math.max(0, poolMonthly)
+  return Math.round(pool * TRACE_COST_PER_TRACE * 12)
+}
 
 function formatTraceVolume(n: number): string {
   return n.toLocaleString('en-US')
@@ -325,10 +343,10 @@ function formatTraceUnitRate(rate: number): string {
 }
 
 /**
- * Progressive monthly cost for a committed analyzed-traces pool.
- * Each band is billed at its own pre-commitment rate (first 10k = $0).
+ * Raw progressive monthly cost for a committed analyzed-traces pool
+ * (band rates as listed; first 10k band is $0).
  */
-export function getAgentLearningMonthly(poolMonthly: number): number {
+export function getTraceProgressiveMonthly(poolMonthly: number): number {
   const pool = Math.max(0, Math.floor(poolMonthly))
   if (pool <= 0) return 0
 
@@ -342,9 +360,29 @@ export function getAgentLearningMonthly(poolMonthly: number): number {
   return cost
 }
 
+/**
+ * Progressive monthly cost for a committed analyzed-traces pool, after the
+ * included monthly allotment (default 10k; Forward Growth/Enterprise raise this).
+ */
+export function getAgentLearningMonthly(
+  poolMonthly: number,
+  includedMonthly: number = TRACE_INCLUDED_MONTHLY,
+): number {
+  const pool = Math.max(0, Math.floor(poolMonthly))
+  const included = Math.max(0, Math.floor(includedMonthly))
+  if (pool <= 0 || pool <= included) return 0
+  return Math.max(
+    0,
+    getTraceProgressiveMonthly(pool) - getTraceProgressiveMonthly(included),
+  )
+}
+
 /** Annual Trace Intelligence pool cost (monthly progressive cost × 12). */
-export function getAgentLearningAnnual(poolMonthly: number): number {
-  return Math.round(getAgentLearningMonthly(poolMonthly) * 12)
+export function getAgentLearningAnnual(
+  poolMonthly: number,
+  includedMonthly: number = TRACE_INCLUDED_MONTHLY,
+): number {
+  return Math.round(getAgentLearningMonthly(poolMonthly, includedMonthly) * 12)
 }
 
 /** Marginal pre-commitment rate ($/trace) for the band the pool sits in. */
@@ -364,10 +402,13 @@ export function getTraceIntelligenceMarginalRatePerTrace(
  * Blended effective rate per 1k analyzed traces for the committed pool.
  * Used in summary meta; 0 when the pool is fully within the included band.
  */
-export function getTraceIntelligenceRatePer1k(poolMonthly: number): number {
+export function getTraceIntelligenceRatePer1k(
+  poolMonthly: number,
+  includedMonthly: number = TRACE_INCLUDED_MONTHLY,
+): number {
   const pool = Math.max(0, poolMonthly)
   if (pool <= 0) return 0
-  const monthly = getAgentLearningMonthly(pool)
+  const monthly = getAgentLearningMonthly(pool, includedMonthly)
   if (monthly <= 0) return 0
   return (monthly / pool) * 1_000
 }
@@ -393,6 +434,127 @@ export const TRACE_INTELLIGENCE_POOLS: TraceIntelligencePool[] =
       price: formatTracePoolPrice(examplePool),
     }
   })
+
+// —— Mastra Knowledge (legacy add-on volume pricing) ——
+
+/** Annual fee per knowledge base. */
+export const KNOWLEDGE_KB_ANNUAL = 6_000
+/** Sources included with each KB. */
+export const KNOWLEDGE_SOURCES_INCLUDED_PER_KB = 3
+/** Data included with each KB (GB). */
+export const KNOWLEDGE_DATA_INCLUDED_GB_PER_KB = 10
+/** Annual fee per source beyond the included allotment. */
+export const KNOWLEDGE_SOURCE_ANNUAL = 1_000
+/** Data is billed in 100 GB blocks. */
+export const KNOWLEDGE_DATA_BLOCK_GB = 100
+
+/** Progressive annual price per 100 GB block of billable data. */
+export const KNOWLEDGE_DATA_BANDS: ReadonlyArray<{
+  /** Inclusive end of this band in GB of billable data (null = open-ended). */
+  toGb: number | null
+  annualPerBlock: number
+}> = [
+  { toGb: 1_000, annualPerBlock: 2_500 }, // up to 1 TB
+  { toGb: 10_000, annualPerBlock: 1_500 }, // 1–10 TB
+  { toGb: null, annualPerBlock: 750 }, // beyond 10 TB
+]
+
+export interface KnowledgeConfig {
+  /** Number of knowledge bases. */
+  kbCount: number
+  /** Total sources across all KBs. */
+  sources: number
+  /** Total data commitment in GB. */
+  dataGb: number
+}
+
+export const DEFAULT_KNOWLEDGE_CONFIG: KnowledgeConfig = {
+  kbCount: 1,
+  sources: KNOWLEDGE_SOURCES_INCLUDED_PER_KB,
+  dataGb: KNOWLEDGE_DATA_INCLUDED_GB_PER_KB,
+}
+
+export function normalizeKnowledgeConfig(
+  config: KnowledgeConfig | null | undefined,
+): KnowledgeConfig {
+  const kbCount = Math.max(1, Math.floor(config?.kbCount ?? 1))
+  const includedSources = kbCount * KNOWLEDGE_SOURCES_INCLUDED_PER_KB
+  const includedDataGb = kbCount * KNOWLEDGE_DATA_INCLUDED_GB_PER_KB
+  return {
+    kbCount,
+    sources: Math.max(includedSources, Math.floor(config?.sources ?? includedSources)),
+    dataGb: Math.max(includedDataGb, Math.floor(config?.dataGb ?? includedDataGb)),
+  }
+}
+
+export function getKnowledgeIncludedSources(kbCount: number): number {
+  return Math.max(0, Math.floor(kbCount)) * KNOWLEDGE_SOURCES_INCLUDED_PER_KB
+}
+
+export function getKnowledgeIncludedDataGb(kbCount: number): number {
+  return Math.max(0, Math.floor(kbCount)) * KNOWLEDGE_DATA_INCLUDED_GB_PER_KB
+}
+
+export function getKnowledgeExtraSources(config: KnowledgeConfig): number {
+  const normalized = normalizeKnowledgeConfig(config)
+  return Math.max(
+    0,
+    normalized.sources - getKnowledgeIncludedSources(normalized.kbCount),
+  )
+}
+
+export function getKnowledgeBillableDataGb(config: KnowledgeConfig): number {
+  const normalized = normalizeKnowledgeConfig(config)
+  return Math.max(
+    0,
+    normalized.dataGb - getKnowledgeIncludedDataGb(normalized.kbCount),
+  )
+}
+
+/** Annual cost for billable data (GB beyond KB includes), in 100 GB blocks. */
+export function getKnowledgeDataAnnual(billableGb: number): number {
+  const blocks = Math.ceil(Math.max(0, billableGb) / KNOWLEDGE_DATA_BLOCK_GB)
+  if (blocks <= 0) return 0
+
+  let cost = 0
+  for (let i = 1; i <= blocks; i++) {
+    const blockEndGb = i * KNOWLEDGE_DATA_BLOCK_GB
+    let rate = KNOWLEDGE_DATA_BANDS[KNOWLEDGE_DATA_BANDS.length - 1].annualPerBlock
+    for (const band of KNOWLEDGE_DATA_BANDS) {
+      if (band.toGb == null || blockEndGb <= band.toGb) {
+        rate = band.annualPerBlock
+        break
+      }
+    }
+    cost += rate
+  }
+  return cost
+}
+
+export function getKnowledgeAnnual(config: KnowledgeConfig): number {
+  const normalized = normalizeKnowledgeConfig(config)
+  const kbFee = normalized.kbCount * KNOWLEDGE_KB_ANNUAL
+  const sourcesFee = getKnowledgeExtraSources(normalized) * KNOWLEDGE_SOURCE_ANNUAL
+  const dataFee = getKnowledgeDataAnnual(getKnowledgeBillableDataGb(normalized))
+  return kbFee + sourcesFee + dataFee
+}
+
+export function formatKnowledgeMeta(config: KnowledgeConfig): string {
+  const normalized = normalizeKnowledgeConfig(config)
+  const includedSources = getKnowledgeIncludedSources(normalized.kbCount)
+  const extraSources = getKnowledgeExtraSources(normalized)
+  const billableData = getKnowledgeBillableDataGb(normalized)
+  const parts = [
+    `${normalized.kbCount} KB × ${formatUsd(KNOWLEDGE_KB_ANNUAL)}`,
+    extraSources > 0
+      ? `${extraSources} extra sources × ${formatUsd(KNOWLEDGE_SOURCE_ANNUAL)}`
+      : `${normalized.sources}/${includedSources} sources included`,
+    billableData > 0
+      ? `${billableData.toLocaleString('en-US')} GB billable data`
+      : `${normalized.dataGb.toLocaleString('en-US')} GB included`,
+  ]
+  return parts.join(' · ')
+}
 
 // —— Programs (annual, not discounted, hidden in agency mode) ——
 
@@ -438,6 +600,17 @@ export function isAddonAvailable(addon: Addon, plan: Plan | null): boolean {
   }
   if (addon.allowedPlanIds) return addon.allowedPlanIds.includes(plan.id)
   return addon.enterpriseOnly
+}
+
+/** Enterprise features that Forward plans include / pick — also exist as add-ons. */
+export const FORWARD_MAPPED_ADDON_IDS: ReadonlyArray<AddonId> = [
+  'agent-builder',
+  'mastra-knowledge',
+  'trace-intelligence',
+]
+
+export function isForwardMappedAddon(id: string): id is AddonId {
+  return (FORWARD_MAPPED_ADDON_IDS as ReadonlyArray<string>).includes(id)
 }
 
 export interface AddonLine {
@@ -849,13 +1022,26 @@ export interface BuildQuoteInput {
   headcount?: number | null
   /** Trace Intelligence pool (analyzed traces/mo). */
   agentLearningPoolMonthly?: number
+  /**
+   * Traces/mo included at $0 before progressive overage.
+   * Defaults to TRACE_INCLUDED_MONTHLY (10k); Forward Growth/Enterprise raise this.
+   */
+  traceIncludedMonthly?: number
+  /** Mastra Knowledge volume config (legacy add-on). */
+  knowledgeConfig?: KnowledgeConfig
   agencyMode?: boolean
   platformConfig?: PlatformConfig
+  /**
+   * Features already included by a Mastra Forward plan. Those add-ons are not
+   * charged again; Trace Intelligence still bills progressive pool overage.
+   */
+  includedByForwardIds?: ReadonlyArray<AddonId>
 }
 
 export function buildQuote(input: BuildQuoteInput): Quote {
   const plan = input.planId == null ? null : getPlan(input.planId)
   const agencyMode = Boolean(input.agencyMode)
+  const includedByForward = new Set(input.includedByForwardIds ?? [])
 
   const headcount = input.headcount ?? null
   const headcountBand = getHeadcountBand(headcount)
@@ -865,30 +1051,51 @@ export function buildQuote(input: BuildQuoteInput): Quote {
     0,
     input.agentLearningPoolMonthly ?? DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
   )
+  const traceIncludedMonthly = Math.max(
+    0,
+    input.traceIncludedMonthly ?? TRACE_INCLUDED_MONTHLY,
+  )
+  const knowledgeConfig = normalizeKnowledgeConfig(input.knowledgeConfig)
 
   const addonIds = input.selectedAddonIds.filter((id) => {
     const addon = ADDONS.find((a) => a.id === id)
     return addon != null && isAddonAvailable(addon, plan)
   })
 
-  const agentLearningSelected = addonIds.includes('trace-intelligence')
+  const agentLearningPurchased = addonIds.includes('trace-intelligence')
+  const agentLearningFromForward = includedByForward.has('trace-intelligence')
+  const agentLearningSelected =
+    agentLearningPurchased || agentLearningFromForward
+  // $3k plan uplift only when TI is purchased as an add-on (not Forward-included).
   const planTraceUplift =
-    plan && agentLearningSelected ? TRACE_PLAN_UPLIFT_ANNUAL : 0
+    plan && agentLearningPurchased && !agentLearningFromForward
+      ? TRACE_PLAN_UPLIFT_ANNUAL
+      : 0
   const planAnnual =
     Math.round(planBaseAnnual * planMultiplier) + planTraceUplift
 
   const baseAddonPricing = priceAddons(
     plan,
     planAnnual,
-    addonIds.filter((id) => id !== 'trace-intelligence'),
+    addonIds.filter(
+      (id) =>
+        id !== 'trace-intelligence' &&
+        id !== 'mastra-knowledge' &&
+        !includedByForward.has(id),
+    ),
     headcount,
   )
 
   const agentLearningAddon = ADDONS.find((a) => a.id === 'trace-intelligence')!
   const agentLearningAmount = agentLearningSelected
-    ? getAgentLearningAnnual(agentLearningPoolMonthly)
+    ? getAgentLearningAnnual(agentLearningPoolMonthly, traceIncludedMonthly)
     : 0
-  const agentLearningLines: AddonLine[] = agentLearningSelected
+  // Forward covers TI access; only surface a product line for pool overage.
+  // Standalone TI purchase always surfaces a line (even at the $0 included pool).
+  const showAgentLearningLine = agentLearningFromForward
+    ? agentLearningAmount > 0
+    : agentLearningPurchased
+  const agentLearningLines: AddonLine[] = showAgentLearningLine
     ? [
         {
           addon: agentLearningAddon,
@@ -898,11 +1105,33 @@ export function buildQuote(input: BuildQuoteInput): Quote {
       ]
     : []
 
+  const knowledgeAddon = ADDONS.find((a) => a.id === 'mastra-knowledge')!
+  const knowledgePurchased =
+    addonIds.includes('mastra-knowledge') &&
+    !includedByForward.has('mastra-knowledge')
+  const knowledgeAmount = knowledgePurchased
+    ? getKnowledgeAnnual(knowledgeConfig)
+    : 0
+  const knowledgeLines: AddonLine[] = knowledgePurchased
+    ? [
+        {
+          addon: knowledgeAddon,
+          listAmount: knowledgeAmount,
+          billedAmount: knowledgeAmount,
+        },
+      ]
+    : []
+
   const addonPricing: AddonPricing = {
-    lines: [...baseAddonPricing.lines, ...agentLearningLines],
+    lines: [
+      ...baseAddonPricing.lines,
+      ...agentLearningLines,
+      ...knowledgeLines,
+    ],
     total:
       baseAddonPricing.total +
-      agentLearningLines.reduce((sum, line) => sum + line.billedAmount, 0),
+      agentLearningLines.reduce((sum, line) => sum + line.billedAmount, 0) +
+      knowledgeLines.reduce((sum, line) => sum + line.billedAmount, 0),
   }
 
   const platformSelected = Boolean(plan?.hasUsage)
@@ -941,25 +1170,28 @@ export function buildQuote(input: BuildQuoteInput): Quote {
   for (const line of addonPricing.lines) {
     const addonMultiplier = getAddonMultiplier(line.addon.id, headcount)
     const isAgentLearning = line.addon.id === 'trace-intelligence'
+    const isKnowledge = line.addon.id === 'mastra-knowledge'
     productLines.push({
       id: line.addon.id,
       name: line.addon.name,
       meta: isAgentLearning
-        ? agentLearningPoolMonthly <= TRACE_INCLUDED_MONTHLY
-          ? `${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')} traces/mo included${planTraceUplift > 0 ? ` · +${formatUsd(planTraceUplift)}/yr on plan` : ''}`
-          : `${agentLearningPoolMonthly.toLocaleString('en-US')} traces/mo progressive · blended ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · first ${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included${planTraceUplift > 0 ? ` · +${formatUsd(planTraceUplift)}/yr on plan` : ''}`
-        : [
-            line.addon.flatAnnual != null
-              ? headcountBand && addonMultiplier !== 1
-                ? `${formatUsd(line.addon.flatAnnual)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(addonMultiplier)}`
-                : 'Fixed annual subscription'
-              : `${formatPercent(line.addon.rate ?? 0)} of subscription`,
-            line.addon.annualMinimum > 0
-              ? `${formatUsd(line.addon.annualMinimum)} min`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(' · '),
+        ? agentLearningPoolMonthly <= traceIncludedMonthly
+          ? `${traceIncludedMonthly.toLocaleString('en-US')} traces/mo included${planTraceUplift > 0 ? ` · +${formatUsd(planTraceUplift)}/yr on plan` : ''}`
+          : `${agentLearningPoolMonthly.toLocaleString('en-US')} traces/mo progressive · blended ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k · first ${traceIncludedMonthly.toLocaleString('en-US')}/mo included${planTraceUplift > 0 ? ` · +${formatUsd(planTraceUplift)}/yr on plan` : ''}`
+        : isKnowledge
+          ? formatKnowledgeMeta(knowledgeConfig)
+          : [
+              line.addon.flatAnnual != null
+                ? headcountBand && addonMultiplier !== 1
+                  ? `${formatUsd(line.addon.flatAnnual)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(addonMultiplier)}`
+                  : 'Fixed annual subscription'
+                : `${formatPercent(line.addon.rate ?? 0)} of subscription`,
+              line.addon.annualMinimum > 0
+                ? `${formatUsd(line.addon.annualMinimum)} min`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · '),
       annualAmount: line.billedAmount,
       period: '/ yr',
       included: isAgentLearning && line.billedAmount === 0,
