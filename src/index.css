@@ -287,6 +287,24 @@ button {
   gap: 1.25rem;
 }
 
+.text-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted, #888);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.text-button:hover {
+  color: var(--text, #fff);
+}
+
 .forward-option-picker {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

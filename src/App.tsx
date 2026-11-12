@@ -4,12 +4,10 @@ import {
   DEFAULT_ENGINEER_COST_PER_HOUR,
   DEFAULT_PATH2_MARGIN,
   FORWARD_EMBEDDED_SELL_RATE_PER_HOUR,
-  FORWARD_HOURS_OPTIONS,
   getForwardCommitmentWeeks,
   getForwardEmbeddedAmount,
   getForwardEmbeddedCostAnnual,
   getForwardPeriodShortLabel,
-  hoursFromForwardAmount,
   PATH1_TIERS,
   type ForwardHoursCommitment,
   PATH2_EVALS_ID,
@@ -153,6 +151,10 @@ export default function App() {
   const [forwardHoursPerWeek, setForwardHoursPerWeek] = useState(2)
   const [forwardHoursCommitment, setForwardHoursCommitment] =
     useState<ForwardHoursCommitment>('quarter')
+  /** When set, annual Forward price is locked to this value (not hours × $210). */
+  const [forwardAnnualOverride, setForwardAnnualOverride] = useState<
+    number | null
+  >(null)
   const [forwardFeaturePicks, setForwardFeaturePicks] = useState<
     EnterpriseFeatureId[]
   >([])
@@ -192,10 +194,14 @@ export default function App() {
     forwardPlan.allowsQuarterlyHours && forwardHoursCommitment === 'quarter'
       ? 'quarter'
       : 'year'
-  const forwardPlanAmount = getForwardEmbeddedAmount(
+  const forwardListAmount = getForwardEmbeddedAmount(
     forwardHoursPerWeek,
     forwardCommitment,
   )
+  const forwardPlanAmount =
+    forwardAnnualOverride != null
+      ? Math.max(0, Math.round(forwardAnnualOverride))
+      : forwardListAmount
   const forwardPeriodShort = getForwardPeriodShortLabel(forwardCommitment)
   const forwardCommitmentWeeks = getForwardCommitmentWeeks(forwardCommitment)
 
@@ -618,6 +624,7 @@ export default function App() {
     setForwardHoursCommitment(next.allowsQuarterlyHours ? 'quarter' : 'year')
     const hoursOptions = getForwardPlanHoursOptions(next)
     setForwardHoursPerWeek(hoursOptions[0] ?? next.hoursMin)
+    setForwardAnnualOverride(null)
     setForwardFeaturePicks([])
   }
 
@@ -639,13 +646,8 @@ export default function App() {
     setForwardHoursPerWeek(hours)
   }
 
-  function applyForwardAmountFromPrice(amount: number) {
-    const hours = hoursFromForwardAmount(
-      amount,
-      forwardCommitment,
-      FORWARD_HOURS_OPTIONS,
-    )
-    applyForwardHours(hours)
+  function applyForwardAnnualOverride(amount: number) {
+    setForwardAnnualOverride(Math.max(0, Math.round(amount)))
   }
 
   function toggleForwardFeaturePick(id: EnterpriseFeatureId) {
@@ -1414,10 +1416,13 @@ export default function App() {
                             <div className="concierge-subhead">
                               <h4>Hours / week</h4>
                               <p>
-                                {forwardPlan.hoursNote} · select hours for an
-                                annual price, or enter annual to snap hours (
+                                {forwardPlan.hoursNote} · hours drive engineer
+                                cost; list rate is{' '}
                                 {formatUsd(FORWARD_EMBEDDED_SELL_RATE_PER_HOUR)}
-                                /hr × {forwardCommitmentWeeks} wks)
+                                /hr × {forwardCommitmentWeeks} wks
+                                {forwardAnnualOverride != null
+                                  ? ' · annual price overridden'
+                                  : ''}
                               </p>
                             </div>
                             <div
@@ -1449,7 +1454,7 @@ export default function App() {
                                           forwardCommitment,
                                         ),
                                       )}
-                                      /yr
+                                      /yr list
                                     </span>
                                   </button>
                                 ),
@@ -1457,20 +1462,32 @@ export default function App() {
                             </div>
                             <div className="ti-input-row">
                               <label htmlFor="forward-plan-annual">
-                                Or annual at{' '}
-                                {formatUsd(FORWARD_EMBEDDED_SELL_RATE_PER_HOUR)}
-                                /hr → hours
+                                Annual price
+                                {forwardAnnualOverride != null
+                                  ? ' (override)'
+                                  : ` (list ${formatUsd(forwardListAmount)})`}
                               </label>
                               <NumberField
                                 id="forward-plan-annual"
                                 value={forwardPlanAmount}
                                 min={0}
                                 onCommit={(next) =>
-                                  applyForwardAmountFromPrice(next ?? 0)
+                                  applyForwardAnnualOverride(next ?? 0)
                                 }
-                                aria-label="Mastra Forward annual price to derive hours"
+                                aria-label="Mastra Forward annual subscription price"
                               />
                             </div>
+                            {forwardAnnualOverride != null && (
+                              <button
+                                type="button"
+                                className="text-button"
+                                onClick={() => setForwardAnnualOverride(null)}
+                              >
+                                Reset to list (
+                                {formatUsd(forwardListAmount)}
+                                /yr)
+                              </button>
+                            )}
                             {forwardMargin && (
                               <div className="path2-price-breakdown">
                                 <span>
