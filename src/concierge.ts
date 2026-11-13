@@ -31,6 +31,9 @@ export const FORWARD_WEEKS_PER_QUARTER = PATH1_WEEKS_PER_QUARTER
 /** Fixed Mastra Forward bill rate for embedded engineering hours ($/hour). */
 export const FORWARD_EMBEDDED_SELL_RATE_PER_HOUR = 300
 
+/** Fixed annual list price for a 40 hrs/week Forward commitment. */
+export const FORWARD_40HR_ANNUAL_PRICE = 500_000
+
 /** Selectable Mastra Forward bill rates ($/hour). */
 export const FORWARD_RATE_OPTIONS = [
   140, 160, 180, 200, 225, 250, 275, 300,
@@ -83,12 +86,20 @@ export function getForwardPeriodShortLabel(
 /**
  * Annual Forward subscription for embedded engineering:
  * hours/wk × sell rate × commitment weeks (13 quarter / 52 year).
+ * 40 hrs/week is a fixed $500k/yr package (pro-rated for 3-mo commitment).
  */
 export function getForwardEmbeddedAmount(
   hoursPerWeek: number,
   commitment: ForwardHoursCommitment = 'year',
   sellRatePerHour = FORWARD_EMBEDDED_SELL_RATE_PER_HOUR,
 ): number {
+  if (hoursPerWeek === 40) {
+    if (commitment === 'year') return FORWARD_40HR_ANNUAL_PRICE
+    return Math.round(
+      (FORWARD_40HR_ANNUAL_PRICE * FORWARD_WEEKS_PER_QUARTER) /
+        FORWARD_WEEKS_PER_YEAR,
+    )
+  }
   return Math.round(
     Math.max(0, hoursPerWeek) *
       sellRatePerHour *
