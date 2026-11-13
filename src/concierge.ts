@@ -29,7 +29,7 @@ export const FORWARD_WEEKS_PER_YEAR = 52
 export const FORWARD_WEEKS_PER_QUARTER = PATH1_WEEKS_PER_QUARTER
 
 /** Fixed Mastra Forward bill rate for embedded engineering hours ($/hour). */
-export const FORWARD_EMBEDDED_SELL_RATE_PER_HOUR = 210
+export const FORWARD_EMBEDDED_SELL_RATE_PER_HOUR = 300
 
 /** Selectable Mastra Forward bill rates ($/hour). */
 export const FORWARD_RATE_OPTIONS = [

@@ -151,7 +151,7 @@ export default function App() {
   const [forwardHoursPerWeek, setForwardHoursPerWeek] = useState(2)
   const [forwardHoursCommitment, setForwardHoursCommitment] =
     useState<ForwardHoursCommitment>('quarter')
-  /** When set, annual Forward price is locked to this value (not hours × $210). */
+  /** When set, annual Forward price is locked to this value (not hours × $300). */
   const [forwardAnnualOverride, setForwardAnnualOverride] = useState<
     number | null
   >(null)
@@ -621,7 +621,8 @@ export default function App() {
   function selectForwardPlan(id: ForwardPlanId) {
     const next = getForwardPlan(id)
     setForwardPlanId(id)
-    setForwardHoursCommitment(next.allowsQuarterlyHours ? 'quarter' : 'year')
+    // Startup defaults to 3-mo hours; Growth/Enterprise default to 12-mo.
+    setForwardHoursCommitment(next.id === 'startup' ? 'quarter' : 'year')
     const hoursOptions = getForwardPlanHoursOptions(next)
     setForwardHoursPerWeek(hoursOptions[0] ?? next.hoursMin)
     setForwardAnnualOverride(null)
@@ -1375,8 +1376,8 @@ export default function App() {
                                 <h4>Hours commitment</h4>
                                 <p>
                                   Billing is always an annual subscription.
-                                  Choose whether embedded hours cover 3 months
-                                  or 12 months.
+                                  Choose whether embedded hours cover a quarter
+                                  (3 months) or a full year.
                                 </p>
                               </div>
                               <div

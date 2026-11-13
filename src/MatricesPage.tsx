@@ -126,14 +126,15 @@ export default function MatricesPage() {
             </table>
           </div>
           <p className="matrix-note">
-            Embedded engineering is always an annual subscription at $210/hr ×
-            hours/week × commitment weeks (13 for Startup 3-month hours, 52 for
-            12-month). Engineer cost ($110/hr × same weeks) is measured against
-            that annual price. Platform packages are paused for now. Trace
-            Intelligence includes 25k traces/mo on Growth and 50k on Enterprise
-            (10k when picked on Startup); margin COGS is $0.005/trace. Agent
-            Builder, Mastra Knowledge, and Trace Intelligence map to the same
-            add-ons when purchased outside Forward.
+            Embedded engineering is always an annual subscription at $300/hr ×
+            hours/week × commitment weeks (13 quarterly / 3-mo, or 52 annual /
+            12-mo on all Forward plans). Guidance bands: Startup $7.8k–$62.4k,
+            Growth $15.6k–$124.8k, Enterprise $39k+. Engineer cost ($110/hr ×
+            same weeks) is measured against that annual price. Platform packages
+            are paused for now. Trace Intelligence includes 25k traces/mo on
+            Growth and 50k on Enterprise (10k when picked on Startup); margin
+            COGS is $0.005/trace. Agent Builder, Mastra Knowledge, and Trace
+            Intelligence map to the same add-ons when purchased outside Forward.
           </p>
         </section>
 

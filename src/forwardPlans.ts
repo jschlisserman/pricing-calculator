@@ -48,9 +48,12 @@ export interface ForwardPlan {
   id: ForwardPlanId
   name: string
   description: string
-  /** Inclusive annual price floor. */
+  /**
+   * Inclusive annual price floor (hrs × $300 × commitment weeks).
+   * Ranges span 3-mo (13 wk) and 12-mo (52 wk) hours commitments.
+   */
   priceMin: number
-  /** Inclusive annual price ceiling; null = open-ended ($100K+). */
+  /** Inclusive annual price ceiling; null = open-ended. */
   priceMax: number | null
   hoursMin: number
   hoursMax: number | null
@@ -67,7 +70,7 @@ export interface ForwardPlan {
   includedConnections: number
   includedPackageValueAnnual: number
   allowsPrivateDeployment: boolean
-  /** Startup can choose 3-month or 12-month hours commitment; others are annual-only. */
+  /** Plan can choose 3-month or 12-month hours commitment. */
   allowsQuarterlyHours: boolean
   /** @deprecated Use allowsQuarterlyHours */
   allowsQuarterlyBilling: boolean
@@ -83,8 +86,9 @@ export const FORWARD_PLANS: ForwardPlan[] = [
     id: 'startup',
     name: 'Startup',
     description: 'One team getting its first agents into production.',
-    priceMin: 8_000,
-    priceMax: 25_000,
+    // 2×$300×13 … 4×$300×52
+    priceMin: 7_800,
+    priceMax: 62_400,
     hoursMin: 2,
     hoursMax: 4,
     hoursNote: 'Hours reset weekly',
@@ -108,8 +112,9 @@ export const FORWARD_PLANS: ForwardPlan[] = [
     id: 'growth',
     name: 'Growth',
     description: 'Several teams building on Mastra, with no-code builders.',
-    priceMin: 30_000,
-    priceMax: 85_000,
+    // 4×$300×13 … 8×$300×52
+    priceMin: 15_600,
+    priceMax: 124_800,
     hoursMin: 4,
     hoursMax: 8,
     hoursNote: 'Unused hours roll over within the quarter',
@@ -121,15 +126,16 @@ export const FORWARD_PLANS: ForwardPlan[] = [
     includedConnections: 0,
     includedPackageValueAnnual: 25_500,
     allowsPrivateDeployment: false,
-    allowsQuarterlyHours: false,
-    allowsQuarterlyBilling: false,
+    allowsQuarterlyHours: true,
+    allowsQuarterlyBilling: true,
     traceIntelligenceIncludedMonthly: 25_000,
   },
   {
     id: 'enterprise',
     name: 'Enterprise',
     description: 'Company-wide rollout with a dedicated Mastra team.',
-    priceMin: 100_000,
+    // 10×$300×13 and up
+    priceMin: 39_000,
     priceMax: null,
     hoursMin: 10,
     hoursMax: null,
@@ -146,8 +152,8 @@ export const FORWARD_PLANS: ForwardPlan[] = [
     includedConnections: 1_000,
     includedPackageValueAnnual: 60_000,
     allowsPrivateDeployment: true,
-    allowsQuarterlyHours: false,
-    allowsQuarterlyBilling: false,
+    allowsQuarterlyHours: true,
+    allowsQuarterlyBilling: true,
     traceIntelligenceIncludedMonthly: 50_000,
   },
 ]
@@ -557,7 +563,7 @@ export function buildForwardQuote(input: BuildForwardQuoteInput): ForwardQuote {
   const hoursPerWeek = hoursOptions.includes(input.hoursPerWeek)
     ? input.hoursPerWeek
     : (hoursOptions[0] ?? plan.hoursMin)
-  // Annual subscription = hours/wk × $210 × commitment weeks (13 or 52).
+  // Annual subscription = hours/wk × $300 × commitment weeks (13 or 52).
   const planAmount = Math.max(
     0,
     Math.round(input.planAmount ?? input.planAnnual ?? 0),
