@@ -65,6 +65,7 @@ import {
   buildQuote,
   defaultPlatformConfig,
   formatPercent,
+  formatTraceUnitRate,
   formatUnitCost,
   formatUsd,
   formatMultiplier,
@@ -2077,7 +2078,7 @@ export default function App() {
                             <div className="total-row muted">
                               <span>
                                 Trace Intelligence margin (COGS{' '}
-                                {formatUsd(TRACE_COST_PER_TRACE)}/trace)
+                                {formatTraceUnitRate(TRACE_COST_PER_TRACE)}/trace)
                               </span>
                               <span>
                                 {formatUsd(
@@ -2148,7 +2149,7 @@ export default function App() {
                             <span>
                               Forward margin
                               {forwardMargin.tiCost > 0
-                                ? ` (incl. TI COGS ${formatUsd(TRACE_COST_PER_TRACE)}/trace)`
+                                ? ` (incl. TI COGS ${formatTraceUnitRate(TRACE_COST_PER_TRACE)}/trace)`
                                 : ''}
                             </span>
                             <span>
