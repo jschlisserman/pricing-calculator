@@ -581,7 +581,7 @@ export function buildForwardQuote(input: BuildForwardQuoteInput): ForwardQuote {
   const lines: ForwardQuoteLine[] = [
     {
       id: 'forward-plan',
-      name: `Mastra Forward · ${plan.name}`,
+      name: `Mastra Packages · ${plan.name}`,
       meta: `${formatUsd(FORWARD_EMBEDDED_SELL_RATE_PER_HOUR)}/hr · ${hoursPerWeek} hrs/wk × ${commitmentWeeks} wks (${hoursCommitment === 'quarter' ? '3-mo hours' : '12-mo hours'}) · annual subscription · ${plan.hoursNote}`,
       amount: planAmount,
       annualAmount: planAmount,
@@ -599,8 +599,8 @@ export function buildForwardQuote(input: BuildForwardQuoteInput): ForwardQuote {
       name: feature.name,
       meta:
         tiIncluded != null
-          ? `Included with Forward plan · ${tiIncluded.toLocaleString('en-US')} traces/mo`
-          : 'Included with Forward plan',
+          ? `Included with Mastra Packages · ${tiIncluded.toLocaleString('en-US')} traces/mo`
+          : 'Included with Mastra Packages',
       amount: 0,
       annualAmount: 0,
       included: true,

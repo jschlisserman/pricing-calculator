@@ -7,8 +7,6 @@ export type Path1TierId =
 
 export type Path2PackageId =
   | 'support-path2-evals'
-  | 'support-path2-integrations'
-  | 'support-path2-infrastructure'
   | 'support-path2-custom'
 
 export const AUDIT_ID = 'support-audit'
@@ -22,24 +20,24 @@ export const PATH1_WEEKS_PER_QUARTER = 13
 /** Default fully loaded engineer cost for Support / Forward margin ($/hr). */
 export const DEFAULT_ENGINEER_COST_PER_HOUR = 110
 
-/** Weeks per year used to annualize Mastra Forward hours/week. */
+/** Weeks per year used to annualize Mastra Packages hours/week. */
 export const FORWARD_WEEKS_PER_YEAR = 52
 
 /** Weeks per quarter used for Startup Forward quarterly billing. */
 export const FORWARD_WEEKS_PER_QUARTER = PATH1_WEEKS_PER_QUARTER
 
-/** Fixed Mastra Forward bill rate for embedded engineering hours ($/hour). */
+/** Fixed Mastra Packages bill rate for embedded engineering hours ($/hour). */
 export const FORWARD_EMBEDDED_SELL_RATE_PER_HOUR = 300
 
 /** Fixed annual list price for a 40 hrs/week Forward commitment. */
 export const FORWARD_40HR_ANNUAL_PRICE = 500_000
 
-/** Selectable Mastra Forward bill rates ($/hour). */
+/** Selectable Mastra Packages bill rates ($/hour). */
 export const FORWARD_RATE_OPTIONS = [
   140, 160, 180, 200, 225, 250, 275, 300,
 ] as const
 
-/** Selectable Mastra Forward hours per week. */
+/** Selectable Mastra Packages hours per week. */
 export const FORWARD_HOURS_OPTIONS = [
   2, 4, 6, 8, 10, 12, 15, 20, 40,
 ] as const
@@ -282,8 +280,6 @@ export const PATH2_EVALS_ID: Path2PackageId = 'support-path2-evals'
 
 export const PATH2_PACKAGES: Path2Package[] = [
   { id: PATH2_EVALS_ID, name: 'Evals', flatPrice: 5_000 },
-  { id: 'support-path2-integrations', name: 'Integrations' },
-  { id: 'support-path2-infrastructure', name: 'Infrastructure' },
   { id: 'support-path2-custom', name: 'Custom' },
 ]
 

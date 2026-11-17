@@ -72,7 +72,7 @@ export default function MatricesPage() {
 
       <div className="matrix-stack animate-in delay-2">
         <section className="matrix-card">
-          <h2>Mastra Forward plans</h2>
+          <h2>Mastra Packages</h2>
           <div className="matrix-wrap">
             <table className="matrix-table">
               <thead>
@@ -128,14 +128,14 @@ export default function MatricesPage() {
           <p className="matrix-note">
             Embedded engineering is always an annual subscription at $300/hr ×
             hours/week × commitment weeks (13 quarterly / 3-mo, or 52 annual /
-            12-mo on all Forward plans), except 40 hrs/week which is a fixed
+            12-mo on all Packages), except 40 hrs/week which is a fixed
             $500k/yr (pro-rated for 3-mo). Guidance bands: Startup $7.8k–$62.4k,
             Growth $15.6k–$124.8k, Enterprise $39k–$500k. Engineer cost ($110/hr ×
             same weeks) is measured against that annual price. Platform packages
             are paused for now. Trace Intelligence includes 25k traces/mo on
             Growth and 50k on Enterprise (10k when picked on Startup); margin
             COGS is $0.005/trace. Agent Builder, Mastra Knowledge, and Trace
-            Intelligence map to the same add-ons when purchased outside Forward.
+            Intelligence map to the same add-ons when purchased outside Packages.
           </p>
         </section>
 
@@ -225,7 +225,7 @@ export default function MatricesPage() {
             Trace Intelligence uses progressive per-trace bands (first 10k/mo
             at $0, then down through 10M); selecting it as an add-on adds
             $3,000/yr to the plan. Not multiplied by headcount. When included
-            via Forward, the $3k uplift is waived; pool overage still bills.
+            via Packages, the $3k uplift is waived; pool overage still bills.
             Mastra Knowledge is volume-priced ($6K/KB/yr with 3 sources + 10GB
             included; +$1K/yr per extra source; data $2.5K/$1.5K/$750 per 100GB
             by band) and is not multiplied by headcount.

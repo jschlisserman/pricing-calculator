@@ -58,7 +58,6 @@ import {
   getTraceIntelligenceCostAnnual,
   PLANS,
   PLATFORM_PACKAGES,
-  PROGRAMS,
   PLATFORM_USAGE_METRICS,
   TRACE_INTELLIGENCE_POOLS,
   buildPlatformMargin,
@@ -90,7 +89,6 @@ import {
   type AddonId,
   type KnowledgeConfig,
   type PlanId,
-  type ProgramId,
   type PlatformConfig,
   type PlatformPackageId,
 } from './pricing'
@@ -141,7 +139,6 @@ export default function App() {
   const [knowledgeConfig, setKnowledgeConfig] = useState<KnowledgeConfig>(
     DEFAULT_KNOWLEDGE_CONFIG,
   )
-  const [selectedPrograms, setSelectedPrograms] = useState<ProgramId[]>([])
   const [headcount, setHeadcount] = useState<number | null>(null)
   const headcountBand = getHeadcountBand(headcount)
   const evalsMultiplier = getEvalsMultiplier(headcount)
@@ -184,7 +181,6 @@ export default function App() {
   useEffect(() => {
     if (agencyMode) {
       setSupportIds([])
-      setSelectedPrograms([])
       setMastraForwardSelected(false)
     }
   }, [agencyMode])
@@ -312,7 +308,6 @@ export default function App() {
       buildQuote({
         planId,
         selectedAddonIds: selectedAddons,
-        selectedProgramIds: selectedPrograms,
         headcount,
         agentLearningPoolMonthly,
         traceIncludedMonthly,
@@ -324,7 +319,6 @@ export default function App() {
     [
       planId,
       selectedAddons,
-      selectedPrograms,
       headcount,
       agentLearningPoolMonthly,
       traceIncludedMonthly,
@@ -543,12 +537,6 @@ export default function App() {
     )
   }
 
-  function toggleProgram(id: ProgramId) {
-    setSelectedPrograms((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    )
-  }
-
   function toggleSupport(id: string) {
     setSupportIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
@@ -664,7 +652,6 @@ export default function App() {
   function clearOrder() {
     setPlanId(null)
     setSelectedAddons([])
-    setSelectedPrograms([])
     setHeadcount(null)
     setAgentLearningPoolMonthly(DEFAULT_AGENT_LEARNING_POOL_MONTHLY)
     setKnowledgeConfig(DEFAULT_KNOWLEDGE_CONFIG)
@@ -1005,7 +992,7 @@ export default function App() {
                           <span className="item-name">
                             {addon.name}
                             {coveredByForward ? (
-                              <span className="pill">Included with Forward</span>
+                              <span className="pill">Included with Packages</span>
                             ) : (
                               !allowed && (
                                 <span className="pill">
@@ -1268,7 +1255,7 @@ export default function App() {
                             {forwardIncludedAddonIds.includes(
                               'trace-intelligence',
                             )
-                              ? ' Included with Forward — $3,000/yr plan uplift waived.'
+                              ? ' Included with Packages — $3,000/yr plan uplift waived.'
                               : ` Selecting Trace Intelligence adds ${formatUsd(TRACE_PLAN_UPLIFT_ANNUAL)}/yr to the selected plan.`}{' '}
                             Pool cost stacks each band up to the committed
                             monthly volume. Pool resets monthly; overage bills
@@ -1286,7 +1273,7 @@ export default function App() {
               {!agencyMode && (
                 <section className="category">
                   <div className="category-title">
-                    <h3>Mastra Forward</h3>
+                    <h3>Mastra Packages</h3>
                     <span className="category-meta">Plans</span>
                   </div>
                   <div className="items">
@@ -1310,7 +1297,7 @@ export default function App() {
                           {mastraForwardSelected ? <CheckIcon /> : null}
                         </span>
                         <span className="item-body">
-                          <span className="item-name">Mastra Forward</span>
+                          <span className="item-name">Mastra Packages</span>
                           <p className="item-desc">
                             Embedded Mastra team with enterprise feature picks.
                             Startup / Growth / Enterprise.
@@ -1341,7 +1328,7 @@ export default function App() {
                             <div
                               className="mode-picker forward-option-picker"
                               role="radiogroup"
-                              aria-label="Mastra Forward plan"
+                              aria-label="Mastra Packages plan"
                             >
                               {FORWARD_PLANS.map((fwdPlan) => (
                                 <button
@@ -1383,7 +1370,7 @@ export default function App() {
                               <div
                                 className="mode-picker path1-billing-picker"
                                 role="radiogroup"
-                                aria-label="Mastra Forward hours commitment"
+                                aria-label="Mastra Packages hours commitment"
                               >
                                 <button
                                   type="button"
@@ -1429,7 +1416,7 @@ export default function App() {
                             <div
                               className="mode-picker forward-option-picker"
                               role="radiogroup"
-                              aria-label="Mastra Forward hours per week"
+                              aria-label="Mastra Packages hours per week"
                             >
                               {getForwardPlanHoursOptions(forwardPlan).map(
                                 (hours) => (
@@ -1475,7 +1462,7 @@ export default function App() {
                                 onCommit={(next) =>
                                   applyForwardAnnualOverride(next ?? 0)
                                 }
-                                aria-label="Mastra Forward annual subscription price"
+                                aria-label="Mastra Packages annual subscription price"
                               />
                             </div>
                             {forwardAnnualOverride != null && (
@@ -1698,42 +1685,6 @@ export default function App() {
                         </div>
                       )}
                     </div>
-                  </div>
-                </section>
-              )}
-
-              {!agencyMode && (
-                <section className="category">
-                  <div className="category-title">
-                    <h3>Programs</h3>
-                    <span className="category-meta">Annual</span>
-                  </div>
-                  <div className="items">
-                    {PROGRAMS.map((program) => {
-                      const selected = selectedPrograms.includes(program.id)
-                      return (
-                        <button
-                          key={program.id}
-                          type="button"
-                          className={`item${selected ? ' selected' : ''}`}
-                          onClick={() => toggleProgram(program.id)}
-                          aria-pressed={selected}
-                        >
-                          <span className="check" aria-hidden="true">
-                            {selected ? <CheckIcon /> : null}
-                          </span>
-                          <span className="item-body">
-                            <span className="item-name">{program.name}</span>
-                            <p className="item-desc">{program.description}</p>
-                          </span>
-                          <span className="item-price">
-                            {formatUsd(program.annualFee)}
-                            <br />
-                            / year
-                          </span>
-                        </button>
-                      )
-                    })}
                   </div>
                 </section>
               )}
@@ -2037,19 +1988,6 @@ export default function App() {
                                   <CloseIcon />
                                 </button>
                               )}
-                              {(line.id === 'agency-program' ||
-                                line.id === 'design-partner-program') && (
-                                <button
-                                  type="button"
-                                  className="remove"
-                                  onClick={() =>
-                                    toggleProgram(line.id as ProgramId)
-                                  }
-                                  aria-label={`Remove ${line.name}`}
-                                >
-                                  <CloseIcon />
-                                </button>
-                              )}
                             </li>
                           )
                         })}
@@ -2095,7 +2033,7 @@ export default function App() {
 
                   {hasMastraForward && mastraForward && (
                     <div className="summary-group">
-                      <h3 className="summary-group-title">Mastra Forward</h3>
+                      <h3 className="summary-group-title">Mastra Packages</h3>
                       <ul className="order-lines">
                         {mastraForward.lines.map((line, index) => (
                           <li className="order-line" key={line.id}>
@@ -2128,7 +2066,7 @@ export default function App() {
                                 type="button"
                                 className="remove"
                                 onClick={() => setMastraForwardSelected(false)}
-                                aria-label="Remove Mastra Forward"
+                                aria-label="Remove Mastra Packages"
                               >
                                 <CloseIcon />
                               </button>
@@ -2138,7 +2076,7 @@ export default function App() {
                       </ul>
                       <div className="totals">
                         <div className="total-row grand">
-                          <span>Mastra Forward / year</span>
+                          <span>Mastra Packages / year</span>
                           <span>
                             {formatUsd(Math.round(mastraForward.periodTotal))}
                           </span>
