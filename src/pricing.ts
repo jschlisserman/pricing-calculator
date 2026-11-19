@@ -336,7 +336,8 @@ function formatTraceVolume(n: number): string {
   return n.toLocaleString('en-US')
 }
 
-function formatTraceUnitRate(rate: number): string {
+/** Per-trace price, e.g. $0.0050 (formatUsd would round it to $0.01). */
+export function formatTraceUnitRate(rate: number): string {
   if (rate === 0) return '$0.00'
   const digits = rate < 0.01 ? 4 : 3
   return `$${rate.toFixed(digits)}`
