@@ -8,6 +8,7 @@ import {
   getForwardEmbeddedAmount,
   getForwardEmbeddedCostAnnual,
   getForwardPeriodShortLabel,
+  roundForwardListPrice,
   PATH1_TIERS,
   type ForwardHoursCommitment,
   PATH2_EVALS_ID,
@@ -15,7 +16,6 @@ import {
   PATH2_PACKAGES,
   buildSupportMargin,
   buildSupportQuote,
-  getAuditFee,
   getPath1ImpliedHourly,
   getPath1ListPrice,
   getPath1PeriodLabel,
@@ -43,15 +43,9 @@ import {
 } from './forwardPlans'
 import {
   ADDONS,
-  AGENCY_MODE_DISCOUNT,
   DEFAULT_AGENT_LEARNING_POOL_MONTHLY,
   DEFAULT_KNOWLEDGE_CONFIG,
-  KNOWLEDGE_DATA_BANDS,
-  KNOWLEDGE_DATA_BLOCK_GB,
-  KNOWLEDGE_DATA_INCLUDED_GB_PER_KB,
-  KNOWLEDGE_KB_ANNUAL,
-  KNOWLEDGE_SOURCE_ANNUAL,
-  KNOWLEDGE_SOURCES_INCLUDED_PER_KB,
+  SOFTWARE_ADDON_IDS,
   TRACE_COST_PER_TRACE,
   TRACE_INCLUDED_MONTHLY,
   TRACE_PLAN_UPLIFT_ANNUAL,
@@ -74,18 +68,11 @@ import {
   getAgentLearningMonthly,
   getEvalsMultiplier,
   getHeadcountBand,
-  getKnowledgeAnnual,
-  getKnowledgeBillableDataGb,
-  getKnowledgeDataAnnual,
-  getKnowledgeExtraSources,
-  getKnowledgeIncludedDataGb,
-  getKnowledgeIncludedSources,
   getPlan,
   getPlanMultiplier,
   getTraceIntelligenceRatePer1k,
   isAddonAvailable,
   isForwardMappedAddon,
-  normalizeKnowledgeConfig,
   platformConfigFromPackage,
   type AddonId,
   type KnowledgeConfig,
@@ -126,9 +113,16 @@ function CloseIcon() {
 }
 
 type AppPage = 'order' | 'review' | 'matrices'
+type PricingSection = 'software' | 'services' | 'software-services'
+
+const SOFTWARE_ADDONS = SOFTWARE_ADDON_IDS.map(
+  (id) => ADDONS.find((addon) => addon.id === id)!,
+)
 
 export default function App() {
   const [page, setPage] = useState<AppPage>('order')
+  const [pricingSection, setPricingSection] =
+    useState<PricingSection>('software')
   const [reviewSnapshot, setReviewSnapshot] = useState<OrderSnapshot | null>(
     null,
   )
@@ -143,12 +137,11 @@ export default function App() {
   const [headcount, setHeadcount] = useState<number | null>(null)
   const headcountBand = getHeadcountBand(headcount)
   const evalsMultiplier = getEvalsMultiplier(headcount)
-  const [agencyMode, setAgencyMode] = useState(false)
   const [mastraForwardSelected, setMastraForwardSelected] = useState(false)
   const [forwardPlanId, setForwardPlanId] = useState<ForwardPlanId>('startup')
   const [forwardHoursPerWeek, setForwardHoursPerWeek] = useState(2)
   const [forwardHoursCommitment, setForwardHoursCommitment] =
-    useState<ForwardHoursCommitment>('quarter')
+    useState<ForwardHoursCommitment>('year')
   /** When set, annual Forward price is locked to this value (not hours × $300). */
   const [forwardAnnualOverride, setForwardAnnualOverride] = useState<
     number | null
@@ -163,7 +156,7 @@ export default function App() {
   const [path2Hours, setPath2Hours] = useState<Path2Hours>({})
   const [path2Margins, setPath2Margins] = useState<Path2Margins>({})
   const [path1BillingPeriod, setPath1BillingPeriod] =
-    useState<Path1BillingPeriod>('quarter')
+    useState<Path1BillingPeriod>('year')
   const [engineerCostPerHour] = useState(DEFAULT_ENGINEER_COST_PER_HOUR)
 
   const plan = planId == null ? null : getPlan(planId)
@@ -178,13 +171,6 @@ export default function App() {
       }),
     )
   }, [planId])
-
-  useEffect(() => {
-    if (agencyMode) {
-      setSupportIds([])
-      setMastraForwardSelected(false)
-    }
-  }, [agencyMode])
 
   const forwardPlan = getForwardPlan(forwardPlanId)
   const forwardCommitment: ForwardHoursCommitment =
@@ -204,7 +190,7 @@ export default function App() {
 
   const mastraForward = useMemo(
     () =>
-      agencyMode || !mastraForwardSelected
+      !mastraForwardSelected
         ? null
         : buildForwardQuote({
             planId: forwardPlanId,
@@ -214,7 +200,6 @@ export default function App() {
             featurePicks: forwardFeaturePicks,
           }),
     [
-      agencyMode,
       mastraForwardSelected,
       forwardPlanId,
       forwardPlanAmount,
@@ -313,7 +298,7 @@ export default function App() {
         agentLearningPoolMonthly,
         traceIncludedMonthly,
         knowledgeConfig,
-        agencyMode,
+        agencyMode: false,
         platformConfig,
         includedByForwardIds: forwardIncludedAddonIds,
       }),
@@ -324,7 +309,6 @@ export default function App() {
       agentLearningPoolMonthly,
       traceIncludedMonthly,
       knowledgeConfig,
-      agencyMode,
       platformConfig,
       forwardIncludedAddonIds,
     ],
@@ -423,14 +407,11 @@ export default function App() {
   ])
 
   const selectedPath1Id = supportIds.find(isPath1Id)
-  const auditSelected = supportIds.includes(AUDIT_ID)
-  const auditFee = getAuditFee()
   const hasSupport =
-    !agencyMode &&
-    (support.path1 != null ||
-      support.path2.length > 0 ||
-      support.audit != null)
-  const hasMastraForward = !agencyMode && mastraForward != null
+    support.path1 != null ||
+    support.path2.length > 0 ||
+    support.audit != null
+  const hasMastraForward = mastraForward != null
   const hasProducts = quote.productLines.length > 0
   const hasOrder = hasProducts || hasSupport || hasMastraForward
 
@@ -464,40 +445,38 @@ export default function App() {
     }
 
     const supportLines: OrderLineSnapshot[] = []
-    if (!agencyMode) {
-      if (support.path1) {
-        supportLines.push({
-          name: `Support Path 1 · ${support.path1.tier.name}`,
-          meta: `${support.path1.tier.hoursPerWeek} hrs/wk · ${
-            support.path1.billingPeriod === 'year' ? 'Annual' : 'Quarterly'
-          }`,
-          listAmount: support.path1.listAmount,
-          billedAmount: support.path1.billedAmount,
-          period: support.path1.periodLabel,
-        })
-      }
-      for (const line of support.path2) {
-        supportLines.push({
-          name: `Support Path 2 · ${line.package.name}`,
-          meta:
-            line.flatPrice != null
-              ? line.flatMultiplier !== 1 && headcountBand
-                ? `${formatUsd(line.flatPrice)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(line.flatMultiplier)} · Flat one-time`
-                : 'Flat one-time'
-              : `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
-          listAmount: line.listAmount > 0 ? line.listAmount : null,
-          billedAmount: line.listAmount > 0 ? line.billedAmount : null,
-          period: '/ one-time',
-        })
-      }
-      if (support.audit) {
-        supportLines.push({
-          name: 'Mastra Audit',
-          listAmount: support.audit.listAmount,
-          billedAmount: support.audit.billedAmount,
-          period: '/ one-time',
-        })
-      }
+    if (support.path1) {
+      supportLines.push({
+        name: support.path1.tier.name,
+        meta: `${support.path1.tier.hoursPerWeek} hrs/wk · ${
+          support.path1.billingPeriod === 'year' ? 'Annual' : '3 months'
+        }`,
+        listAmount: support.path1.listAmount,
+        billedAmount: support.path1.billedAmount,
+        period: support.path1.periodLabel,
+      })
+    }
+    for (const line of support.path2) {
+      supportLines.push({
+        name: line.package.name,
+        meta:
+          line.flatPrice != null
+            ? line.flatMultiplier !== 1 && headcountBand
+              ? `${formatUsd(line.flatPrice)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(line.flatMultiplier)} · Flat one-time`
+              : 'Flat one-time'
+            : `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
+        listAmount: line.listAmount > 0 ? line.listAmount : null,
+        billedAmount: line.listAmount > 0 ? line.billedAmount : null,
+        period: '/ one-time',
+      })
+    }
+    if (support.audit) {
+      supportLines.push({
+        name: 'Mastra Audit',
+        listAmount: support.audit.listAmount,
+        billedAmount: support.audit.billedAmount,
+        period: '/ one-time',
+      })
     }
 
     return {
@@ -506,9 +485,7 @@ export default function App() {
         quote.headcountBand && quote.headcount != null
           ? `${quote.headcount.toLocaleString('en-US')} employees · ${quote.headcountBand.name} (${quote.headcountBand.rangeLabel})`
           : null,
-      agencyModeLabel: agencyMode
-        ? `Agency mode (${formatPercent(AGENCY_MODE_DISCOUNT)} off subscription)`
-        : null,
+      agencyModeLabel: null,
       productLines,
       productTotal: quote.annualTotal,
       forwardLines,
@@ -517,16 +494,14 @@ export default function App() {
         : null,
       forwardPeriod: hasMastraForward ? '/ yr' : null,
       supportLines,
-      supportPath1Total:
-        !agencyMode && support.path1 ? support.path1Total : null,
-      supportPath1Period:
-        !agencyMode && support.path1 ? support.path1.periodLabel : null,
+      supportPath1Total: support.path1 ? support.path1Total : null,
+      supportPath1Period: support.path1 ? support.path1.periodLabel : null,
       supportOneTimeTotal:
-        !agencyMode && (support.path2.length > 0 || support.audit)
+        support.path2.length > 0 || support.audit
           ? support.oneTimeTotal
           : null,
     }
-  }, [hasOrder, hasMastraForward, quote, support, mastraForward, agencyMode, headcountBand])
+  }, [hasOrder, hasMastraForward, quote, support, mastraForward, headcountBand])
 
   function selectPlan(id: PlanId) {
     setPlanId(id)
@@ -610,8 +585,7 @@ export default function App() {
   function selectForwardPlan(id: ForwardPlanId) {
     const next = getForwardPlan(id)
     setForwardPlanId(id)
-    // Startup defaults to 3-mo hours; Growth/Enterprise default to 12-mo.
-    setForwardHoursCommitment(next.id === 'startup' ? 'quarter' : 'year')
+    setForwardHoursCommitment('year')
     const hoursOptions = getForwardPlanHoursOptions(next)
     setForwardHoursPerWeek(hoursOptions[0] ?? next.hoursMin)
     setForwardAnnualOverride(null)
@@ -627,9 +601,7 @@ export default function App() {
         ) ?? null
       if (nextPlan && nextPlan.id !== forwardPlanId) {
         setForwardPlanId(nextPlan.id)
-        setForwardHoursCommitment(
-          nextPlan.allowsQuarterlyHours ? forwardHoursCommitment : 'year',
-        )
+        setForwardHoursCommitment('year')
         setForwardFeaturePicks([])
       }
     }
@@ -637,7 +609,7 @@ export default function App() {
   }
 
   function applyForwardAnnualOverride(amount: number) {
-    setForwardAnnualOverride(Math.max(0, Math.round(amount)))
+    setForwardAnnualOverride(roundForwardListPrice(amount))
   }
 
   function toggleForwardFeaturePick(id: EnterpriseFeatureId) {
@@ -656,14 +628,14 @@ export default function App() {
     setHeadcount(null)
     setAgentLearningPoolMonthly(DEFAULT_AGENT_LEARNING_POOL_MONTHLY)
     setKnowledgeConfig(DEFAULT_KNOWLEDGE_CONFIG)
-    setAgencyMode(false)
     setMastraForwardSelected(false)
     selectForwardPlan('startup')
     setSupportIds([])
     setPlatformConfig(defaultPlatformConfig(0))
     setPath2Hours({})
     setPath2Margins({})
-    setPath1BillingPeriod('quarter')
+    setPath1BillingPeriod('year')
+    setPricingSection('software')
   }
 
   return (
@@ -726,6 +698,37 @@ export default function App() {
 
           <div className="layout animate-in delay-2">
             <div className="panel">
+              <div
+                className="pricing-section-tabs"
+                role="tablist"
+                aria-label="Pricing sections"
+              >
+                {(
+                  [
+                    ['software', 'Software'],
+                    ['services', 'Services'],
+                    ['software-services', 'Software + Services'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    className={`pricing-section-tab${pricingSection === id ? ' active' : ''}`}
+                    aria-selected={pricingSection === id}
+                    onClick={() => setPricingSection(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="pricing-section-note">
+                Software and Software + Services are annual contracts. Support
+                Small / Medium / Large can be 3 months or annual.
+              </p>
+
+              {pricingSection === 'software' && (
+                <>
               <section className="category">
                 <div className="category-title">
                   <h3>Company headcount</h3>
@@ -747,44 +750,13 @@ export default function App() {
                 </div>
                 <p className="item-desc">
                   {headcountBand
-                    ? `${headcountBand.name} (${headcountBand.rangeLabel} employees) — multipliers apply to the plan, Agent Builder, Compliance, Premium On-Call, and Evals.`
-                    : 'Enter headcount to apply size multipliers to the plan, Agent Builder, Compliance, Premium On-Call, and Evals. Defaults to 1.0×.'}
+                    ? `${headcountBand.name} (${headcountBand.rangeLabel} employees) — multipliers apply to Enterprise Plans, Compliance, and Factory when available.`
+                    : 'Enter headcount to apply size multipliers to Enterprise Plans and Compliance. Defaults to 1.0×.'}
                 </p>
               </section>
 
-              <section className="category">
-                <div className="category-title">
-                  <h3>Agency mode</h3>
-                  <span className="category-meta">Optional</span>
-                </div>
-                <div className="items">
-                  <button
-                    type="button"
-                    className={`item${agencyMode ? ' selected' : ''}`}
-                    onClick={() => setAgencyMode((v) => !v)}
-                    aria-pressed={agencyMode}
-                  >
-                    <span className="check" aria-hidden="true">
-                      {agencyMode ? <CheckIcon /> : null}
-                    </span>
-                    <span className="item-body">
-                      <span className="item-name">Agency mode</span>
-                      <p className="item-desc">
-                        {formatPercent(AGENCY_MODE_DISCOUNT)} off plan and
-                        add-ons.
-                      </p>
-                    </span>
-                    <span className="item-price">
-                      −{formatPercent(AGENCY_MODE_DISCOUNT)}
-                      <br />
-                      subscription
-                    </span>
-                  </button>
-                </div>
-              </section>
-
               <div className="panel-head">
-                <h2>Plan</h2>
+                <h2>Enterprise Plans</h2>
               </div>
               <div className="items">
                 {PLANS.map((p) => {
@@ -934,18 +906,21 @@ export default function App() {
 
               <section className="category">
                 <div className="category-title">
-                  <h3>Add-ons</h3>
+                  <h3>Enterprise Add-Ons</h3>
                   <span className="category-meta">Optional</span>
                 </div>
                 <div className="items">
-                  {ADDONS.map((addon) => {
+                  {SOFTWARE_ADDONS.map((addon) => {
                     const coveredByForward = forwardIncludedAddonIds.includes(
                       addon.id,
                     )
+                    const comingSoon = Boolean(addon.comingSoon)
                     const allowed =
-                      coveredByForward || isAddonAvailable(addon, plan)
+                      !comingSoon &&
+                      (coveredByForward || isAddonAvailable(addon, plan))
                     const selected =
-                      coveredByForward || selectedAddons.includes(addon.id)
+                      !comingSoon &&
+                      (coveredByForward || selectedAddons.includes(addon.id))
                     const priced = quote.addonPricing.lines.find(
                       (l) => l.addon.id === addon.id,
                     )
@@ -957,34 +932,17 @@ export default function App() {
                       addon.flatAnnual != null
                         ? Math.round(addon.flatAnnual * addonMultiplier)
                         : null
-                    const showTiPool =
-                      selected &&
-                      addon.id === 'trace-intelligence' &&
-                      !coveredByForward
-                    const showKnowledgePanel =
-                      selected &&
-                      addon.id === 'mastra-knowledge' &&
-                      !coveredByForward
-                    const knowledgeNormalized = normalizeKnowledgeConfig(
-                      knowledgeConfig,
-                    )
-                    const knowledgePrice = getKnowledgeAnnual(
-                      knowledgeNormalized,
-                    )
                     return (
-                      <div
-                        key={addon.id}
-                        className={`item-wrap${showTiPool || showKnowledgePanel ? ' open' : ''}`}
-                      >
+                      <div key={addon.id} className="item-wrap">
                       <button
                         type="button"
-                        className={`item${selected ? ' selected' : ''}${!allowed || coveredByForward ? ' unavailable' : ''}`}
+                        className={`item${selected ? ' selected' : ''}${!allowed || coveredByForward || comingSoon ? ' unavailable' : ''}`}
                         onClick={() => {
-                          if (!allowed || coveredByForward) return
+                          if (!allowed || coveredByForward || comingSoon) return
                           toggleAddon(addon.id)
                         }}
                         aria-pressed={selected}
-                        disabled={!allowed || coveredByForward}
+                        disabled={!allowed || coveredByForward || comingSoon}
                       >
                         <span className="check" aria-hidden="true">
                           {selected ? <CheckIcon /> : null}
@@ -992,7 +950,9 @@ export default function App() {
                         <span className="item-body">
                           <span className="item-name">
                             {addon.name}
-                            {coveredByForward ? (
+                            {comingSoon ? (
+                              <span className="pill">Coming Soon</span>
+                            ) : coveredByForward ? (
                               <span className="pill">Included with Packages</span>
                             ) : (
                               !allowed && (
@@ -1007,25 +967,15 @@ export default function App() {
                           <p className="item-desc">{addon.description}</p>
                         </span>
                         <span className="item-price">
-                          {coveredByForward ? (
+                          {comingSoon ? (
+                            '—'
+                          ) : coveredByForward ? (
                             'Included'
                           ) : !allowed ? (
                             '—'
                           ) : priced ? (
                             <>
                               {formatUsd(priced.billedAmount)}
-                              <br />
-                              / year
-                            </>
-                          ) : addon.id === 'trace-intelligence' ? (
-                            <>
-                              +{formatUsd(TRACE_PLAN_UPLIFT_ANNUAL)}
-                              <br />
-                              on plan
-                            </>
-                          ) : addon.id === 'mastra-knowledge' ? (
-                            <>
-                              {formatUsd(knowledgePrice)}
                               <br />
                               / year
                             </>
@@ -1046,361 +996,76 @@ export default function App() {
                           )}
                         </span>
                       </button>
-
-                      {showKnowledgePanel && (
-                        <div className="ti-panel">
-                          <div className="platform-usage-intro">
-                            <strong>Knowledge volume</strong>
-                            <span>
-                              {formatUsd(KNOWLEDGE_KB_ANNUAL)}/KB/yr ·{' '}
-                              {KNOWLEDGE_SOURCES_INCLUDED_PER_KB} sources +{' '}
-                              {KNOWLEDGE_DATA_INCLUDED_GB_PER_KB} GB included
-                              per KB
-                            </span>
-                          </div>
-                          <div className="ti-input-row">
-                            <label htmlFor="knowledge-kb-count">
-                              Knowledge bases
-                            </label>
-                            <NumberField
-                              id="knowledge-kb-count"
-                              value={knowledgeNormalized.kbCount}
-                              min={1}
-                              onCommit={(next) => {
-                                const kbCount = Math.max(1, next ?? 1)
-                                setKnowledgeConfig((prev) =>
-                                  normalizeKnowledgeConfig({
-                                    ...prev,
-                                    kbCount,
-                                  }),
-                                )
-                              }}
-                              aria-label="Number of knowledge bases"
-                            />
-                          </div>
-                          <div className="ti-input-row">
-                            <label htmlFor="knowledge-sources">
-                              Sources (total)
-                            </label>
-                            <NumberField
-                              id="knowledge-sources"
-                              value={knowledgeNormalized.sources}
-                              min={getKnowledgeIncludedSources(
-                                knowledgeNormalized.kbCount,
-                              )}
-                              onCommit={(next) => {
-                                setKnowledgeConfig((prev) =>
-                                  normalizeKnowledgeConfig({
-                                    ...prev,
-                                    sources:
-                                      next ??
-                                      getKnowledgeIncludedSources(prev.kbCount),
-                                  }),
-                                )
-                              }}
-                              aria-label="Total Mastra Knowledge sources"
-                            />
-                          </div>
-                          <div className="ti-input-row">
-                            <label htmlFor="knowledge-data-gb">
-                              Data (GB total)
-                            </label>
-                            <NumberField
-                              id="knowledge-data-gb"
-                              value={knowledgeNormalized.dataGb}
-                              min={getKnowledgeIncludedDataGb(
-                                knowledgeNormalized.kbCount,
-                              )}
-                              onCommit={(next) => {
-                                setKnowledgeConfig((prev) =>
-                                  normalizeKnowledgeConfig({
-                                    ...prev,
-                                    dataGb:
-                                      next ??
-                                      getKnowledgeIncludedDataGb(prev.kbCount),
-                                  }),
-                                )
-                              }}
-                              aria-label="Mastra Knowledge data in GB"
-                            />
-                          </div>
-                          <div className="ti-computed">
-                            <span>
-                              {getKnowledgeExtraSources(knowledgeNormalized)}{' '}
-                              extra sources ·{' '}
-                              {formatUsd(
-                                getKnowledgeExtraSources(knowledgeNormalized) *
-                                  KNOWLEDGE_SOURCE_ANNUAL,
-                              )}
-                            </span>
-                            <span>
-                              {getKnowledgeBillableDataGb(
-                                knowledgeNormalized,
-                              ).toLocaleString('en-US')}{' '}
-                              GB billable ·{' '}
-                              {formatUsd(
-                                getKnowledgeDataAnnual(
-                                  getKnowledgeBillableDataGb(
-                                    knowledgeNormalized,
-                                  ),
-                                ),
-                              )}
-                            </span>
-                            <span>{formatUsd(knowledgePrice)}/yr</span>
-                          </div>
-                          <div className="ti-table">
-                            <div className="ti-row ti-head">
-                              <span>Data band</span>
-                              <span>Per 100 GB / yr</span>
-                            </div>
-                            {KNOWLEDGE_DATA_BANDS.map((band) => (
-                              <div
-                                className="ti-row"
-                                key={band.toGb ?? 'open'}
-                              >
-                                <span>
-                                  {band.toGb == null
-                                    ? `Above ${(10_000).toLocaleString('en-US')} GB`
-                                    : band.toGb <= 1_000
-                                      ? `Up to ${band.toGb.toLocaleString('en-US')} GB`
-                                      : `${(1_000).toLocaleString('en-US')}–${band.toGb.toLocaleString('en-US')} GB`}
-                                </span>
-                                <span>
-                                  {formatUsd(band.annualPerBlock)} /{' '}
-                                  {KNOWLEDGE_DATA_BLOCK_GB} GB
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          <p className="ti-note">
-                            Each KB is {formatUsd(KNOWLEDGE_KB_ANNUAL)}/yr and
-                            includes {KNOWLEDGE_SOURCES_INCLUDED_PER_KB} sources
-                            + {KNOWLEDGE_DATA_INCLUDED_GB_PER_KB} GB. Extra
-                            sources are {formatUsd(KNOWLEDGE_SOURCE_ANNUAL)}
-                            /yr each. Billable data (above includes) is priced
-                            in {KNOWLEDGE_DATA_BLOCK_GB} GB blocks on the bands
-                            above. Not multiplied by headcount.
-                          </p>
-                        </div>
-                      )}
-
-                      {showTiPool && (
-                        <div className="ti-panel">
-                          <div className="platform-usage-intro">
-                            <strong>Volume pricing</strong>
-                            <span>Analyzed traces / month</span>
-                          </div>
-                          <div className="ti-input-row">
-                            <label htmlFor="trace-intelligence-pool">
-                              Monthly pool (analyzed traces)
-                            </label>
-                            <NumberField
-                              id="trace-intelligence-pool"
-                              value={agentLearningPoolMonthly}
-                              min={0}
-                              onCommit={(next) =>
-                                setAgentLearningPoolMonthly(next ?? 0)
-                              }
-                              aria-label="Trace Intelligence monthly pool, analyzed traces"
-                            />
-                          </div>
-                          <div className="ti-computed">
-                            <span>
-                              {agentLearningPoolMonthly <=
-                              TRACE_INCLUDED_MONTHLY
-                                ? `${TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}/mo included`
-                                : `Blended ${formatUsd(getTraceIntelligenceRatePer1k(agentLearningPoolMonthly))}/1k`}
-                            </span>
-                            <span>
-                              {formatUsd(
-                                getAgentLearningMonthly(
-                                  agentLearningPoolMonthly,
-                                ),
-                              )}
-                              /mo
-                            </span>
-                            <span>
-                              {formatUsd(
-                                getAgentLearningAnnual(
-                                  agentLearningPoolMonthly,
-                                ),
-                              )}
-                              /yr
-                            </span>
-                          </div>
-                          <div className="ti-table">
-                            <div className="ti-row ti-head">
-                              <span>From</span>
-                              <span>To</span>
-                              <span>Pre-commit</span>
-                              <span>Overage</span>
-                              <span>At top of band</span>
-                            </div>
-                            {TRACE_INTELLIGENCE_POOLS.map((pool) => (
-                              <div
-                                className="ti-row"
-                                key={`${pool.fromLabel}-${pool.toLabel}`}
-                              >
-                                <span>{pool.fromLabel}</span>
-                                <span>{pool.toLabel}</span>
-                                <span>{pool.ratePerTrace}</span>
-                                <span>{pool.overagePerTrace}</span>
-                                <span>{pool.price}</span>
-                              </div>
-                            ))}
-                          </div>
-                          <p className="ti-note">
-                            Progressive per-trace bands (first{' '}
-                            {TRACE_INCLUDED_MONTHLY.toLocaleString('en-US')}
-                            /mo at $0).
-                            {forwardIncludedAddonIds.includes(
-                              'trace-intelligence',
-                            )
-                              ? ' Included with Packages — $3,000/yr plan uplift waived.'
-                              : ` Selecting Trace Intelligence adds ${formatUsd(TRACE_PLAN_UPLIFT_ANNUAL)}/yr to the selected plan.`}{' '}
-                            Pool cost stacks each band up to the committed
-                            monthly volume. Pool resets monthly; overage bills
-                            at the overage rate. Bring-your-own model: same
-                            price. Self-hosted / air-gapped: +50%.
-                          </p>
-                        </div>
-                      )}
                       </div>
                     )
                   })}
                 </div>
               </section>
+                </>
+              )}
 
-              {!agencyMode && (
+              {pricingSection === 'software-services' && (
                 <section className="category">
                   <div className="category-title">
-                    <h3>Mastra Packages</h3>
-                    <span className="category-meta">Plans</span>
+                    <h3>Software + Services</h3>
+                    <span className="category-meta">Annual packages</span>
                   </div>
                   <div className="items">
-                    <div
-                      className={`item-wrap${mastraForwardSelected ? ' open' : ''}`}
-                    >
-                      <button
-                        type="button"
-                        className={`item${mastraForwardSelected ? ' selected' : ''}`}
-                        onClick={() => {
-                          if (mastraForwardSelected) {
-                            setMastraForwardSelected(false)
-                            return
-                          }
-                          selectForwardPlan('startup')
-                          setMastraForwardSelected(true)
-                        }}
-                        aria-pressed={mastraForwardSelected}
-                      >
-                        <span className="check" aria-hidden="true">
-                          {mastraForwardSelected ? <CheckIcon /> : null}
-                        </span>
-                        <span className="item-body">
-                          <span className="item-name">Mastra Packages</span>
-                          <p className="item-desc">
-                            Embedded Mastra team with enterprise feature picks.
-                            Startup / Growth / Enterprise.
-                          </p>
-                        </span>
-                        <span className="item-price">
-                          {hasMastraForward ? (
-                            <>
-                              {formatUsd(Math.round(mastraForward!.periodTotal))}
-                              <br />
-                              {forwardPeriodShort}
-                            </>
-                          ) : (
-                            <>
-                              Select plan
-                              <br />
-                              &amp; hours
-                            </>
-                          )}
-                        </span>
-                      </button>
-                      {mastraForwardSelected && (
+                    {FORWARD_PLANS.map((fwdPlan) => {
+                      const selected =
+                        mastraForwardSelected && forwardPlanId === fwdPlan.id
+                      const hoursOptions = getForwardPlanHoursOptions(fwdPlan)
+                      return (
+                        <div
+                          key={fwdPlan.id}
+                          className={`item-wrap${selected ? ' open' : ''}`}
+                        >
+                          <button
+                            type="button"
+                            className={`item radio${selected ? ' selected' : ''}`}
+                            onClick={() => {
+                              if (selected) {
+                                setMastraForwardSelected(false)
+                                return
+                              }
+                              selectForwardPlan(fwdPlan.id)
+                              setMastraForwardSelected(true)
+                            }}
+                            aria-pressed={selected}
+                          >
+                            <span className="check" aria-hidden="true" />
+                            <span className="item-body">
+                              <span className="item-name">
+                                Mastra {fwdPlan.name}
+                              </span>
+                              <p className="item-desc">
+                                {fwdPlan.description}{' '}
+                                {fwdPlan.featurePickCount > 0
+                                  ? `Pick ${fwdPlan.featurePickCount} of ${fwdPlan.featurePool.length} enterprise features.`
+                                  : 'All 3 enterprise features included.'}{' '}
+                                Hours: {hoursOptions.join(' / ')} per week.
+                              </p>
+                            </span>
+                            <span className="item-price">
+                              {selected && hasMastraForward ? (
+                                <>
+                                  {formatUsd(
+                                    Math.round(mastraForward!.periodTotal),
+                                  )}
+                                  <br />
+                                  {forwardPeriodShort}
+                                </>
+                              ) : (
+                                <>
+                                  {formatForwardPriceRange(fwdPlan)}
+                                  <br />
+                                  / yr
+                                </>
+                              )}
+                            </span>
+                          </button>
+                          {selected && (
                         <div className="path2-pricing forward-plan-panel">
-                          <div>
-                            <div className="concierge-subhead">
-                              <h4>Plan</h4>
-                            </div>
-                            <div
-                              className="mode-picker forward-option-picker"
-                              role="radiogroup"
-                              aria-label="Mastra Packages plan"
-                            >
-                              {FORWARD_PLANS.map((fwdPlan) => (
-                                <button
-                                  key={fwdPlan.id}
-                                  type="button"
-                                  className={`mode-option${
-                                    forwardPlanId === fwdPlan.id ? ' active' : ''
-                                  }`}
-                                  role="radio"
-                                  aria-checked={forwardPlanId === fwdPlan.id}
-                                  onClick={() => selectForwardPlan(fwdPlan.id)}
-                                >
-                                  <strong>{fwdPlan.name}</strong>
-                                  <span>
-                                    {formatForwardPriceRange(fwdPlan)}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                            <p className="item-desc">
-                              {forwardPlan.description} Embedded engineering is
-                              billed at{' '}
-                              {formatUsd(FORWARD_EMBEDDED_SELL_RATE_PER_HOUR)}
-                              /hr (guidance {formatForwardPriceRange(forwardPlan)}
-                              ).
-                            </p>
-                          </div>
-
-                          {forwardPlan.allowsQuarterlyHours && (
-                            <div>
-                              <div className="concierge-subhead">
-                                <h4>Hours commitment</h4>
-                                <p>
-                                  Billing is always an annual subscription.
-                                  Choose whether embedded hours cover a quarter
-                                  (3 months) or a full year.
-                                </p>
-                              </div>
-                              <div
-                                className="mode-picker path1-billing-picker"
-                                role="radiogroup"
-                                aria-label="Mastra Packages hours commitment"
-                              >
-                                <button
-                                  type="button"
-                                  className={`mode-option${forwardCommitment === 'quarter' ? ' active' : ''}`}
-                                  role="radio"
-                                  aria-checked={forwardCommitment === 'quarter'}
-                                  onClick={() =>
-                                    setForwardHoursCommitment('quarter')
-                                  }
-                                >
-                                  <strong>3 months</strong>
-                                  <span>13 wks in annual price</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`mode-option${forwardCommitment === 'year' ? ' active' : ''}`}
-                                  role="radio"
-                                  aria-checked={forwardCommitment === 'year'}
-                                  onClick={() =>
-                                    setForwardHoursCommitment('year')
-                                  }
-                                >
-                                  <strong>12 months</strong>
-                                  <span>52 wks in annual price</span>
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
                           <div>
                             <div className="concierge-subhead">
                               <h4>Hours / week</h4>
@@ -1417,7 +1082,7 @@ export default function App() {
                             <div
                               className="mode-picker forward-option-picker"
                               role="radiogroup"
-                              aria-label="Mastra Packages hours per week"
+                              aria-label="Software + Services hours per week"
                             >
                               {getForwardPlanHoursOptions(forwardPlan).map(
                                 (hours) => (
@@ -1463,7 +1128,7 @@ export default function App() {
                                 onCommit={(next) =>
                                   applyForwardAnnualOverride(next ?? 0)
                                 }
-                                aria-label="Mastra Packages annual subscription price"
+                                aria-label="Software + Services annual subscription price"
                               />
                             </div>
                             {forwardAnnualOverride != null && (
@@ -1600,7 +1265,7 @@ export default function App() {
                                                   ),
                                                 )
                                               }
-                                              aria-label="Forward Trace Intelligence monthly pool, analyzed traces"
+                                              aria-label="Agent Learning monthly pool, analyzed traces"
                                             />
                                           </div>
                                           <div className="ti-computed">
@@ -1679,57 +1344,27 @@ export default function App() {
                           {forwardPlan.allowsPrivateDeployment && (
                             <p className="item-desc">
                               Enterprise includes BYO VPC / BYOC / private cloud
-                              deployment options (priced via deployment SKUs
-                              above).
+                              deployment options (priced via Enterprise Plans on
+                              the Software tab).
                             </p>
                           )}
                         </div>
-                      )}
-                    </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </section>
               )}
 
-              {!agencyMode && (
+
+              {pricingSection === 'services' && (
               <section className="category concierge-section">
                 <div className="category-title">
-                  <h3>Support</h3>
-                  <span className="category-meta">Services</span>
+                  <h3>Services</h3>
+                  <span className="category-meta">Support packages</span>
                 </div>
 
-                <div className="concierge-subhead">
-                  <h4>Path 1 — Standard</h4>
-                  <p>
-                    Ongoing engineering support. Annual is ~10% off quarterly
-                    annualized.
-                  </p>
-                </div>
-                <div
-                  className="mode-picker path1-billing-picker"
-                  role="radiogroup"
-                  aria-label="Path 1 billing period"
-                >
-                  <button
-                    type="button"
-                    className={`mode-option${path1BillingPeriod === 'quarter' ? ' active' : ''}`}
-                    role="radio"
-                    aria-checked={path1BillingPeriod === 'quarter'}
-                    onClick={() => setPath1BillingPeriod('quarter')}
-                  >
-                    <strong>Quarterly</strong>
-                    <span>Billed each quarter</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`mode-option${path1BillingPeriod === 'year' ? ' active' : ''}`}
-                    role="radio"
-                    aria-checked={path1BillingPeriod === 'year'}
-                    onClick={() => setPath1BillingPeriod('year')}
-                  >
-                    <strong>Annually</strong>
-                    <span>~10% off vs quarterly × 4</span>
-                  </button>
-                </div>
                 <div className="items">
                   {PATH1_TIERS.map((tier) => {
                     const selected = selectedPath1Id === tier.id
@@ -1741,61 +1376,91 @@ export default function App() {
                     )
                     const periodLabel = getPath1PeriodLabel(path1BillingPeriod)
                     return (
-                      <button
+                      <div
                         key={tier.id}
-                        type="button"
-                        className={`item radio${selected ? ' selected' : ''}`}
-                        onClick={() => toggleSupport(tier.id)}
-                        aria-pressed={selected}
+                        className={`item-wrap${selected ? ' open' : ''}`}
                       >
-                        <span className="check" aria-hidden="true" />
-                        <span className="item-body">
-                          <span className="item-name">
-                            {tier.name}
-                            <span className="pill">
-                              {tier.hoursPerWeek} hrs/wk
+                        <button
+                          type="button"
+                          className={`item radio${selected ? ' selected' : ''}`}
+                          onClick={() => toggleSupport(tier.id)}
+                          aria-pressed={selected}
+                        >
+                          <span className="check" aria-hidden="true" />
+                          <span className="item-body">
+                            <span className="item-name">
+                              {tier.name}
+                              <span className="pill">
+                                {tier.hoursPerWeek} hrs/wk
+                              </span>
                             </span>
+                            <p className="item-desc">
+                              Ongoing engineering support ·{' '}
+                              {formatUsd(Math.round(hourly))}/hr implied
+                              {path1BillingPeriod === 'quarter'
+                                ? ` · ${formatUsd(tier.annualPrice)} annual`
+                                : ` · ${formatUsd(tier.quarterlyPrice)}/qtr`}
+                            </p>
                           </span>
-                          <p className="item-desc">
-                            {formatUsd(Math.round(hourly))}/hr implied
-                            {path1BillingPeriod === 'quarter'
-                              ? ` · ${formatUsd(tier.annualPrice)} annual package`
-                              : ` · ${formatUsd(tier.quarterlyPrice)}/qtr`}
-                          </p>
-                        </span>
-                        <span className="item-price">
-                          {formatUsd(price)}
-                          <br />
-                          {periodLabel}
-                        </span>
-                      </button>
+                          <span className="item-price">
+                            {formatUsd(price)}
+                            <br />
+                            {periodLabel}
+                          </span>
+                        </button>
+                        {selected && (
+                          <div className="path2-pricing">
+                            <div className="concierge-subhead">
+                              <h4>Contract length</h4>
+                            </div>
+                            <div
+                              className="mode-picker path1-billing-picker"
+                              role="radiogroup"
+                              aria-label={`${tier.name} contract length`}
+                            >
+                              <button
+                                type="button"
+                                className={`mode-option${path1BillingPeriod === 'quarter' ? ' active' : ''}`}
+                                role="radio"
+                                aria-checked={path1BillingPeriod === 'quarter'}
+                                onClick={() => setPath1BillingPeriod('quarter')}
+                              >
+                                <strong>3 months</strong>
+                                <span>
+                                  {formatUsd(tier.quarterlyPrice)}/qtr
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className={`mode-option${path1BillingPeriod === 'year' ? ' active' : ''}`}
+                                role="radio"
+                                aria-checked={path1BillingPeriod === 'year'}
+                                onClick={() => setPath1BillingPeriod('year')}
+                              >
+                                <strong>Annual</strong>
+                                <span>
+                                  {formatUsd(tier.annualPrice)}/yr
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
-                </div>
 
-                <div className="concierge-subhead">
-                  <h4>Path 2 — Builds</h4>
-                  <p>
-                    Fixed-scope delivery. Price = ${engineerCostPerHour}/hr ×
-                    hours ÷ (1 − margin)
-                  </p>
-                </div>
-                <div className="items">
-                  {PATH2_PACKAGES.map((pkg) => {
+                  {PATH2_PACKAGES.filter((pkg) => pkg.id !== PATH2_EVALS_ID).map(
+                    (pkg) => {
                     const selected = supportIds.includes(pkg.id)
-                    const isFlat = pkg.flatPrice != null
                     const hours = path2Hours[pkg.id] ?? 0
                     const targetMargin =
                       path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
                     const cost = getPath2Cost(hours, engineerCostPerHour)
-                    const listPrice =
-                      pkg.flatPrice != null
-                        ? pkg.flatPrice * evalsMultiplier
-                        : getPath2ListPrice(
-                            hours,
-                            targetMargin,
-                            engineerCostPerHour,
-                          )
+                    const listPrice = getPath2ListPrice(
+                      hours,
+                      targetMargin,
+                      engineerCostPerHour,
+                    )
                     return (
                       <div
                         key={pkg.id}
@@ -1811,10 +1476,11 @@ export default function App() {
                             {selected ? <CheckIcon /> : null}
                           </span>
                           <span className="item-body">
-                            <span className="item-name">
-                              {pkg.name}
-                              <span className="pill">Outcome</span>
-                            </span>
+                            <span className="item-name">{pkg.name}</span>
+                            <p className="item-desc">
+                              Fixed-scope delivery. Price = $
+                              {engineerCostPerHour}/hr × hours ÷ (1 − margin).
+                            </p>
                           </span>
                           <span className="item-price">
                             {listPrice > 0 ? (
@@ -1832,7 +1498,7 @@ export default function App() {
                             )}
                           </span>
                         </button>
-                        {selected && !isFlat && (
+                        {selected && (
                           <div className="path2-pricing">
                             <label
                               className="scoped-price"
@@ -1894,36 +1560,9 @@ export default function App() {
                     )
                   })}
                 </div>
-
-                <div className="concierge-subhead">
-                  <h4>Mastra Audit</h4>
-                  <p>
-                    One-time scoping fee. Credits 100% against a Build within 90
-                    days.
-                  </p>
-                </div>
-                <div className="items">
-                  <button
-                    type="button"
-                    className={`item${auditSelected ? ' selected' : ''}`}
-                    onClick={() => toggleSupport(AUDIT_ID)}
-                    aria-pressed={auditSelected}
-                  >
-                    <span className="check" aria-hidden="true">
-                      {auditSelected ? <CheckIcon /> : null}
-                    </span>
-                    <span className="item-body">
-                      <span className="item-name">Mastra Audit</span>
-                    </span>
-                    <span className="item-price">
-                      {formatUsd(auditFee)}
-                      <br />
-                      / one-time
-                    </span>
-                  </button>
-                </div>
               </section>
               )}
+
             </div>
 
             <aside className="panel summary">
@@ -2015,8 +1654,9 @@ export default function App() {
                           ) && (
                             <div className="total-row muted">
                               <span>
-                                Trace Intelligence margin (COGS{' '}
-                                {formatTraceUnitRate(TRACE_COST_PER_TRACE)}/trace)
+                                Agent Learning margin (COGS{' '}
+                                {formatTraceUnitRate(TRACE_COST_PER_TRACE)}
+                                /trace)
                               </span>
                               <span>
                                 {formatUsd(
@@ -2034,7 +1674,7 @@ export default function App() {
 
                   {hasMastraForward && mastraForward && (
                     <div className="summary-group">
-                      <h3 className="summary-group-title">Mastra Packages</h3>
+                      <h3 className="summary-group-title">Software + Services</h3>
                       <ul className="order-lines">
                         {mastraForward.lines.map((line, index) => (
                           <li className="order-line" key={line.id}>
@@ -2067,7 +1707,7 @@ export default function App() {
                                 type="button"
                                 className="remove"
                                 onClick={() => setMastraForwardSelected(false)}
-                                aria-label="Remove Mastra Packages"
+                                aria-label="Remove Software + Services"
                               >
                                 <CloseIcon />
                               </button>
@@ -2077,7 +1717,7 @@ export default function App() {
                       </ul>
                       <div className="totals">
                         <div className="total-row grand">
-                          <span>Mastra Packages / year</span>
+                          <span>Software + Services / year</span>
                           <span>
                             {formatUsd(Math.round(mastraForward.periodTotal))}
                           </span>
@@ -2087,7 +1727,7 @@ export default function App() {
                             <span>
                               Forward margin
                               {forwardMargin.tiCost > 0
-                                ? ` (incl. TI COGS ${formatTraceUnitRate(TRACE_COST_PER_TRACE)}/trace)`
+                                ? ` (incl. Agent Learning COGS ${formatTraceUnitRate(TRACE_COST_PER_TRACE)}/trace)`
                                 : ''}
                             </span>
                             <span>
@@ -2112,13 +1752,13 @@ export default function App() {
                           <li className="order-line">
                             <div>
                               <span className="order-line-name">
-                                Path 1 · {support.path1.tier.name}
+                                {support.path1.tier.name}
                               </span>
                               <span className="order-line-meta">
                                 {support.path1.tier.hoursPerWeek} hrs/wk ·{' '}
                                 {support.path1.billingPeriod === 'year'
                                   ? 'Annual'
-                                  : 'Quarterly'}
+                                  : '3 months'}
                               </span>
                             </div>
                             <span className="order-line-price">
@@ -2133,7 +1773,7 @@ export default function App() {
                               onClick={() =>
                                 removeSupport(support.path1!.tier.id)
                               }
-                              aria-label={`Remove Path 1 ${support.path1.tier.name}`}
+                              aria-label={`Remove ${support.path1.tier.name}`}
                             >
                               <CloseIcon />
                             </button>
@@ -2143,7 +1783,7 @@ export default function App() {
                           <li className="order-line" key={line.package.id}>
                             <div>
                               <span className="order-line-name">
-                                Path 2 · {line.package.name}
+                                {line.package.name}
                               </span>
                               <span className="order-line-meta">
                                 {line.flatPrice != null
@@ -2217,7 +1857,7 @@ export default function App() {
                         )}
                         {support.path1 && (
                           <div className="total-row muted">
-                            <span>Path 1 margin</span>
+                            <span>Support margin</span>
                             <span>
                               {formatUsd(margin.path1Margin)}
                               {margin.path1MarginRate != null
@@ -2231,7 +1871,7 @@ export default function App() {
                             className="total-row muted"
                             key={`margin-${row.id}`}
                           >
-                            <span>Path 2 · {row.name} margin</span>
+                            <span>{row.name} margin</span>
                             <span>
                               {formatUsd(Math.round(row.margin))}
                               {row.marginRate != null

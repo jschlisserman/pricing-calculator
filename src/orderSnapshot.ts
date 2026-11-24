@@ -100,11 +100,11 @@ export function formatOrderEmailText(
   }
 
   if (order.forwardLines.length > 0) {
-    sections.push('Mastra Packages')
+    sections.push('Software + Services')
     for (const line of order.forwardLines) sections.push(`- ${lineText(line)}`)
     if (order.forwardAnnualTotal != null) {
       sections.push(
-        `Mastra Packages / year: ${formatUsd(order.forwardAnnualTotal)}`,
+        `Software + Services / year: ${formatUsd(order.forwardAnnualTotal)}`,
       )
     }
     sections.push('')
@@ -178,11 +178,11 @@ export function formatOrderEmailHtml(
 
   const forwardBlock =
     order.forwardLines.length > 0
-      ? `<h3 style="margin:24px 0 8px">Mastra Packages</h3>
+      ? `<h3 style="margin:24px 0 8px">Software + Services</h3>
          <table style="width:100%;border-collapse:collapse">${renderLines(order.forwardLines)}</table>
          ${
            order.forwardAnnualTotal != null
-             ? `<p style="font-size:18px;font-weight:700">Mastra Packages / year: ${formatUsd(order.forwardAnnualTotal)}</p>`
+             ? `<p style="font-size:18px;font-weight:700">Software + Services / year: ${formatUsd(order.forwardAnnualTotal)}</p>`
              : ''
          }`
       : ''

@@ -49,17 +49,20 @@ Enter the customer's company headcount on the order builder. It maps to a band (
 | Global | 4.0× | 3.5× | 2.25× |
 | Global+ | 5.0× | 4.0× | 2.5× |
 
-### Add-ons
+### Order builder sections
 
-- **Trace Intelligence** — (all plans; also available without a plan selected). Progressive per-trace bands: first 10k/mo at $0, then $0.016 → $0.002 through 10M (see calculator table; includes overage rates). When selected with a plan, **+$3,000/yr** is added to that plan (waived when included via Packages). Pool cost = sum of each band × rate × 12.
-- **Agent Builder** — fixed $6,000/yr base (all plans), scaled by the headcount multiplier (same curve as BYO VPC / Private Cloud)
-- **Mastra Knowledge** — (all plans). **$6,000/KB/yr**; each KB includes **3 sources + 10GB**. Extra sources **$1,000/yr** each. Billable data (above includes) in 100GB blocks: **$2,500** up to 1TB, **$1,500** from 1–10TB, **$750** beyond. Not multiplied by headcount.
+Tabs: **Software**, **Services**, **Software + Services**. All options are annual contracts.
+
+### Software — Enterprise Add-ons
+
 - **Compliance** — fixed $5,000/yr base (Enterprise Platform only), scaled by the headcount multiplier
-- **Premium on-call support** — fixed $10,000/yr base (Enterprise plans: Enterprise Platform, Enterprise Self-Hosted; also available without a plan selected), scaled by the headcount multiplier
+- **Agent Learning** — Coming Soon (formerly Trace Intelligence)
+- **Knowledge** — Coming Soon
+- **Factory** — Coming Soon (formerly Agent Builder)
 
-### Mastra Packages
+### Software + Services
 
-Hidden while agency mode is on. Startup / Growth / Enterprise plans with hours/week chips. Embedded engineering is always an **annual subscription** at **$300/hr** × hours/week × commitment weeks (**13** for a quarterly / 3-month hours commitment, **52** for annual / 12 months — available on Startup, Growth, and Enterprise). **40 hrs/week** is a fixed **$500,000/yr** package (pro-rated for 3-mo). Cost basis $110/hr for margin (commitment weeks × cost, measured against the annual price). Feature picks: Agent Builder / Mastra Knowledge / Trace Intelligence. Trace Intelligence includes **25k traces/mo on Growth** and **50k on Enterprise** (10k when picked on Startup); overage still bills. TI margin uses COGS of **$0.005/trace** analyzed. Platform packages are paused for now. Features included by Packages are not charged again as add-ons. Legacy deployment SKUs and headcount multipliers remain available alongside Packages.
+**Mastra Startup** (2 or 4 hrs/wk, pick 1 of 3 features), **Mastra Growth** (6 or 8 hrs/wk, pick 2 of 3), **Mastra Enterprise** (10 / 12 / 15 / 20 / 40 hrs/wk, all 3 features). Embedded engineering is an **annual** subscription at **$300/hr** × hours/week × 52 (**40 hrs/week** = fixed **$500,000/yr**). Features: Factory / Knowledge / Agent Learning. Agent Learning includes **25k traces/mo on Growth** and **50k on Enterprise** (10k when picked on Startup).
 
 ### Platform usage
 
@@ -67,18 +70,11 @@ Enterprise Platform only. Usage packages scale includes from the product total p
 
 ### Bundle discount
 
-When a plan is bundled with any add-on, the **plan** gets **15% off**. Add-ons and platform usage overage are not discounted. The bundle discount does **not** stack with the agency discount — while agency mode is on, only the 30% agency discount applies.
+When a plan is bundled with any add-on, the **plan** gets **15% off**. Add-ons and platform usage overage are not discounted.
 
-### Agency mode
+### Services
 
-Optional toggle on the order builder. Applies **30% off** plan and add-ons. Platform usage overage is not discounted. While agency mode is on, Support / services are hidden.
+Annual contracts:
 
-### Support
-
-Hidden while agency mode is on.
-
-- **Path 1** — Small / Medium / Large; choose quarterly ($9k / $24k / $70k) or annual package ($32k / $86k / $250k, ~10% off)
-- **Path 2** — Evals is a flat $5,000 one-time payment, scaled by the headcount multiplier (same curve as BYOC / Compliance / Premium On-Call). Custom: price = engineer $/hr × hours ÷ (1 − margin)
-- **Mastra Audit** — $500 one-time
-
-No purchase-count or support package discounts.
+- **Support Small / Medium / Large** — $32k / $86k / $250k per year (2 / 6 / 20 hrs/wk)
+- **Custom** — price = engineer $/hr × hours ÷ (1 − margin)

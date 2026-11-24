@@ -27,17 +27,17 @@ export const ENTERPRISE_FEATURES: ReadonlyArray<{
 }> = [
   {
     id: 'agent-builder',
-    name: 'Agent Builder',
+    name: 'Factory',
     description: 'No-code / low-code agent building.',
   },
   {
     id: 'mastra-knowledge',
-    name: 'Mastra Knowledge',
+    name: 'Knowledge',
     description: 'Knowledge base and retrieval for agents.',
   },
   {
     id: 'trace-intelligence',
-    name: 'Trace Intelligence',
+    name: 'Agent Learning',
     description: 'Analyzed traces and custom signals.',
   },
 ]
@@ -86,9 +86,9 @@ export const FORWARD_PLANS: ForwardPlan[] = [
     id: 'startup',
     name: 'Startup',
     description: 'One team getting its first agents into production.',
-    // 2×$300×13 … 4×$300×52
-    priceMin: 7_800,
-    priceMax: 62_400,
+    // 2×$300×52 … 4×$300×52, rounded to nearest $1k
+    priceMin: 31_000,
+    priceMax: 62_000,
     hoursMin: 2,
     hoursMax: 4,
     hoursNote: 'Hours reset weekly',
@@ -104,38 +104,42 @@ export const FORWARD_PLANS: ForwardPlan[] = [
     includedConnections: 0,
     includedPackageValueAnnual: 12_000,
     allowsPrivateDeployment: false,
-    allowsQuarterlyHours: true,
-    allowsQuarterlyBilling: true,
+    allowsQuarterlyHours: false,
+    allowsQuarterlyBilling: false,
     traceIntelligenceIncludedMonthly: TRACE_INCLUDED_MONTHLY,
   },
   {
     id: 'growth',
     name: 'Growth',
     description: 'Several teams building on Mastra, with no-code builders.',
-    // 4×$300×13 … 8×$300×52
-    priceMin: 15_600,
-    priceMax: 124_800,
-    hoursMin: 4,
+    // 6×$300×52 … 8×$300×52, rounded to nearest $1k
+    priceMin: 94_000,
+    priceMax: 125_000,
+    hoursMin: 6,
     hoursMax: 8,
     hoursNote: 'Unused hours roll over within the quarter',
-    includedFeatures: ['agent-builder'],
-    featurePickCount: 1,
-    featurePool: ['mastra-knowledge', 'trace-intelligence'],
+    includedFeatures: [],
+    featurePickCount: 2,
+    featurePool: [
+      'agent-builder',
+      'mastra-knowledge',
+      'trace-intelligence',
+    ],
     includedDeploys: 'production',
     includedObservability: 'obs-25m',
     includedConnections: 0,
     includedPackageValueAnnual: 25_500,
     allowsPrivateDeployment: false,
-    allowsQuarterlyHours: true,
-    allowsQuarterlyBilling: true,
+    allowsQuarterlyHours: false,
+    allowsQuarterlyBilling: false,
     traceIntelligenceIncludedMonthly: 25_000,
   },
   {
     id: 'enterprise',
     name: 'Enterprise',
     description: 'Company-wide rollout with a dedicated Mastra team.',
-    // 10×$300×13 … 40 hrs/wk fixed $500k/yr
-    priceMin: 39_000,
+    // 10×$300×52 … 40 hrs/wk fixed $500k/yr
+    priceMin: 156_000,
     priceMax: 500_000,
     hoursMin: 10,
     hoursMax: null,
@@ -152,8 +156,8 @@ export const FORWARD_PLANS: ForwardPlan[] = [
     includedConnections: 1_000,
     includedPackageValueAnnual: 60_000,
     allowsPrivateDeployment: true,
-    allowsQuarterlyHours: true,
-    allowsQuarterlyBilling: true,
+    allowsQuarterlyHours: false,
+    allowsQuarterlyBilling: false,
     traceIntelligenceIncludedMonthly: 50_000,
   },
 ]
@@ -581,8 +585,8 @@ export function buildForwardQuote(input: BuildForwardQuoteInput): ForwardQuote {
   const lines: ForwardQuoteLine[] = [
     {
       id: 'forward-plan',
-      name: `Mastra Packages · ${plan.name}`,
-      meta: `${formatUsd(FORWARD_EMBEDDED_SELL_RATE_PER_HOUR)}/hr · ${hoursPerWeek} hrs/wk × ${commitmentWeeks} wks (${hoursCommitment === 'quarter' ? '3-mo hours' : '12-mo hours'}) · annual subscription · ${plan.hoursNote}`,
+      name: `Mastra ${plan.name}`,
+      meta: `${formatUsd(FORWARD_EMBEDDED_SELL_RATE_PER_HOUR)}/hr · ${hoursPerWeek} hrs/wk × ${commitmentWeeks} wks · annual contract · ${plan.hoursNote}`,
       amount: planAmount,
       annualAmount: planAmount,
     },

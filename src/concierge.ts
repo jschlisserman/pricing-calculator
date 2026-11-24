@@ -81,10 +81,16 @@ export function getForwardPeriodShortLabel(
   return '/yr'
 }
 
+/** Round Software + Services list prices to the nearest $1,000. */
+export function roundForwardListPrice(amount: number): number {
+  return Math.round(Math.max(0, amount) / 1_000) * 1_000
+}
+
 /**
  * Annual Forward subscription for embedded engineering:
  * hours/wk × sell rate × commitment weeks (13 quarter / 52 year).
  * 40 hrs/week is a fixed $500k/yr package (pro-rated for 3-mo commitment).
+ * List prices round to the nearest $1,000.
  */
 export function getForwardEmbeddedAmount(
   hoursPerWeek: number,
@@ -93,12 +99,12 @@ export function getForwardEmbeddedAmount(
 ): number {
   if (hoursPerWeek === 40) {
     if (commitment === 'year') return FORWARD_40HR_ANNUAL_PRICE
-    return Math.round(
+    return roundForwardListPrice(
       (FORWARD_40HR_ANNUAL_PRICE * FORWARD_WEEKS_PER_QUARTER) /
         FORWARD_WEEKS_PER_YEAR,
     )
   }
-  return Math.round(
+  return roundForwardListPrice(
     Math.max(0, hoursPerWeek) *
       sellRatePerHour *
       getForwardCommitmentWeeks(commitment),
@@ -248,21 +254,21 @@ export interface Path1Tier {
 export const PATH1_TIERS: Path1Tier[] = [
   {
     id: 'support-path1-small',
-    name: 'Small',
+    name: 'Support Small',
     hoursPerWeek: 2,
     quarterlyPrice: 9_000,
     annualPrice: 32_000,
   },
   {
     id: 'support-path1-medium',
-    name: 'Medium',
+    name: 'Support Medium',
     hoursPerWeek: 6,
     quarterlyPrice: 24_000,
     annualPrice: 86_000,
   },
   {
     id: 'support-path1-large',
-    name: 'Large',
+    name: 'Support Large',
     hoursPerWeek: 20,
     quarterlyPrice: 70_000,
     annualPrice: 250_000,

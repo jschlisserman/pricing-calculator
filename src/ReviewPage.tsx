@@ -85,7 +85,7 @@ function OrderLines({ order }: { order: OrderSnapshot }) {
 
       {order.forwardLines.length > 0 && (
         <div className="summary-group">
-          <h3 className="summary-group-title">Mastra Packages</h3>
+          <h3 className="summary-group-title">Software + Services</h3>
           <ul className="order-lines">
             {order.forwardLines.map((line) => (
               <li
@@ -116,7 +116,7 @@ function OrderLines({ order }: { order: OrderSnapshot }) {
           {order.forwardAnnualTotal != null && (
             <div className="totals">
               <div className="total-row grand">
-                <span>Mastra Packages / year</span>
+                <span>Software + Services / year</span>
                 <span>{formatUsd(order.forwardAnnualTotal)}</span>
               </div>
             </div>

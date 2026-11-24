@@ -222,36 +222,21 @@ export interface Addon {
   allowedPlanIds?: PlanId[]
   /** Enterprise only. */
   enterpriseOnly: boolean
+  /** Shown in Software add-ons but not selectable yet. */
+  comingSoon?: boolean
+  /** Hide from the Software Enterprise Add-Ons list. */
+  hiddenFromSoftware?: boolean
 }
 
+/** Enterprise Add-Ons shown on the Software tab (display order). */
+export const SOFTWARE_ADDON_IDS: AddonId[] = [
+  'compliance',
+  'trace-intelligence',
+  'mastra-knowledge',
+  'agent-builder',
+]
+
 export const ADDONS: Addon[] = [
-  {
-    id: 'trace-intelligence',
-    name: 'Trace Intelligence',
-    description:
-      'Custom Signals · 10k analyzed traces/mo included; +$3,000/yr on plan',
-    rate: null,
-    annualMinimum: 0,
-    enterpriseOnly: true,
-  },
-  {
-    id: 'agent-builder',
-    name: 'Agent Builder',
-    description: 'Agent Builder add-on. Fixed annual subscription.',
-    rate: null,
-    annualMinimum: 0,
-    flatAnnual: 6_000,
-    enterpriseOnly: true,
-  },
-  {
-    id: 'mastra-knowledge',
-    name: 'Mastra Knowledge',
-    description:
-      '$6K/KB/yr · 3 sources + 10GB included per KB; extra sources + data overage',
-    rate: null,
-    annualMinimum: 0,
-    enterpriseOnly: true,
-  },
   {
     id: 'compliance',
     name: 'Compliance',
@@ -263,6 +248,36 @@ export const ADDONS: Addon[] = [
     enterpriseOnly: true,
   },
   {
+    id: 'trace-intelligence',
+    name: 'Agent Learning',
+    description:
+      'Custom Signals · 10k analyzed traces/mo included; +$3,000/yr on plan',
+    rate: null,
+    annualMinimum: 0,
+    enterpriseOnly: true,
+    comingSoon: true,
+  },
+  {
+    id: 'mastra-knowledge',
+    name: 'Knowledge',
+    description:
+      '$6K/KB/yr · 3 sources + 10GB included per KB; extra sources + data overage',
+    rate: null,
+    annualMinimum: 0,
+    enterpriseOnly: true,
+    comingSoon: true,
+  },
+  {
+    id: 'agent-builder',
+    name: 'Factory',
+    description: 'Factory add-on. Fixed annual subscription.',
+    rate: null,
+    annualMinimum: 0,
+    flatAnnual: 6_000,
+    enterpriseOnly: true,
+    comingSoon: true,
+  },
+  {
     id: 'premium-on-call',
     name: 'Premium on-call support',
     description:
@@ -272,6 +287,7 @@ export const ADDONS: Addon[] = [
     flatAnnual: 10_000,
     allowedPlanIds: ['enterprise-platform', 'enterprise-self-hosted'],
     enterpriseOnly: true,
+    hiddenFromSoftware: true,
   },
 ]
 
@@ -1124,7 +1140,7 @@ export function buildQuote(input: BuildQuoteInput): Quote {
         ? `${formatUsd(planBaseAnnual)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(planMultiplier)}`
         : 'Fixed annual subscription',
       planTraceUplift > 0
-        ? `+${formatUsd(planTraceUplift)} Trace Intelligence`
+        ? `+${formatUsd(planTraceUplift)} Agent Learning`
         : null,
     ].filter(Boolean)
     productLines.push({
