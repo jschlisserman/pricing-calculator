@@ -62,7 +62,7 @@ Tabs: **Software**, **Services**, **Software + Services**. All options are annua
 
 ### Software + Services
 
-**Mastra Startup** (2 or 4 hrs/wk, pick 1 of 3 features), **Mastra Growth** (6 or 8 hrs/wk, pick 2 of 3), **Mastra Enterprise** (10 / 12 / 15 / 20 / 40 hrs/wk, all 3 features). Embedded engineering is an **annual** subscription at **$300/hr** × hours/week × 52 (**40 hrs/week** = fixed **$500,000/yr**). Features: Factory / Knowledge / Agent Learning. Agent Learning includes **25k traces/mo on Growth** and **50k on Enterprise** (10k when picked on Startup).
+**Mastra Startup** (2 or 4 hrs/wk, pick 1 of 3 features), **Mastra Growth** (6 or 8 hrs/wk, pick 2 of 3), **Mastra Enterprise** (10 / 12 / 15 / 20 / 40 hrs/wk, all 3 features). Embedded engineering is an **annual** subscription at **$300/hr** × hours/week × 52 (**40 hrs/week** = fixed **$575,000/yr**, ~60% margin). Features: Factory / Knowledge / Agent Learning. Agent Learning includes **25k traces/mo on Growth** and **50k on Enterprise** (10k when picked on Startup).
 
 ### Platform usage
 

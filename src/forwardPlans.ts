@@ -138,9 +138,9 @@ export const FORWARD_PLANS: ForwardPlan[] = [
     id: 'enterprise',
     name: 'Enterprise',
     description: 'Company-wide rollout with a dedicated Mastra team.',
-    // 10×$300×52 … 40 hrs/wk fixed $500k/yr
+    // 10×$300×52 … 40 hrs/wk fixed $575k/yr (~60% margin)
     priceMin: 156_000,
-    priceMax: 500_000,
+    priceMax: 575_000,
     hoursMin: 10,
     hoursMax: null,
     hoursNote: 'Unused hours roll over within the quarter',

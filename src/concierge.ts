@@ -29,8 +29,11 @@ export const FORWARD_WEEKS_PER_QUARTER = PATH1_WEEKS_PER_QUARTER
 /** Fixed Mastra Packages bill rate for embedded engineering hours ($/hour). */
 export const FORWARD_EMBEDDED_SELL_RATE_PER_HOUR = 300
 
-/** Fixed annual list price for a 40 hrs/week Forward commitment. */
-export const FORWARD_40HR_ANNUAL_PRICE = 500_000
+/**
+ * Fixed annual list price for a 40 hrs/week Forward commitment.
+ * ~60% margin vs engineer cost (40 × $110 × 52 = $228,800).
+ */
+export const FORWARD_40HR_ANNUAL_PRICE = 575_000
 
 /** Selectable Mastra Packages bill rates ($/hour). */
 export const FORWARD_RATE_OPTIONS = [
@@ -89,7 +92,7 @@ export function roundForwardListPrice(amount: number): number {
 /**
  * Annual Forward subscription for embedded engineering:
  * hours/wk × sell rate × commitment weeks (13 quarter / 52 year).
- * 40 hrs/week is a fixed $500k/yr package (pro-rated for 3-mo commitment).
+ * 40 hrs/week is a fixed $575k/yr package (~60% margin; pro-rated for 3-mo).
  * List prices round to the nearest $1,000.
  */
 export function getForwardEmbeddedAmount(
