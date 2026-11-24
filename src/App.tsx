@@ -3,30 +3,22 @@ import {
   AUDIT_ID,
   DEFAULT_ENGINEER_COST_PER_HOUR,
   DEFAULT_PATH2_MARGIN,
-  FORWARD_EMBEDDED_SELL_RATE_PER_HOUR,
-  getForwardCommitmentWeeks,
   getForwardEmbeddedAmount,
-  getForwardEmbeddedCostAnnual,
   getForwardPeriodShortLabel,
   roundForwardListPrice,
   PATH1_TIERS,
   type ForwardHoursCommitment,
   PATH2_EVALS_ID,
-  PATH2_MARGIN_OPTIONS,
   PATH2_PACKAGES,
-  buildSupportMargin,
   buildSupportQuote,
-  getPath1ImpliedHourly,
   getPath1ListPrice,
   getPath1PeriodLabel,
-  getPath2Cost,
   getPath2ListPrice,
   isPath1Id,
   isPath2Id,
   withoutOtherPath1Tiers,
   type Path1BillingPeriod,
   type Path2Hours,
-  type Path2MarginRate,
   type Path2Margins,
   type Path2PackageId,
 } from './concierge'
@@ -186,7 +178,6 @@ export default function App() {
       ? Math.max(0, Math.round(forwardAnnualOverride))
       : forwardListAmount
   const forwardPeriodShort = getForwardPeriodShortLabel(forwardCommitment)
-  const forwardCommitmentWeeks = getForwardCommitmentWeeks(forwardCommitment)
 
   const mastraForward = useMemo(
     () =>
@@ -314,46 +305,6 @@ export default function App() {
     ],
   )
 
-  const forwardMargin = useMemo(() => {
-    if (!mastraForward) return null
-    const engCost = getForwardEmbeddedCostAnnual(
-      mastraForward.hoursPerWeek,
-      mastraForward.hoursCommitment,
-      engineerCostPerHour,
-    )
-    const engRevenue = mastraForward.planAmount
-    const tiOnForward = forwardIncludedAddonIds.includes('trace-intelligence')
-    const tiRevenue = tiOnForward
-      ? getAgentLearningAnnual(
-          agentLearningPoolMonthly,
-          forwardTraceIncludedMonthly,
-        )
-      : 0
-    const tiCost = tiOnForward ? traceIntelligenceCostAnnual : 0
-    // Hours commitment cost (13 or 52 wks) measured against annual subscription.
-    const periodRevenue = engRevenue + tiRevenue
-    const periodCost = engCost + tiCost
-    const periodMargin = periodRevenue - periodCost
-    return {
-      engCost,
-      engRevenue,
-      tiCost,
-      tiRevenue,
-      periodCost,
-      periodRevenue,
-      periodMargin,
-      marginRate: periodRevenue > 0 ? periodMargin / periodRevenue : null,
-      commitmentWeeks: mastraForward.commitmentWeeks,
-    }
-  }, [
-    mastraForward,
-    engineerCostPerHour,
-    forwardIncludedAddonIds,
-    agentLearningPoolMonthly,
-    forwardTraceIncludedMonthly,
-    traceIntelligenceCostAnnual,
-  ])
-
   const usageScaleAnnual =
     quote.subscriptionListAnnual - quote.agencyDiscount - quote.bundleDiscount
 
@@ -383,11 +334,6 @@ export default function App() {
       path1BillingPeriod,
       evalsMultiplier,
     ],
-  )
-
-  const margin = useMemo(
-    () => buildSupportMargin(support, engineerCostPerHour),
-    [support, engineerCostPerHour],
   )
 
   const showUsage = Boolean(quote.plan?.hasUsage)
@@ -464,7 +410,7 @@ export default function App() {
             ? line.flatMultiplier !== 1 && headcountBand
               ? `${formatUsd(line.flatPrice)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(line.flatMultiplier)} · Flat one-time`
               : 'Flat one-time'
-            : `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`,
+            : `${line.hours} hrs`,
         listAmount: line.listAmount > 0 ? line.listAmount : null,
         billedAmount: line.listAmount > 0 ? line.billedAmount : null,
         period: '/ one-time',
@@ -569,16 +515,6 @@ export default function App() {
     setPath2Hours((prev) => ({
       ...prev,
       [packageId]: Math.max(0, hours),
-    }))
-  }
-
-  function setPath2TargetMargin(
-    packageId: Path2PackageId,
-    marginRate: Path2MarginRate,
-  ) {
-    setPath2Margins((prev) => ({
-      ...prev,
-      [packageId]: marginRate,
     }))
   }
 
@@ -1070,10 +1006,7 @@ export default function App() {
                             <div className="concierge-subhead">
                               <h4>Hours / week</h4>
                               <p>
-                                {forwardPlan.hoursNote} · hours drive engineer
-                                cost; list rate is{' '}
-                                {formatUsd(FORWARD_EMBEDDED_SELL_RATE_PER_HOUR)}
-                                /hr × {forwardCommitmentWeeks} wks
+                                {forwardPlan.hoursNote}
                                 {forwardAnnualOverride != null
                                   ? ' · annual price overridden'
                                   : ''}
@@ -1141,32 +1074,6 @@ export default function App() {
                                 {formatUsd(forwardListAmount)}
                                 /yr)
                               </button>
-                            )}
-                            {forwardMargin && (
-                              <div className="path2-price-breakdown">
-                                <span>
-                                  Annual {formatUsd(forwardPlanAmount)}
-                                  /yr · eng cost{' '}
-                                  {formatUsd(Math.round(forwardMargin.engCost))}
-                                  /yr ({mastraForward!.hoursPerWeek} hrs/wk ×{' '}
-                                  {formatUsd(engineerCostPerHour)}/hr ×{' '}
-                                  {forwardMargin.commitmentWeeks}
-                                  {forwardMargin.tiCost > 0
-                                    ? ` · TI cost ${formatUsd(forwardMargin.tiCost)}/yr`
-                                    : ''}
-                                  )
-                                </span>
-                                <strong>
-                                  Margin{' '}
-                                  {formatUsd(
-                                    Math.round(forwardMargin.periodMargin),
-                                  )}
-                                  /yr
-                                  {forwardMargin.marginRate != null
-                                    ? ` (${formatPercent(forwardMargin.marginRate)})`
-                                    : ''}
-                                </strong>
-                              </div>
                             )}
                           </div>
 
@@ -1369,11 +1276,6 @@ export default function App() {
                   {PATH1_TIERS.map((tier) => {
                     const selected = selectedPath1Id === tier.id
                     const price = getPath1ListPrice(tier, path1BillingPeriod)
-                    const hourly = getPath1ImpliedHourly(
-                      price,
-                      tier,
-                      path1BillingPeriod,
-                    )
                     const periodLabel = getPath1PeriodLabel(path1BillingPeriod)
                     return (
                       <div
@@ -1395,8 +1297,7 @@ export default function App() {
                               </span>
                             </span>
                             <p className="item-desc">
-                              Ongoing engineering support ·{' '}
-                              {formatUsd(Math.round(hourly))}/hr implied
+                              Ongoing engineering support
                               {path1BillingPeriod === 'quarter'
                                 ? ` · ${formatUsd(tier.annualPrice)} annual`
                                 : ` · ${formatUsd(tier.quarterlyPrice)}/qtr`}
@@ -1455,7 +1356,6 @@ export default function App() {
                     const hours = path2Hours[pkg.id] ?? 0
                     const targetMargin =
                       path2Margins[pkg.id] ?? DEFAULT_PATH2_MARGIN
-                    const cost = getPath2Cost(hours, engineerCostPerHour)
                     const listPrice = getPath2ListPrice(
                       hours,
                       targetMargin,
@@ -1478,8 +1378,7 @@ export default function App() {
                           <span className="item-body">
                             <span className="item-name">{pkg.name}</span>
                             <p className="item-desc">
-                              Fixed-scope delivery. Price = $
-                              {engineerCostPerHour}/hr × hours ÷ (1 − margin).
+                              Fixed-scope delivery. Set project hours to price.
                             </p>
                           </span>
                           <span className="item-price">
@@ -1520,40 +1419,6 @@ export default function App() {
                                 }
                               />
                             </label>
-                            <div
-                              className="mode-picker path2-margin-picker"
-                              role="radiogroup"
-                              aria-label={`${pkg.name} target margin`}
-                            >
-                              {PATH2_MARGIN_OPTIONS.map((rate) => (
-                                <button
-                                  key={rate}
-                                  type="button"
-                                  className={`mode-option${targetMargin === rate ? ' active' : ''}`}
-                                  role="radio"
-                                  aria-checked={targetMargin === rate}
-                                  onClick={() =>
-                                    setPath2TargetMargin(pkg.id, rate)
-                                  }
-                                >
-                                  <strong>{formatPercent(rate)}</strong>
-                                  <span>target margin</span>
-                                </button>
-                              ))}
-                            </div>
-                            <div className="path2-price-breakdown">
-                              <span>
-                                Cost {formatUsd(Math.round(cost))}
-                                {hours > 0
-                                  ? ` · ${hours} hrs × ${formatUsd(engineerCostPerHour)}/hr`
-                                  : ''}
-                              </span>
-                              <strong>
-                                {listPrice > 0
-                                  ? formatUsd(Math.round(listPrice))
-                                  : '—'}
-                              </strong>
-                            </div>
                           </div>
                         )}
                       </div>
@@ -1722,24 +1587,6 @@ export default function App() {
                             {formatUsd(Math.round(mastraForward.periodTotal))}
                           </span>
                         </div>
-                        {forwardMargin && (
-                          <div className="total-row muted">
-                            <span>
-                              Forward margin
-                              {forwardMargin.tiCost > 0
-                                ? ` (incl. Agent Learning COGS ${formatTraceUnitRate(TRACE_COST_PER_TRACE)}/trace)`
-                                : ''}
-                            </span>
-                            <span>
-                              {formatUsd(
-                                Math.round(forwardMargin.periodMargin),
-                              )}
-                              {forwardMargin.marginRate != null
-                                ? ` (${formatPercent(forwardMargin.marginRate)})`
-                                : ''}
-                            </span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   )}
@@ -1790,7 +1637,7 @@ export default function App() {
                                   ? line.flatMultiplier !== 1 && headcountBand
                                     ? `${formatUsd(line.flatPrice)} base · ${headcountBand.name} (${headcountBand.rangeLabel}) ${formatMultiplier(line.flatMultiplier)} · Flat one-time`
                                     : 'Flat one-time'
-                                  : `${line.hours} hrs · ${formatPercent(line.targetMarginRate)} target`}
+                                  : `${line.hours} hrs`}
                               </span>
                             </div>
                             <span className="order-line-price">
@@ -1855,31 +1702,6 @@ export default function App() {
                             <span>{formatUsd(support.oneTimeTotal)}</span>
                           </div>
                         )}
-                        {support.path1 && (
-                          <div className="total-row muted">
-                            <span>Support margin</span>
-                            <span>
-                              {formatUsd(margin.path1Margin)}
-                              {margin.path1MarginRate != null
-                                ? ` (${formatPercent(margin.path1MarginRate)})`
-                                : ''}
-                            </span>
-                          </div>
-                        )}
-                        {margin.path2.map((row) => (
-                          <div
-                            className="total-row muted"
-                            key={`margin-${row.id}`}
-                          >
-                            <span>{row.name} margin</span>
-                            <span>
-                              {formatUsd(Math.round(row.margin))}
-                              {row.marginRate != null
-                                ? ` (${formatPercent(row.marginRate)})`
-                                : ''}
-                            </span>
-                          </div>
-                        ))}
                       </div>
                     </div>
                   )}

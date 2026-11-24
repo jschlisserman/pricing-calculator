@@ -127,14 +127,13 @@ export default function MatricesPage() {
           </div>
           <p className="matrix-note">
             Annual contracts at $300/hr × hours/week × 52 weeks, rounded to the
-            nearest $1,000, except 40 hrs/week which is a fixed $575k/yr (~60%
-            margin at $110/hr eng cost). Guidance bands: Startup $31k–$62k (2–4
-            hrs), Growth $94k–$125k (6–8 hrs), Enterprise $156k–$575k (10–40 hrs).
-            Startup picks 1 of 3
+            nearest $1,000, except 40 hrs/week which is a fixed $575k/yr.
+            Guidance bands: Startup $31k–$62k (2–4 hrs), Growth $94k–$125k (6–8
+            hrs), Enterprise $156k–$575k (10–40 hrs). Startup picks 1 of 3
             enterprise features; Growth picks 2 of 3; Enterprise includes all 3
             (Factory, Knowledge, Agent Learning). Agent Learning includes 25k
             traces/mo on Growth and 50k on Enterprise (10k when picked on
-            Startup); margin COGS is $0.005/trace.
+            Startup).
           </p>
         </section>
 
